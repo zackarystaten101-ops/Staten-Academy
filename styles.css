@@ -1,0 +1,199 @@
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Background - subtle light elegant pattern or color */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1470&q=80') no-repeat center center fixed;
+  background-size: cover;
+  color: #333333;
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Overlay to lighten the background for better text visibility */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255, 255, 255, 0.75);
+  z-index: -1;
+}
+
+/* Header styling */
+header {
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 20px 0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+header h1 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 2.5rem;
+  color: #2c3e50;
+}
+
+/* Navigation */
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+nav ul li a {
+  text-decoration: none;
+  color: #34495e;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 25px;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+nav ul li a:hover,
+nav ul li a:focus {
+  background-color: #2980b9;
+  color: white;
+  outline: none;
+}
+
+/* Sections */
+section {
+  background-color: rgba(255, 255, 255, 0.9);
+  margin: 30px auto;
+  max-width: 900px;
+  padding: 30px 20px;
+  border-radius: 12px;
+  box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+/* Headings */
+h2 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-weight: 700;
+  font-size: 2rem;
+}
+
+/* Paragraphs */
+p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #555;
+  margin-bottom: 20px;
+}
+
+/* Form styling */
+form {
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #2c3e50;
+}
+
+input[type="text"],
+input[type="email"],
+textarea {
+  width: 100%;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  border: 2px solid #ccc;
+  border-radius: 25px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  border-color: #2980b9;
+  outline: none;
+}
+
+/* Rounded button */
+input[type="submit"] {
+  background-color: #2980b9;
+  color: white;
+  font-weight: 700;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background-color 0.3s ease;
+  display: block;
+  margin: 0 auto;
+}
+
+input[type="submit"]:hover,
+input[type="submit"]:focus {
+  background-color: #1c5980;
+  outline: none;
+}
+
+/* Footer */
+footer {
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 15px 0;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+  margin-top: auto;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+}
+
+
+.teacher-card img {
+  width: 100%;
+  border-radius: 50%;
+  margin-bottom: 15px;
+  border: 4px solid #2980b9;
+}.teacher-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 20px;
+  padding: 20px 0;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  cursor: grab;
+  transition: transform 0.3s ease;
+}
+
+.teacher-scroll:active {
+  cursor: grabbing;
+}
+
+.teacher-card {
+  flex: 0 0 auto;
+  background-color: #ffffffcc;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  min-width: 200px;
+  max-width: 250px;
+  scroll-snap-align: start;
+  text-align: center;
+  font-weight: bold;
+  color: #2c3e50;
+  transition: transform 0.3s ease;
+}
+
+.teacher-card:hover {
+  transform: scale(1.05) translateY(-5px);
+}

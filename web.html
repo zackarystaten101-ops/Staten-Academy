@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>StatenAcademy</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <header>
+        <h1>Welcome to StatenAcademy</h1>
+        <nav>
+            <ul>
+                <li><a href="#Teachers">Courses</a></li>
+                <li><a href="#about">About Us</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+<section id="about">
+        <h2>About StatenAcademy</h2>
+        <p>StatenAcademy is dedicated to providing quality education to learners worldwide.</p>
+        <p>Founded by the Staten family, we have a passion for teaching and a commitment to helping our students succeed.</p>
+        <img src="staten_family.jpg" alt="Staten Family" />
+        
+                <p>We are a small family business dedicated to helping English learners from all over the world reach their potential.</p>
+                <p>Our mission is to make learning English accessible and enjoyable for everyone.</p>
+    </section>
+    <section id="teachers">
+  <h2>Our Teachers</h2>
+  <p>Explore a variety of teachers trained to help you succeed in learning English.</p>
+  <div class="teacher-scroll">
+    <div class="teacher-card">
+      <img src="zack.jpg" alt="Zack Staten">
+      <p>Zack Staten</p>
+    </div>
+    <div class="teacher-card">
+      <img src="jamin.jpg" alt="Jamin Staten">
+      <p>Jamin Staten</p>
+    </div>
+    <div class="teacher-card">
+      <img src="linda.jpg" alt="Linda Staten">
+      <p>Linda Staten</p>
+    </div>
+    <div class="teacher-card">
+      <img src="Wilmet.jpg" alt="Wilmet Staten">
+      <p>Wilmet Staten</p>
+    </div>
+    <div class="teacher-card">
+      <img src="ben.jpg" alt="Ben Staten">
+      <p>Ben Staten</p>
+    </div>
+  </div>
+</section>
+<section id="courses">
+        <h2>Our courses</h2>
+        <p>We offer a range of courses designed to help you improve your English skills.</p>
+        <ul>
+            <li>Beginner English</li>
+            <li>Intermediate English</li>
+            <li>Advanced English</li>
+            <li>Business English</li>
+        </ul>
+
+    
+
+    <section id="contact">
+        <h2>Contact Us</h2>
+        <p>If you have any questions, feel free to reach out!</p>
+        <form action="submit_form.php" method="post">
+            <label for="name">Name:</label><br />
+            <input type="text" id="name" name="name" required /><br />
+
+            <label for="email">Email:</label><br />
+            <input type="email" id="email" name="email" required /><br />
+
+            <label for="message">Message:</label><br />
+            <textarea id="message" name="message" rows="4" cols="50" required></textarea><br />
+
+            <input type="submit" value="Submit" />
+        </form>
+    </section>
+
+    <footer>
+        <p>&copy; 2024 StatenAcademy. All rights reserved.</p>
+    </footer>
+    
+
+
+<script>
+  // Allow scroll with mouse wheel
+  scrollContainer.addEventListener('wheel', (evt) => {
+    evt.preventDefault();
+    scrollContainer.scrollLeft += evt.deltaY;
+  });
+</script>
+<script>
+  const scrollContainer = document.querySelector('.teacher-scroll');
+
+  // Enable horizontal scrolling with the mouse wheel
+  scrollContainer.addEventListener('wheel', (evt) => {
+    evt.preventDefault();
+    scrollContainer.scrollLeft += evt.deltaY;
+  });
+</script>
+
+</body>
+
+<body>
+  
+</body>
+</html>
