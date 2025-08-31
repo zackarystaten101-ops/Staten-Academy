@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Zack Staten – StatenAcademy</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- FullCalendar Styles -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+  <style>
+    /* Booking container: two columns, no wrap */
+    #booking-container {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      justify-content: center;
+      align-items: flex-start;
+      max-width: 1100px;
+      margin: 0 auto 40px;
+      
+    }
+
+    /* Form on left: ~35% width, uniform padding */
+    .booking-form-wrapper {
+      flex: 0 0 35%;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px;        /* uniform padding */
+      border-radius: 12px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+    }
+
+    /* Calendar on right: ~60% width, uniform padding */
+    .calendar-wrapper {
+      flex: 0 0 50%;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px;        /* uniform padding */
+      border-radius: 12px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+    }
+
+    /* FullCalendar tweaks */
+    .fc .fc-toolbar-title {
+      font-size: 1.3rem;
+      color: #2c3e50;
+    }
+    .fc .fc-button {
+      background-color: #2980b9;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-weight: 600;
+    }
+    .fc .fc-button:hover {
+      background-color: #1c5980;
+    }
+    
+
+      
+    /* Intro video container */
+    .into-video-container {
+      width: 90%;
+      contain:strict;
+      margin: 0 auto 20px;
+      border-radius: 12px;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+      overflow: none;
+      
+    }
+
+    /* readonly field styling */
+    input[type="text"][readonly] {
+      background-color: #f5f5f5;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Meet Zack Staten</h1>
+    <nav>
+      <ul>
+        <li><a href="web.html#about">Home</a></li>
+        <li><a href="web.html#teachers">Our Teachers</a></li>
+        <li><a href="web.html#contact">Contact</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <section>
+    <div class="teacher-img">
+      <img src="zack.jpg" alt="Zack Staten">
+    </div>
+    <h2>Zack Staten</h2>
+    <div class="intro-video-container">
+      <video class="intro-video" width="100%" height="auto" controls>
+       <iframe 
+       width="560" 
+       height="315" 
+       src="https://www.youtube.com/embed/FF1ykHTQtko?si=O6K6zqiKY2o1bJey" 
+       title="YouTube video player" 
+       frameborder="0" 
+       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+       referrerpolicy="strict-origin-when-cross-origin" 
+       allowfullscreen>
+
+       </iframe>
+        Your browser does not support the video tag.
+      </video>
+      
+  </div>
+    <p>Hello! I'm Zack, one of the English teachers here at StatenAcademy. I love helping students grow in confidence and communication. I specialize in beginner and conversational English and enjoy making learning fun and practical.</p>
+  </section>
+
+  <section>
+    <h2>Request a Lesson</h2>
+    <div id="booking-container">
+      <!-- Left: form -->
+      <div class="booking-form-wrapper">
+        <form id="booking-form" action="submit_form.php" method="POST">
+          <label for="selectedTime">Selected Time:</label>
+          <input type="text" id="selectedTime" name="selectedTime" readonly required />
+
+          <label for="studentName">Your Name:</label>
+          <input type="text" id="studentName" name="studentName" required />
+
+          <label for="studentEmail">Your Email:</label>
+          <input type="email" id="studentEmail" name="studentEmail" required />
+
+          <input type="submit" value="Request Lesson" />
+        </form>
+      </div>
+
+      <!-- Right: calendar -->
+      <div class="calendar-wrapper">
+        <div id="calendar"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <a href="web.html" style="text-decoration: none;">
+      <input type="button" value="⬅ Back to Homepage" />
+    </a>
+  </section>
+
+  <footer>
+    <p>&copy; 2024 StatenAcademy. All rights reserved.</p>
+  </footer>
+
+  <!-- FullCalendar Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const calendarEl = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        selectable: true,
+        nowIndicator: true,
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'timeGridWeek,timeGridDay'
+        },
+        slotMinTime: "08:00:00",
+        slotMaxTime: "20:00:00",
+        allDaySlot: false,
+        select: function (info) {
+          const start = new Date(info.start);
+          const formatted = start.toLocaleString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+          document.getElementById('selectedTime').value = formatted;
+          document.getElementById('studentName').focus();
+          
+        }
+      });
+      calendar.render();
+    });
+  </script>
+</body>
+</html>
