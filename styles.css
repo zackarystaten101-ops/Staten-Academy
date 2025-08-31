@@ -3,7 +3,6 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Background - subtle light elegant pattern or color */
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -16,7 +15,6 @@ body {
   flex-direction: column;
 }
 
-/* Overlay to lighten the background for better text visibility */
 body::before {
   content: "";
   position: fixed;
@@ -25,7 +23,7 @@ body::before {
   z-index: -1;
 }
 
-/* Header styling */
+/* Header */
 header {
   background-color: rgba(255, 255, 255, 0.85);
   padding: 20px 0;
@@ -65,7 +63,7 @@ nav ul li a:focus {
   outline: none;
 }
 
-/* Sections */
+/* Section */
 section {
   background-color: rgba(255, 255, 255, 0.9);
   margin: 30px auto;
@@ -92,7 +90,7 @@ p {
   margin-bottom: 20px;
 }
 
-/* Form styling */
+/* Form */
 form {
   max-width: 600px;
   margin: 0 auto;
@@ -126,7 +124,6 @@ textarea:focus {
   outline: none;
 }
 
-/* Rounded button */
 input[type="submit"] {
   background-color: #2980b9;
   color: white;
@@ -158,13 +155,8 @@ footer {
   box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
 }
 
-
-.teacher-card img {
-  width: 100%;
-  border-radius: 50%;
-  margin-bottom: 15px;
-  border: 4px solid #2980b9;
-}.teacher-scroll {
+/* Teacher Scroll */
+.teacher-scroll {
   display: flex;
   overflow-x: auto;
   gap: 20px;
@@ -172,13 +164,13 @@ footer {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   cursor: grab;
-  transition: transform 0.3s ease;
 }
 
 .teacher-scroll:active {
   cursor: grabbing;
 }
 
+/* Teacher Card */
 .teacher-card {
   flex: 0 0 auto;
   background-color: #ffffffcc;
@@ -192,8 +184,26 @@ footer {
   font-weight: bold;
   color: #2c3e50;
   transition: transform 0.3s ease;
+  text-decoration: none;
+  display: block;
 }
 
 .teacher-card:hover {
   transform: scale(1.05) translateY(-5px);
+}
+
+/* Teacher Image Circle */
+.teacher-img {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 15px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 4px solid #2980b9;
+}
+
+.teacher-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
