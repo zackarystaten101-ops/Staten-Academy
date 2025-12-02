@@ -1,0 +1,233 @@
+/* Authentication Page Styles
+   Used by: login.php, register.php, apply-teacher.php, support_contact.php
+*/
+
+/* ===========================================
+   Auth Container
+   =========================================== */
+.auth-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 30px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.auth-container h2 {
+    color: #004080;
+    margin-bottom: 20px;
+}
+
+.auth-container p {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+/* ===========================================
+   Form Groups
+   =========================================== */
+.form-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #666;
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #0b6cf5;
+    box-shadow: 0 0 0 2px rgba(11, 108, 245, 0.1);
+}
+
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+    min-height: 100px;
+}
+
+.form-group textarea:focus {
+    outline: none;
+    border-color: #0b6cf5;
+}
+
+/* ===========================================
+   Submit Button
+   =========================================== */
+.btn-submit {
+    width: 100%;
+    padding: 12px;
+    background: #0b6cf5;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.btn-submit:hover {
+    background: #0056b3;
+}
+
+.btn-submit:active {
+    transform: scale(0.98);
+}
+
+/* ===========================================
+   OR Divider
+   =========================================== */
+.or-divider {
+    margin: 20px 0;
+    color: #999;
+    position: relative;
+}
+
+.or-divider::before,
+.or-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 45%;
+    height: 1px;
+    background: #ddd;
+}
+
+.or-divider::before {
+    left: 0;
+}
+
+.or-divider::after {
+    right: 0;
+}
+
+/* ===========================================
+   Error / Success Messages
+   =========================================== */
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 12px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border: 1px solid #f5c6cb;
+}
+
+.error-message a {
+    color: #721c24;
+    font-weight: bold;
+}
+
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 12px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border: 1px solid #c3e6cb;
+}
+
+/* ===========================================
+   Google Login Container
+   =========================================== */
+.google-btn-container {
+    display: flex;
+    justify-content: center;
+}
+
+/* ===========================================
+   Links
+   =========================================== */
+.auth-container a {
+    color: #0b6cf5;
+    text-decoration: none;
+}
+
+.auth-container a:hover {
+    text-decoration: underline;
+}
+
+/* ===========================================
+   Status Boxes (for apply-teacher.php)
+   =========================================== */
+.status-box {
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.status-box.pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+.status-box.approved {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-box.rejected {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-box h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.status-box p {
+    margin: 0;
+}
+
+/* ===========================================
+   Teacher Portal Variant
+   =========================================== */
+.auth-container.teacher-portal {
+    border-top: 5px solid #dc3545;
+}
+
+.auth-container.teacher-portal .btn-submit {
+    background: #dc3545;
+}
+
+.auth-container.teacher-portal .btn-submit:hover {
+    background: #c82333;
+}
+
+/* ===========================================
+   Responsive
+   =========================================== */
+@media (max-width: 480px) {
+    .auth-container {
+        margin: 60px 20px;
+        padding: 25px 20px;
+    }
+}
+

@@ -1,0 +1,30 @@
+# Environment configuration (contains API keys and secrets)
+env.php
+
+# Log files
+*.log
+debug_*.log
+
+# Uploaded files (optional, depending on your deployment)
+# uploads/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Dependency directories
+vendor/
+node_modules/
+
+# Cache files
+*.cache
+
