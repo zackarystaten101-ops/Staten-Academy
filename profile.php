@@ -344,7 +344,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
         <section class="content-section">
             <h2><i class="fas fa-user"></i> About Me</h2>
             <div style="line-height: 1.8; color: #444;">
-                <?php echo !empty($teacher['about_text']) ? nl2br(htmlspecialchars($teacher['about_text'])) : nl2br(htmlspecialchars($teacher['bio'])); ?>
+                <?php 
+                $about_content = !empty($teacher['about_text']) ? $teacher['about_text'] : (!empty($teacher['bio']) ? $teacher['bio'] : '');
+                if (!empty($about_content)) {
+                    echo nl2br(htmlspecialchars($about_content));
+                } else {
+                    echo '<p style="color: #999; font-style: italic;">No bio available</p>';
+                }
+                ?>
             </div>
             
             <?php if ($teacher['hours_taught'] > 0): ?>

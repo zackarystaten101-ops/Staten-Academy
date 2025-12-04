@@ -60,7 +60,53 @@ $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at
         .tag.link { background: #fff3cd; color: #856404; }
         .tag.file { background: #d4edda; color: #155724; }
         
-        .btn-open { float: right; background: #0b6cf5; color: white; text-decoration: none; padding: 8px 15px; border-radius: 5px; font-size: 0.9rem; }
+        .btn-open { 
+            float: right; 
+            background: #0b6cf5; 
+            color: white; 
+            text-decoration: none; 
+            padding: 8px 15px; 
+            border-radius: 5px; 
+            font-size: 0.9rem; 
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-open:hover { 
+            background: #0056b3; 
+            color: white;
+        }
+        
+        /* Fix white buttons in mobile menu */
+        .menu-toggle, .close-btn {
+            background: transparent;
+            border: none;
+            color: #004080;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px 10px;
+        }
+        .menu-toggle:hover, .close-btn:hover {
+            background: rgba(0, 64, 128, 0.1);
+        }
+        
+        /* Ensure nav buttons have proper styling */
+        .nav-btn {
+            background: white;
+            color: #004080;
+            border: 1px solid #ddd;
+            padding: 10px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: block;
+            margin: 5px 0;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            background: #f0f7ff;
+            border-color: #0b6cf5;
+            color: #0b6cf5;
+        }
     </style>
 </head>
 <body>

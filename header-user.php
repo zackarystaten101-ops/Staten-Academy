@@ -7,18 +7,26 @@ $user_name = null;
 $user_role = null;
 if (isset($_SESSION['user_id'])) {
      // Always fetch fresh profile_pic from DB to ensure accuracy
-     require_once 'db.php';
-     $stmt = $conn->prepare("SELECT profile_pic, name, role FROM users WHERE id = ?");
-     $stmt->bind_param("i", $_SESSION['user_id']);
-     $stmt->execute();
-     $result = $stmt->get_result();
-     if ($result->num_rows > 0) {
-         $user = $result->fetch_assoc();
-         $_SESSION['profile_pic'] = $user['profile_pic'] ?? 'images/placeholder-teacher.svg';
-         $_SESSION['user_name'] = $user['name'];
-         $_SESSION['user_role'] = $user['role'];
+     if (!isset($conn)) {
+         require_once __DIR__ . '/db.php';
      }
-     $stmt->close();
+     
+     // Check if connection exists and is valid
+     if (isset($conn) && !$conn->connect_error) {
+         $stmt = $conn->prepare("SELECT profile_pic, name, role FROM users WHERE id = ?");
+         if ($stmt) {
+             $stmt->bind_param("i", $_SESSION['user_id']);
+             $stmt->execute();
+             $result = $stmt->get_result();
+             if ($result && $result->num_rows > 0) {
+                 $user = $result->fetch_assoc();
+                 $_SESSION['profile_pic'] = $user['profile_pic'] ?? 'images/placeholder-teacher.svg';
+                 $_SESSION['user_name'] = $user['name'] ?? 'User';
+                 $_SESSION['user_role'] = $user['role'] ?? 'guest';
+             }
+             $stmt->close();
+         }
+     }
      
      $user_profile_pic = $_SESSION['profile_pic'] ?? 'images/placeholder-teacher.svg';
      $user_name = $_SESSION['user_name'] ?? 'User';

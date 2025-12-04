@@ -1,6 +1,26 @@
 <?php
-session_start();
-require_once 'db.php';
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Enable error reporting based on APP_DEBUG
+if (defined('APP_DEBUG') && APP_DEBUG === true) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Load database connection
+require_once __DIR__ . '/db.php';
+
+// Check if database connection is successful
+if (!isset($conn) || $conn->connect_error) {
+    die("Database connection failed. Please check your database configuration.");
+}
 
 $login_error = '';
 

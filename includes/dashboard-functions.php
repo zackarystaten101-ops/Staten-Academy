@@ -317,6 +317,9 @@ function getAdminStats($conn) {
     $result = $conn->query("SELECT COUNT(*) as count FROM support_messages WHERE status = 'open'");
     $stats['open_support'] = $result ? $result->fetch_assoc()['count'] : 0;
     
+    // Total pending requests (applications + profile updates)
+    $stats['total_pending_requests'] = $stats['pending_apps'] + $stats['pending_updates'];
+    
     return $stats;
 }
 

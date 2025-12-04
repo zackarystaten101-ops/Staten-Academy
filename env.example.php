@@ -33,7 +33,7 @@ define('STRIPE_PUBLISHABLE_KEY', 'pk_test_YOUR_TEST_PUBLISHABLE_KEY_HERE');
 // ===========================================
 define('GOOGLE_CLIENT_ID', 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET', 'YOUR_CLIENT_SECRET_HERE');
-define('GOOGLE_REDIRECT_URI', 'http://localhost/Staten%20Accademy%20Webpage/google-calendar-callback.php');
+define('GOOGLE_REDIRECT_URI', 'http://localhost/Web%20page/Staten-Academy/google-calendar-callback.php');
 define('GOOGLE_SCOPES', 'https://www.googleapis.com/auth/calendar');
 
 // ===========================================

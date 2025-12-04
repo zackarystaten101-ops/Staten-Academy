@@ -162,6 +162,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 
+    // Create Google Calendar event in student's calendar if connected
+    if (!empty($student['google_calendar_token'])) {
+        // Refresh token if expired
+        if (!empty($student['google_calendar_token_expiry']) && strtotime($student['google_calendar_token_expiry']) <= time()) {
+            if (!empty($student['google_calendar_refresh_token'])) {
+                $token_response = $api->refreshAccessToken($student['google_calendar_refresh_token']);
+                if (!isset($token_response['error'])) {
+                    $student['google_calendar_token'] = $token_response['access_token'];
+                    $new_expiry = date('Y-m-d H:i:s', time() + ($token_response['expires_in'] ?? 3600));
+                    $stmt = $conn->prepare("UPDATE users SET google_calendar_token = ?, google_calendar_token_expiry = ? WHERE id = ?");
+                    $stmt->bind_param("ssi", $student['google_calendar_token'], $new_expiry, $student_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+        }
+
+        $start_datetime = $lesson_date . 'T' . $start_time . ':00';
+        $end_datetime = $lesson_date . 'T' . $end_time . ':00';
+        
+        $student_event_data = [
+            'title' => 'Lesson with ' . htmlspecialchars($teacher['name']),
+            'description' => 'Teacher: ' . htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['email']) . ')',
+            'start_datetime' => $start_datetime,
+            'end_datetime' => $end_datetime,
+            'attendees' => [['email' => $teacher['email']]]
+        ];
+
+        $student_calendar_result = $api->createEvent($student['google_calendar_token'], $student_event_data);
+        
+        // Note: We don't store student's event ID separately, but the event is created in their calendar
+    }
+
     http_response_code(201);
     echo json_encode([
         'success' => true,

@@ -8,8 +8,9 @@
  * 3. Enable Google Calendar API
  * 4. Create OAuth 2.0 credentials (Web Application)
  * 5. Add authorized redirect URIs:
- *    - http://localhost/Staten%20Accademy%20Webpage/google-calendar-callback.php
- *    - https://yourdomain.com/Staten%20Accademy%20Webpage/google-calendar-callback.php
+ *    - http://localhost/Web%20page/Staten-Academy/google-calendar-callback.php
+ *    - https://yourdomain.com/Web%20page/Staten-Academy/google-calendar-callback.php
+ *    (Adjust the path based on your actual server setup)
  * 6. Download the OAuth 2.0 Client ID JSON file
  * 7. Update credentials in env.php
  */

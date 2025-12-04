@@ -1,0 +1,17 @@
+# Git Attributes
+# Additional protection for sensitive files
+
+# CRITICAL: Ensure env.php is NEVER committed, even if accidentally added
+# Note: Primary protection is via .gitignore
+# These attributes provide extra safety
+env.php -diff
+env.php merge=ours
+env.php export-ignore
+
+# Protect other sensitive files
+*.key -diff
+*.pem -diff
+*.p12 -diff
+*.env -diff
+.env* -diff
+

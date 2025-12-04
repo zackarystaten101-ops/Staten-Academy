@@ -58,6 +58,8 @@ $stmt->close();
 $redirect_url = 'index.php';
 if ($user['role'] === 'teacher') {
     $redirect_url = 'teacher-calendar-setup.php';
+} elseif ($user['role'] === 'student') {
+    $redirect_url = 'student-dashboard.php';
 } elseif ($user['role'] === 'admin') {
     $redirect_url = 'admin-dashboard.php';
 }

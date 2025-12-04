@@ -1,7 +1,41 @@
 <?php
-session_start();
-require_once 'db.php';
-require_once 'includes/dashboard-functions.php';
+// Load environment configuration first to check APP_DEBUG
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Enable error reporting based on APP_DEBUG setting
+if (defined('APP_DEBUG') && APP_DEBUG === true) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+} else {
+    // In production, log errors but don't display them
+    error_reporting(E_ALL);
+    ini_set('display_errors', 0);
+    ini_set('log_errors', 1);
+}
+
+// Start session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Load database connection
+require_once __DIR__ . '/db.php';
+
+// Check if database connection is successful
+if (!isset($conn) || $conn->connect_error) {
+    die("Database connection failed. Please check your database configuration in env.php");
+}
+
+// Load dashboard functions
+require_once __DIR__ . '/includes/dashboard-functions.php';
 
 // Get filter parameters
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -59,23 +93,39 @@ switch ($sort) {
 }
 
 $stmt = $conn->prepare($sql);
-if ($stmt && count($params) > 0) {
-    $stmt->bind_param($types, ...$params);
-}
 if ($stmt) {
+    if (count($params) > 0) {
+        $stmt->bind_param($types, ...$params);
+    }
     $stmt->execute();
     $teachers_result = $stmt->get_result();
+    if (!$teachers_result) {
+        // If execute failed, use fallback
+        $teachers_result = $conn->query("SELECT u.id, u.name, u.bio, u.profile_pic, u.specialty, u.hourly_rate,
+            COALESCE((SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id), 0) as avg_rating,
+            COALESCE((SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id), 0) as review_count
+            FROM users u 
+            WHERE u.role='teacher' AND u.application_status='approved'
+            ORDER BY u.id DESC");
+    }
 } else {
-    // Fallback to simple query
-    $teachers_result = $conn->query("SELECT id, name, bio, profile_pic FROM users WHERE role='teacher' AND application_status='approved'");
+    // Fallback to simple query with all necessary columns
+    $teachers_result = $conn->query("SELECT u.id, u.name, u.bio, u.profile_pic, u.specialty, u.hourly_rate,
+        COALESCE((SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id), 0) as avg_rating,
+        COALESCE((SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id), 0) as review_count
+        FROM users u 
+        WHERE u.role='teacher' AND u.application_status='approved'
+        ORDER BY u.id DESC");
 }
 
 // Get unique specialties for filter dropdown
 $specialties = [];
-$spec_result = $conn->query("SELECT DISTINCT specialty FROM users WHERE role='teacher' AND specialty IS NOT NULL AND specialty != ''");
+$spec_result = $conn->query("SELECT DISTINCT specialty FROM users WHERE role='teacher' AND application_status='approved' AND specialty IS NOT NULL AND specialty != ''");
 if ($spec_result) {
     while ($row = $spec_result->fetch_assoc()) {
-        $specialties[] = $row['specialty'];
+        if (!empty($row['specialty'])) {
+            $specialties[] = $row['specialty'];
+        }
     }
 }
 
@@ -317,7 +367,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 $has_teachers = true;
             ?>
             <article class="teacher-card">
-                <?php if ($teacher['hourly_rate']): ?>
+                <?php if (!empty($teacher['hourly_rate']) && $teacher['hourly_rate'] > 0): ?>
                 <span class="teacher-price">$<?php echo number_format($teacher['hourly_rate'], 0); ?>/hr</span>
                 <?php endif; ?>
                 <a href="profile.php?id=<?php echo $teacher['id']; ?>" style="text-decoration: none; color: inherit;">
@@ -342,7 +392,11 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                             ?>
                             <span><?php echo $rating; ?> (<?php echo $teacher['review_count']; ?>)</span>
                         </div>
-                        <p><?php echo htmlspecialchars(substr($teacher['bio'], 0, 80)); ?>...</p>
+                        <?php if (!empty($teacher['bio'])): ?>
+                        <p><?php echo htmlspecialchars(substr($teacher['bio'], 0, 80)); ?><?php echo strlen($teacher['bio']) > 80 ? '...' : ''; ?></p>
+                        <?php else: ?>
+                        <p style="color: #999; font-style: italic;">No bio available</p>
+                        <?php endif; ?>
                     </div>
                 </a>
             </article>

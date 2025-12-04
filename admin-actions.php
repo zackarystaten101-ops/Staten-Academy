@@ -12,16 +12,83 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
      if ($action === 'make_teacher') {
          $user_id = intval($_POST['user_id']);
+         
+         // Check if user has pending profile updates and auto-approve them
+         $pending_check = $conn->prepare("SELECT id, name, bio, profile_pic, about_text, video_url FROM pending_updates WHERE user_id = ?");
+         $pending_check->bind_param("i", $user_id);
+         $pending_check->execute();
+         $pending_result = $pending_check->get_result();
+         
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
+         $stmt->execute();
+         $stmt->close();
+         
+         // Auto-approve pending profile updates if they exist
+         if ($pending_result->num_rows > 0) {
+             $pending_update = $pending_result->fetch_assoc();
+             
+             $update_stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, about_text = ?, video_url = ? WHERE id = ?");
+             $update_stmt->bind_param("ssssi", 
+                 $pending_update['bio'], 
+                 $pending_update['profile_pic'], 
+                 $pending_update['about_text'], 
+                 $pending_update['video_url'], 
+                 $user_id
+             );
+             $update_stmt->execute();
+             $update_stmt->close();
+             
+             $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE user_id = ?");
+             $del_stmt->bind_param("i", $user_id);
+             $del_stmt->execute();
+             $del_stmt->close();
+         }
+         
+         $pending_check->close();
      } elseif ($action === 'make_student') {
          $user_id = intval($_POST['user_id']);
          $stmt = $conn->prepare("UPDATE users SET role = 'student' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
      } elseif ($action === 'approve_teacher') {
          $user_id = intval($_POST['user_id']);
+         
+         // First, check if user has pending profile updates
+         $pending_check = $conn->prepare("SELECT id, name, bio, profile_pic, about_text, video_url FROM pending_updates WHERE user_id = ?");
+         $pending_check->bind_param("i", $user_id);
+         $pending_check->execute();
+         $pending_result = $pending_check->get_result();
+         
+         // Approve the teacher application
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
+         $stmt->execute();
+         $stmt->close();
+         
+         // If there are pending profile updates, auto-approve them
+         if ($pending_result->num_rows > 0) {
+             $pending_update = $pending_result->fetch_assoc();
+             
+             // Apply the pending profile updates to the user
+             $update_stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, about_text = ?, video_url = ? WHERE id = ?");
+             $update_stmt->bind_param("ssssi", 
+                 $pending_update['bio'], 
+                 $pending_update['profile_pic'], 
+                 $pending_update['about_text'], 
+                 $pending_update['video_url'], 
+                 $user_id
+             );
+             $update_stmt->execute();
+             $update_stmt->close();
+             
+             // Delete the pending update record
+             $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE user_id = ?");
+             $del_stmt->bind_param("i", $user_id);
+             $del_stmt->execute();
+             $del_stmt->close();
+         }
+         
+         $pending_check->close();
      } elseif ($action === 'reject_teacher') {
          $user_id = intval($_POST['user_id']);
          $stmt = $conn->prepare("UPDATE users SET application_status = 'rejected' WHERE id = ?");

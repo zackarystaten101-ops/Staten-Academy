@@ -148,7 +148,11 @@ $active_tab = 'dashboard';
 <?php include 'includes/dashboard-header.php'; ?>
 
 <div class="content-wrapper">
-    <?php include 'includes/dashboard-sidebar.php'; ?>
+    <?php 
+    // Make admin_stats available to sidebar
+    $admin_stats_for_sidebar = $admin_stats;
+    include 'includes/dashboard-sidebar.php'; 
+    ?>
 
     <div class="main">
         
@@ -191,16 +195,12 @@ $active_tab = 'dashboard';
                 <div class="card">
                     <h2><i class="fas fa-exclamation-circle"></i> Pending Actions</h2>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <?php if ($admin_stats['pending_apps'] > 0): ?>
-                        <a href="#" onclick="switchTab('applications')" class="quick-action-btn" style="flex-direction: row; justify-content: space-between;">
-                            <span><i class="fas fa-user-plus"></i> Teacher Applications</span>
-                            <span class="notification-badge" style="position: static;"><?php echo $admin_stats['pending_apps']; ?></span>
-                        </a>
-                        <?php endif; ?>
-                        <?php if ($admin_stats['pending_updates'] > 0): ?>
-                        <a href="#" onclick="switchTab('approvals')" class="quick-action-btn" style="flex-direction: row; justify-content: space-between;">
-                            <span><i class="fas fa-edit"></i> Profile Updates</span>
-                            <span class="notification-badge" style="position: static;"><?php echo $admin_stats['pending_updates']; ?></span>
+                        <?php 
+                        $total_pending = $admin_stats['pending_apps'] + $admin_stats['pending_updates'];
+                        if ($total_pending > 0): ?>
+                        <a href="#" onclick="switchTab('pending-requests')" class="quick-action-btn" style="flex-direction: row; justify-content: space-between; background: #fff5f5; border-color: #dc3545;">
+                            <span><i class="fas fa-exclamation-circle"></i> Pending Requests</span>
+                            <span class="notification-badge" style="position: static; background: #dc3545; color: white;"><?php echo $total_pending; ?></span>
                         </a>
                         <?php endif; ?>
                         <?php if ($unread_support > 0): ?>
@@ -209,7 +209,7 @@ $active_tab = 'dashboard';
                             <span class="notification-badge" style="position: static; background: var(--danger);"><?php echo $unread_support; ?></span>
                         </a>
                         <?php endif; ?>
-                        <?php if ($admin_stats['pending_apps'] == 0 && $admin_stats['pending_updates'] == 0 && $unread_support == 0): ?>
+                        <?php if ($total_pending == 0 && $unread_support == 0): ?>
                         <p style="color: var(--gray); text-align: center; padding: 20px;">
                             <i class="fas fa-check-circle" style="color: var(--success);"></i> All caught up!
                         </p>
@@ -323,9 +323,139 @@ $active_tab = 'dashboard';
             </div>
         </div>
 
-        <!-- Applications Tab -->
+        <!-- Unified Pending Requests Tab -->
+        <div id="pending-requests" class="tab-content">
+            <h1><i class="fas fa-exclamation-circle"></i> Pending Requests</h1>
+            <p style="color: var(--gray); margin-bottom: 20px;">Review and approve teacher applications and profile update requests.</p>
+            
+            <?php 
+            $total_pending = $admin_stats['pending_apps'] + $admin_stats['pending_updates'];
+            if ($total_pending == 0): ?>
+            <div class="empty-state">
+                <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                <h3>All Caught Up!</h3>
+                <p>There are no pending requests at this time.</p>
+            </div>
+            <?php else: ?>
+            
+            <!-- Teacher Applications Section -->
+            <?php if ($admin_stats['pending_apps'] > 0): ?>
+            <div style="margin-bottom: 40px;">
+                <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <i class="fas fa-user-plus" style="color: var(--primary);"></i> 
+                    Teacher Applications
+                    <span class="notification-badge" style="background: #dc3545; color: white; margin-left: 10px;"><?php echo $admin_stats['pending_apps']; ?></span>
+                </h2>
+                <?php 
+                $applications->data_seek(0); // Reset pointer
+                if ($applications->num_rows > 0): ?>
+                <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Applicant</th>
+                            <th>Email</th>
+                            <th>Bio</th>
+                            <th>Calendly</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while($app = $applications->fetch_assoc()): ?>
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="<?php echo h($app['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                    <?php echo h($app['name']); ?>
+                                </div>
+                            </td>
+                            <td><?php echo h($app['email']); ?></td>
+                            <td><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?><?php echo strlen($app['bio'] ?? '') > 50 ? '...' : ''; ?></td>
+                            <td>
+                                <?php if ($app['calendly_link']): ?>
+                                <a href="<?php echo h($app['calendly_link']); ?>" target="_blank" class="btn-outline btn-sm">View</a>
+                                <?php else: ?>
+                                <span style="color: var(--gray);">Not set</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <form action="admin-actions.php" method="POST" style="display: inline-flex; gap: 5px;">
+                                    <input type="hidden" name="user_id" value="<?php echo $app['id']; ?>">
+                                    <button type="submit" name="action" value="approve_teacher" class="btn-success btn-sm">Approve</button>
+                                    <button type="submit" name="action" value="reject_teacher" class="btn-danger btn-sm">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Profile Update Requests Section -->
+            <?php if ($admin_stats['pending_updates'] > 0): ?>
+            <div>
+                <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <i class="fas fa-edit" style="color: var(--primary);"></i> 
+                    Profile Update Requests
+                    <span class="notification-badge" style="background: #dc3545; color: white; margin-left: 10px;"><?php echo $admin_stats['pending_updates']; ?></span>
+                </h2>
+                <?php 
+                $pending_updates->data_seek(0); // Reset pointer
+                if ($pending_updates->num_rows > 0): ?>
+                <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Name</th>
+                            <th>Bio</th>
+                            <th>About</th>
+                            <th>Picture</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while($up = $pending_updates->fetch_assoc()): ?>
+                        <tr>
+                            <td><?php echo h($up['user_email']); ?></td>
+                            <td><?php echo h($up['name']); ?></td>
+                            <td title="<?php echo h($up['bio'] ?? ''); ?>"><?php echo h(substr($up['bio'] ?? '', 0, 30)); ?><?php echo strlen($up['bio'] ?? '') > 30 ? '...' : ''; ?></td>
+                            <td title="<?php echo h($up['about_text'] ?? ''); ?>"><?php echo h(substr($up['about_text'] ?? '', 0, 30)); ?><?php echo strlen($up['about_text'] ?? '') > 30 ? '...' : ''; ?></td>
+                            <td>
+                                <?php if ($up['profile_pic']): ?>
+                                <a href="<?php echo h($up['profile_pic']); ?>" target="_blank">
+                                    <img src="<?php echo h($up['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 5px; object-fit: cover;">
+                                </a>
+                                <?php else: ?>
+                                <span style="color: var(--gray);">None</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <form action="admin-actions.php" method="POST" style="display: inline-flex; gap: 5px;">
+                                    <input type="hidden" name="update_id" value="<?php echo $up['id']; ?>">
+                                    <button type="submit" name="action" value="approve_profile" class="btn-success btn-sm">Approve</button>
+                                    <button type="submit" name="action" value="reject_profile" class="btn-danger btn-sm">Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
+            <?php endif; ?>
+        </div>
+
+        <!-- Applications Tab (kept for backward compatibility) -->
         <div id="applications" class="tab-content">
             <h1>Teacher Applications</h1>
+            <p style="color: var(--gray); margin-bottom: 20px;">This section has been moved to <a href="#" onclick="switchTab('pending-requests')" style="color: var(--primary);">Pending Requests</a>.</p>
             <?php if ($applications->num_rows > 0): ?>
             <table class="data-table">
                 <thead>
@@ -338,7 +468,9 @@ $active_tab = 'dashboard';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while($app = $applications->fetch_assoc()): ?>
+                    <?php 
+                    $applications->data_seek(0);
+                    while($app = $applications->fetch_assoc()): ?>
                     <tr>
                         <td>
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -347,7 +479,7 @@ $active_tab = 'dashboard';
                             </div>
                         </td>
                         <td><?php echo h($app['email']); ?></td>
-                        <td><?php echo h(substr($app['bio'], 0, 50)); ?>...</td>
+                        <td><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?>...</td>
                         <td>
                             <?php if ($app['calendly_link']): ?>
                             <a href="<?php echo h($app['calendly_link']); ?>" target="_blank" class="btn-outline btn-sm">View</a>
@@ -375,9 +507,10 @@ $active_tab = 'dashboard';
             <?php endif; ?>
         </div>
 
-        <!-- Approvals Tab -->
+        <!-- Approvals Tab (kept for backward compatibility) -->
         <div id="approvals" class="tab-content">
             <h1>Profile Update Requests</h1>
+            <p style="color: var(--gray); margin-bottom: 20px;">This section has been moved to <a href="#" onclick="switchTab('pending-requests')" style="color: var(--primary);">Pending Requests</a>.</p>
             <?php if ($pending_updates->num_rows > 0): ?>
             <div style="overflow-x: auto;">
             <table class="data-table">
@@ -392,12 +525,14 @@ $active_tab = 'dashboard';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while($up = $pending_updates->fetch_assoc()): ?>
+                    <?php 
+                    $pending_updates->data_seek(0);
+                    while($up = $pending_updates->fetch_assoc()): ?>
                     <tr>
                         <td><?php echo h($up['user_email']); ?></td>
                         <td><?php echo h($up['name']); ?></td>
-                        <td title="<?php echo h($up['bio']); ?>"><?php echo h(substr($up['bio'], 0, 30)); ?>...</td>
-                        <td title="<?php echo h($up['about_text']); ?>"><?php echo h(substr($up['about_text'] ?? '', 0, 30)); ?>...</td>
+                        <td title="<?php echo h($up['bio'] ?? ''); ?>"><?php echo h(substr($up['bio'] ?? '', 0, 30)); ?>...</td>
+                        <td title="<?php echo h($up['about_text'] ?? ''); ?>"><?php echo h(substr($up['about_text'] ?? '', 0, 30)); ?>...</td>
                         <td>
                             <?php if ($up['profile_pic']): ?>
                             <a href="<?php echo h($up['profile_pic']); ?>" target="_blank">

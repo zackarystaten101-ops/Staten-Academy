@@ -1,6 +1,8 @@
 <?php
 // Load environment configuration
-require_once __DIR__ . '/env.php';
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
 
 $servername = DB_HOST;
 $username = DB_USERNAME;
@@ -12,7 +14,12 @@ $conn = new mysqli($servername, $username, $password);
 
 // Check connection
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    // Better error message for production
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        die("Database connection failed: " . $conn->connect_error . "<br>Please check your database credentials in env.php");
+    } else {
+        die("Database connection failed. Please contact the administrator.");
+    }
 }
 
 // Create database if not exists
@@ -20,7 +27,16 @@ $sql = "CREATE DATABASE IF NOT EXISTS $dbname";
 if ($conn->query($sql) === TRUE) {
     $conn->select_db($dbname);
 } else {
-    die("Error creating database: " . $conn->error);
+    // Try to select existing database instead of dying
+    if ($conn->select_db($dbname)) {
+        // Database exists, continue
+    } else {
+        if (defined('APP_DEBUG') && APP_DEBUG === true) {
+            die("Error accessing database: " . $conn->error . "<br>Database name: " . htmlspecialchars($dbname));
+        } else {
+            die("Database error. Please contact the administrator.");
+        }
+    }
 }
 
 // Create users table if not exists
@@ -61,6 +77,8 @@ if (!in_array('video_url', $existing_cols)) $conn->query("ALTER TABLE users ADD 
 if (!in_array('backup_email', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN backup_email VARCHAR(50) AFTER email");
 if (!in_array('age', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN age INT AFTER dob");
 if (!in_array('age_visibility', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN age_visibility ENUM('private', 'public') DEFAULT 'private' AFTER age");
+if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN specialty VARCHAR(100) DEFAULT NULL AFTER age_visibility");
+if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 
 // Create pending profile updates table
 $sql = "CREATE TABLE IF NOT EXISTS pending_updates (

@@ -2,6 +2,7 @@
 session_start();
 require_once 'db.php';
 require_once 'includes/dashboard-functions.php';
+require_once 'google-calendar-config.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'student') {
     header("Location: login.php");
@@ -11,6 +12,13 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'student') {
 $student_id = $_SESSION['user_id'];
 $user = getUserById($conn, $student_id);
 $user_role = 'student';
+
+// Initialize Google Calendar API
+$api = new GoogleCalendarAPI($conn);
+$has_calendar = !empty($user['google_calendar_token']);
+
+// Check for calendar connection success message
+$calendar_connected = isset($_GET['calendar']) && $_GET['calendar'] === 'connected';
 
 // Handle Profile Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
@@ -374,6 +382,29 @@ $active_tab = 'overview';
                         <i class="fas fa-save"></i> Save Changes
                     </button>
                 </form>
+            </div>
+
+            <!-- Google Calendar Connection -->
+            <div class="card" style="margin-top: 20px;">
+                <h2><i class="fab fa-google"></i> Google Calendar Integration</h2>
+                <?php if ($calendar_connected): ?>
+                    <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745; margin-bottom: 15px;">
+                        <i class="fas fa-check-circle"></i> <strong>Google Calendar connected successfully!</strong>
+                    </div>
+                <?php endif; ?>
+                <?php if ($has_calendar): ?>
+                    <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745; margin-bottom: 15px;">
+                        <i class="fas fa-check-circle"></i> <strong>Google Calendar Connected</strong>
+                        <p style="margin: 10px 0 0 0; font-size: 14px;">Your booked lessons will automatically sync to your Google Calendar.</p>
+                    </div>
+                <?php else: ?>
+                    <div style="background: #f0f7ff; padding: 20px; border-radius: 8px; border: 2px solid #0b6cf5; text-align: center;">
+                        <p style="margin: 0 0 15px 0;">Connect your Google Calendar to automatically sync your booked lessons.</p>
+                        <a href="<?php echo $api->getAuthUrl($student_id); ?>" style="display: inline-block; background: #db4437; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                            <i class="fab fa-google"></i> Connect Google Calendar
+                        </a>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 

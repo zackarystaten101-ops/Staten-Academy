@@ -18,6 +18,9 @@ $pending_assignments = 0;
 if ($user_role === 'teacher' && isset($conn)) {
     $pending_assignments = getPendingAssignmentsCount($conn, $user_id);
 }
+
+// Get admin stats for pending requests badge
+$admin_stats = isset($admin_stats_for_sidebar) ? $admin_stats_for_sidebar : (isset($admin_stats) ? $admin_stats : (isset($conn) && $user_role === 'admin' ? getAdminStats($conn) : []));
 ?>
 
 <div class="sidebar">
@@ -124,11 +127,13 @@ if ($user_role === 'teacher' && isset($conn)) {
             <a href="#" onclick="switchTab('analytics')" class="<?php echo $active_tab === 'analytics' ? 'active' : ''; ?>">
                 <i class="fas fa-chart-line"></i> Analytics
             </a>
-            <a href="#" onclick="switchTab('applications')" class="<?php echo $active_tab === 'applications' ? 'active' : ''; ?>">
-                <i class="fas fa-user-plus"></i> Applications
-            </a>
-            <a href="#" onclick="switchTab('approvals')" class="<?php echo $active_tab === 'approvals' ? 'active' : ''; ?>">
-                <i class="fas fa-check-circle"></i> Profile Updates
+            <a href="#" onclick="switchTab('pending-requests')" class="<?php echo $active_tab === 'pending-requests' ? 'active' : ''; ?>">
+                <i class="fas fa-exclamation-circle"></i> Pending Requests
+                <?php 
+                $total_pending = isset($admin_stats) ? ($admin_stats['pending_apps'] + $admin_stats['pending_updates']) : 0;
+                if ($total_pending > 0): ?>
+                    <span class="sidebar-badge" style="background: #dc3545;"><?php echo $total_pending; ?></span>
+                <?php endif; ?>
             </a>
             <a href="#" onclick="switchTab('teachers')" class="<?php echo $active_tab === 'teachers' ? 'active' : ''; ?>">
                 <i class="fas fa-chalkboard-teacher"></i> Teachers

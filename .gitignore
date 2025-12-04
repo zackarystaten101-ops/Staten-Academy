@@ -1,5 +1,11 @@
 # Environment configuration (contains API keys and secrets)
+# CRITICAL: Never commit this file - it contains production credentials
 env.php
+*.env
+.env
+.env.local
+.env.production
+.env.*.local
 
 # Log files
 *.log
@@ -28,3 +34,23 @@ node_modules/
 # Cache files
 *.cache
 
+# Deployment verification scripts (temporary)
+verify-production.php
+test-connection.php
+error-handler.php
+
+# Large media files (should not be in Git - slows down commits/pushes)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flv
+# Keep small images, but exclude very large ones
+# *.jpg
+# *.jpeg
+# *.png
+# Uncomment above if you want to exclude all images
+# Large images (over 1MB typically) should be excluded
+# You can add specific large files here:
+# Zack Introduction.mp4
