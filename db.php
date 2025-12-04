@@ -23,7 +23,9 @@ if ($conn->connect_error) {
 }
 
 // Create database if not exists
-$sql = "CREATE DATABASE IF NOT EXISTS $dbname";
+// Escape database name with backticks to handle spaces and special characters
+$dbname_escaped = "`" . str_replace("`", "``", $dbname) . "`";
+$sql = "CREATE DATABASE IF NOT EXISTS $dbname_escaped";
 if ($conn->query($sql) === TRUE) {
     $conn->select_db($dbname);
 } else {

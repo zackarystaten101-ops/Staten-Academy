@@ -1,4 +1,7 @@
 <?php
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
 // Load environment configuration first to check APP_DEBUG
 if (!defined('DB_HOST')) {
     require_once __DIR__ . '/env.php';
@@ -16,14 +19,9 @@ if (defined('APP_DEBUG') && APP_DEBUG === true) {
     ini_set('log_errors', 1);
 }
 
-// Start session
+// Start session (must be before any output)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
-}
-
-// Load environment configuration first
-if (!defined('DB_HOST')) {
-    require_once __DIR__ . '/env.php';
 }
 
 // Load database connection
