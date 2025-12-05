@@ -122,6 +122,7 @@ $sql = "CREATE TABLE IF NOT EXISTS messages (
     receiver_id INT(6) UNSIGNED,
     message TEXT,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_read BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (sender_id) REFERENCES users(id),
     FOREIGN KEY (receiver_id) REFERENCES users(id)
 )";
@@ -174,6 +175,7 @@ while($row = $msg_cols->fetch_assoc()) { $existing_msg_cols[] = $row['Field']; }
 
 if (!in_array('thread_id', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN thread_id INT(6) UNSIGNED AFTER id");
 if (!in_array('message_type', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN message_type ENUM('direct', 'support') DEFAULT 'direct' AFTER message");
+if (!in_array('is_read', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN is_read BOOLEAN DEFAULT FALSE AFTER sent_at");
 
 // Add foreign key for thread_id if messages table exists
 $check_fk = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='messages' AND COLUMN_NAME='thread_id' AND REFERENCED_TABLE_NAME='message_threads'");
