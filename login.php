@@ -1,17 +1,21 @@
 <?php
+// Start output buffering to prevent headers already sent errors
+ob_start();
+
 // Load environment configuration first
 if (!defined('DB_HOST')) {
     require_once __DIR__ . '/env.php';
 }
 
-// Enable error reporting based on APP_DEBUG
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Enable error reporting based on APP_DEBUG (after session start)
 if (defined('APP_DEBUG') && APP_DEBUG === true) {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
-}
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
 }
 
 // Load database connection
@@ -57,6 +61,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                      $_SESSION['profile_pic'] = $full_user['profile_pic'] ?? 'images/placeholder-teacher.svg';
 
                     // Redirect Logic
+                    // Clear output buffer before redirect to ensure no output is sent
+                    ob_end_clean();
+                    
                     if ($role === 'admin') {
                         // Admins ALWAYS go to dashboard, ignore booking redirects
                         if (isset($_SESSION['redirect_teacher'])) unset($_SESSION['redirect_teacher']);
@@ -140,6 +147,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
 
+        // Clear output buffer before sending response
+        ob_end_clean();
         echo "success";
         exit();
     }

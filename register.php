@@ -1,17 +1,21 @@
 <?php
+// Start output buffering to prevent headers already sent errors
+ob_start();
+
 // Load environment configuration first
 if (!defined('DB_HOST')) {
     require_once __DIR__ . '/env.php';
 }
 
-// Enable error reporting based on APP_DEBUG
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Enable error reporting based on APP_DEBUG (after session start)
 if (defined('APP_DEBUG') && APP_DEBUG === true) {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
-}
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
 }
 
 // Load database connection
@@ -29,6 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name = htmlspecialchars(trim($_POST['name']), ENT_QUOTES, 'UTF-8');
 
     if ($password !== $confirm_password) {
+        ob_end_clean();
         die("Passwords do not match.");
     }
 
@@ -39,6 +44,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt->store_result();
 
     if ($stmt->num_rows > 0) {
+         ob_end_clean();
          die("Email already registered. <a href='login.php'>Login here</a>");
      }
     $stmt->close();
@@ -54,10 +60,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
          $_SESSION['user_id'] = $stmt->insert_id;
          $_SESSION['user_name'] = $name;
          $_SESSION['user_role'] = 'student';
+         // Clear output buffer before redirect
+         ob_end_clean();
          header("Location: schedule.php");
          exit();
      } else {
-         echo "Error: " . $stmt->error;
+         // Clear buffer and show error
+         ob_end_clean();
+         die("Error creating account: " . htmlspecialchars($stmt->error) . ". Please try again.");
      }
 
     $stmt->close();
