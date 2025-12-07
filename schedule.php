@@ -1,8 +1,45 @@
 <?php
-error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE);
-session_start();
-require_once 'db.php';
-require_once 'google-calendar-config.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first to check APP_DEBUG
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Enable error reporting based on APP_DEBUG setting
+if (defined('APP_DEBUG') && APP_DEBUG === true) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+} else {
+    // In production, log errors but don't display them
+    error_reporting(E_ALL);
+    ini_set('display_errors', 0);
+    ini_set('log_errors', 1);
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/google-calendar-config.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+
+// Ensure getAssetPath function is available
+if (!function_exists('getAssetPath')) {
+    function getAssetPath($asset) {
+        $asset = ltrim($asset, '/');
+        if (strpos($asset, 'assets/') === 0) {
+            $assetPath = $asset;
+        } else {
+            $assetPath = 'assets/' . $asset;
+        }
+        return '/' . $assetPath;
+    }
+}
 
 // If not logged in, redirect to login
 if (!isset($_SESSION['user_id'])) {
@@ -22,15 +59,18 @@ $user_role = $_SESSION['user_role'] ?? 'student';
 
 // If teacher parameter is set, fetch teacher details
 if (isset($_GET['teacher'])) {
-    $teacher_param = $_GET['teacher'];
-    $teacher_search = $conn->real_escape_string($teacher_param);
+    $teacher_param = trim($_GET['teacher']);
+    $teacher_search = "%{$teacher_param}%";
     
-    $sql = "SELECT id, name, email, profile_pic FROM users WHERE role='teacher' AND name LIKE '%$teacher_search%' LIMIT 1";
-    $result = $conn->query($sql);
+    $stmt = $conn->prepare("SELECT id, name, email, profile_pic FROM users WHERE role='teacher' AND name LIKE ? LIMIT 1");
+    $stmt->bind_param("s", $teacher_search);
+    $stmt->execute();
+    $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
         $teacher_data = $result->fetch_assoc();
         $selected_teacher = $teacher_data['id'];
+        $stmt->close();
         
         // Fetch teacher's availability slots
         $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
@@ -45,6 +85,13 @@ if (isset($_GET['teacher'])) {
 // Handle lesson booking (AJAX request)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'book_lesson') {
     header('Content-Type: application/json');
+    
+    // Only allow students (who have purchased) to book lessons
+    if ($_SESSION['user_role'] !== 'student') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Please purchase a lesson plan first to book lessons. Visit the payment page to get started.']);
+        exit();
+    }
     
     if (!$selected_teacher) {
         http_response_code(400);
@@ -125,6 +172,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $lesson_id = $stmt->insert_id;
     $stmt->close();
 
+    // Also create a booking record for compatibility
+    $booking_stmt = $conn->prepare("INSERT IGNORE INTO bookings (student_id, teacher_id, booking_date) VALUES (?, ?, ?)");
+    $booking_date = date('Y-m-d H:i:s');
+    $booking_stmt->bind_param("iis", $student_id, $teacher_id, $booking_date);
+    $booking_stmt->execute();
+    $booking_stmt->close();
+
     // Create Google Calendar event if connected
     if (!empty($teacher['google_calendar_token'])) {
         if (!empty($teacher['google_calendar_token_expiry']) && strtotime($teacher['google_calendar_token_expiry']) <= time()) {
@@ -204,58 +258,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit();
 }
 
-// Fetch user profile for header
-$stmt = $conn->prepare("SELECT profile_pic FROM users WHERE id = ?");
-$stmt->bind_param("i", $_SESSION['user_id']);
+// Fetch user data for header
+$user_id = $_SESSION['user_id'];
+$stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->bind_param("i", $user_id);
 $stmt->execute();
-$user_profile = $stmt->get_result()->fetch_assoc();
+$user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
-$_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-teacher.svg';
+
+// Set page title for header
+$page_title = 'Schedule & Book Lessons';
+$_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Schedule - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { display: flex; flex-direction: column; height: 100vh; margin: 0; background: #f4f4f9; }
-        .site-header { flex-shrink: 0; }
-        .main-wrapper { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { 
-            width: 250px; 
-            background: #2c3e50; 
-            color: white; 
-            padding-top: 20px; 
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-        .sidebar a { 
-            display: block; 
-            padding: 15px 20px; 
-            color: #adb5bd; 
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .sidebar a:hover, .sidebar a.active { 
-            background: #34495e; 
-            color: white; 
-        }
-        .sidebar h3 { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            color: white;
-            font-size: 1.1rem;
-        }
-        .sidebar hr {
-            border: none;
-            border-top: 1px solid #444;
-            margin: 15px 0;
-        }
-        .schedule-content { flex: 1; overflow-y: auto; padding: 30px; }
+        /* Schedule page specific styles */
         .schedule-container { max-width: 1200px; margin: 0 auto; }
 
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -313,88 +343,41 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
         .lesson-item strong { display: block; margin-bottom: 5px; }
 
         @media (max-width: 768px) {
-            .sidebar { width: 200px; }
             .teachers-grid { grid-template-columns: 1fr; }
             .time-slots { grid-template-columns: 1fr; }
         }
     </style>
 </head>
-<body>
-    <header class="site-header">
-        <div class="header-left"><a href="index.php"><img src="logo.png" alt="Logo" class="site-logo"></a></div>
-        <div class="header-center"><div class="branding"><h1 class="site-title">Schedule & Book Lessons</h1></div></div>
-        <?php include 'header-user.php'; ?>
-        
-        <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
-            <span class="hamburger" aria-hidden="true"></span>
-        </button>
-        
-        <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
-            <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
-            <a class="nav-btn" href="index.php">Home</a>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
-                    <a class="nav-btn" href="schedule.php">Schedule</a>
-                    <a class="nav-btn" href="classroom.php">Classroom</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'student'): ?>
-                    <a class="nav-btn" href="schedule.php">Book Lesson</a>
-                    <a class="nav-btn" href="student-dashboard.php">My Profile</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'teacher'): ?>
-                    <a class="nav-btn" href="teacher-dashboard.php">Dashboard</a>
-                    <a class="nav-btn" href="teacher-calendar-setup.php">Calendar Setup</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'admin'): ?>
-                    <a class="nav-btn" href="admin-dashboard.php">Admin Panel</a>
-                <?php endif; ?>
-                <a class="nav-btn" href="message_threads.php">Messages</a>
-                <a class="nav-btn" href="support_contact.php">Support</a>
-                <a class="nav-btn" href="logout.php">Logout</a>
-            <?php endif; ?>
-        </div>
-    </header>
+<body class="dashboard-layout">
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
-    <div class="main-wrapper">
-        <div class="sidebar">
-            <h3><?php echo ucfirst($_SESSION['user_role'] ?? 'User'); ?> Portal</h3>
-            <?php if ($_SESSION['user_role'] === 'teacher'): ?>
-                <a href="teacher-dashboard.php"><i class="fas fa-home"></i> Overview</a>
-                <a href="teacher-calendar-setup.php"><i class="fas fa-calendar-alt"></i> My Availability</a>
-                <a href="schedule.php" class="active"><i class="fas fa-calendar"></i> View Bookings</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($_SESSION['user_role'] === 'student'): ?>
-                <a href="student-dashboard.php"><i class="fas fa-home"></i> My Dashboard</a>
-                <a href="schedule.php" class="active"><i class="fas fa-calendar"></i> Book Lesson</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($_SESSION['user_role'] === 'admin'): ?>
-                <a href="admin-dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                <a href="admin-schedule-view.php" class="active"><i class="fas fa-calendar"></i> Teacher Schedules</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php endif; ?>
-            <a href="message_threads.php"><i class="fas fa-comments"></i> Messages</a>
-            <a href="support_contact.php"><i class="fas fa-headset"></i> Support</a>
-            <hr>
-            <a href="index.php"><i class="fas fa-arrow-left"></i> Home</a>
-            <hr>
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
+<div class="content-wrapper">
+    <?php 
+    // Set active tab for sidebar based on current page
+    $active_tab = 'schedule';
+    include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
+    ?>
 
-        <div class="schedule-content">
+    <div class="main">
             <div class="schedule-container">
-                <?php if (!isset($_GET['teacher']) && $_SESSION['user_role'] === 'student'): ?>
+                <?php if (!isset($_GET['teacher']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student')): ?>
                     <!-- Teacher Selection -->
                     <div class="card">
                         <h3><i class="fas fa-users"></i> Select a Teacher</h3>
-                        <p>Choose a teacher to view their availability and book a lesson.</p>
+                        <p>Choose a teacher to view their availability<?php echo $_SESSION['user_role'] === 'student' ? ' and book a lesson' : ''; ?>.</p>
+                        <?php if ($_SESSION['user_role'] === 'new_student'): ?>
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                                <strong><i class="fas fa-info-circle"></i> Purchase Required:</strong> Please <a href="payment.php" style="color: #004080; font-weight: bold;">purchase a lesson plan</a> to book lessons with teachers.
+                            </div>
+                        <?php endif; ?>
                         <div class="teachers-grid">
                             <?php
                             $teachers_result = $conn->query("SELECT id, name, profile_pic, email FROM users WHERE role='teacher' ORDER BY name");
                             while ($teacher = $teachers_result->fetch_assoc()):
                             ?>
                                 <div class="teacher-card">
-                                    <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? 'images/placeholder-teacher.svg'); ?>" 
-                                         style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;">
+                                    <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                         style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                     <h4><?php echo htmlspecialchars($teacher['name']); ?></h4>
                                     <p><?php echo htmlspecialchars($teacher['email']); ?></p>
                                     <a href="schedule.php?teacher=<?php echo urlencode($teacher['name']); ?>">View Availability</a>
@@ -408,13 +391,18 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
                         <h3><i class="fas fa-book"></i> Book Lesson with <?php echo htmlspecialchars($teacher_data['name']); ?></h3>
                         <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; align-items: start; margin-top: 20px;">
                             <div style="text-align: center;">
-                                <img src="<?php echo htmlspecialchars($teacher_data['profile_pic'] ?? 'images/placeholder-teacher.svg'); ?>" 
-                                     style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid #0b6cf5;">
+                                <img src="<?php echo htmlspecialchars($teacher_data['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                     style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 3px solid #0b6cf5;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <h4 style="margin: 15px 0 5px 0;"><?php echo htmlspecialchars($teacher_data['name']); ?></h4>
                                 <p style="color: #666; margin: 0;"><?php echo htmlspecialchars($teacher_data['email']); ?></p>
                             </div>
 
                             <div>
+                                <?php if ($_SESSION['user_role'] === 'new_student'): ?>
+                                    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                                        <strong><i class="fas fa-lock"></i> Purchase Required:</strong> You need to <a href="payment.php" style="color: #004080; font-weight: bold;">purchase a lesson plan</a> before you can book lessons. View our plans <a href="payment.php" style="color: #004080; font-weight: bold;">here</a>.
+                                    </div>
+                                <?php endif; ?>
                                 <h4>Available Time Slots</h4>
                                 <?php if (count($availability_slots) > 0): ?>
                                     <div class="availability-section">
@@ -427,6 +415,7 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
                                             <p style="color: #999;">Select a date to view available times</p>
                                         </div>
 
+                                        <?php if ($_SESSION['user_role'] === 'student'): ?>
                                         <form id="booking-form" class="booking-form" style="display: none;">
                                             <div class="form-group">
                                                 <label><strong>Selected Time:</strong> <span id="selected-time-display"></span></label>
@@ -434,6 +423,12 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
                                             <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Confirm Booking</button>
                                             <button type="button" class="btn" onclick="cancelBooking()" style="background: #6c757d; margin-left: 10px;">Cancel</button>
                                         </form>
+                                        <?php else: ?>
+                                        <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; text-align: center;">
+                                            <p style="margin: 0; color: #6c757d;"><i class="fas fa-lock"></i> Booking is only available after purchasing a lesson plan.</p>
+                                            <a href="payment.php" class="btn btn-primary" style="margin-top: 10px; display: inline-block;"><i class="fas fa-shopping-cart"></i> View Plans</a>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
 
                                     <script>
@@ -483,7 +478,11 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
                                         e.preventDefault();
                                         
                                         if (!selectedSlot) {
-                                            alert('Please select a time slot');
+                                            if (typeof toast !== 'undefined') {
+                                                toast.error('Please select a time slot');
+                                            } else {
+                                                alert('Please select a time slot');
+                                            }
                                             return;
                                         }
 
@@ -537,10 +536,14 @@ $_SESSION['profile_pic'] = $user_profile['profile_pic'] ?? 'images/placeholder-t
                         </div>
                     <?php endif; ?>
                 <?php endif; ?>
-            </div>
         </div>
     </div>
+</div>
 
-    <script src="js/menu.js" defer></script>
+    <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

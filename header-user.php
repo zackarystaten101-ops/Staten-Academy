@@ -2,6 +2,23 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+// Load dashboard functions if not already loaded
+if (!function_exists('getAssetPath')) {
+    if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+        require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+    } else {
+        function getAssetPath($asset) {
+            $asset = ltrim($asset, '/');
+            if (strpos($asset, 'assets/') === 0) {
+                $assetPath = $asset;
+            } else {
+                $assetPath = 'assets/' . $asset;
+            }
+            return '/' . $assetPath;
+        }
+    }
+}
 $user_profile_pic = null;
 $user_name = null;
 $user_role = null;
@@ -20,7 +37,7 @@ if (isset($_SESSION['user_id'])) {
              $result = $stmt->get_result();
              if ($result && $result->num_rows > 0) {
                  $user = $result->fetch_assoc();
-                 $_SESSION['profile_pic'] = $user['profile_pic'] ?? 'images/placeholder-teacher.svg';
+                 $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
                  $_SESSION['user_name'] = $user['name'] ?? 'User';
                  $_SESSION['user_role'] = $user['role'] ?? 'guest';
              }
@@ -28,7 +45,7 @@ if (isset($_SESSION['user_id'])) {
          }
      }
      
-     $user_profile_pic = $_SESSION['profile_pic'] ?? 'images/placeholder-teacher.svg';
+     $user_profile_pic = $_SESSION['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
      $user_name = $_SESSION['user_name'] ?? 'User';
      $user_role = $_SESSION['user_role'] ?? 'guest';
 }
@@ -94,6 +111,22 @@ if (isset($_SESSION['user_id'])) {
     .user-menu-dropdown.active {
         display: block;
     }
+    
+    /* Hide navigation links in dropdown on pages with sidebar - only show Messages, Support, Logout */
+    .user-menu-dropdown.has-sidebar a[href="index.php"],
+    .user-menu-dropdown.has-sidebar a[href*="schedule.php"],
+    .user-menu-dropdown.has-sidebar a[href*="profile.php"],
+    .user-menu-dropdown.has-sidebar a[href*="classroom.php"],
+    .user-menu-dropdown.has-sidebar a[href*="dashboard.php"],
+    .user-menu-dropdown.has-sidebar a[href*="apply-teacher.php"],
+    .user-menu-dropdown.has-sidebar a[href*="admin-dashboard.php"],
+    .user-menu-dropdown.has-sidebar a[href*="student-dashboard.php"] {
+        display: none !important;
+    }
+    
+    .user-menu-dropdown.has-sidebar hr:first-of-type {
+        display: none !important;
+    }
 
     .user-menu-dropdown a {
         display: block;
@@ -129,6 +162,15 @@ if (isset($_SESSION['user_id'])) {
 </style>
 
 <?php if (isset($_SESSION['user_id'])): ?>
+<?php 
+// Check if current page has a sidebar
+$has_sidebar = false;
+$current_page = basename($_SERVER['PHP_SELF']);
+$sidebar_pages = ['teacher-dashboard.php', 'student-dashboard.php', 'admin-dashboard.php', 'classroom.php', 'schedule.php'];
+if (in_array($current_page, $sidebar_pages)) {
+    $has_sidebar = true;
+}
+?>
 <div class="header-user-section">
     <div class="user-info-text">
         <div class="user-name"><?php echo htmlspecialchars($user_name); ?></div>
@@ -139,26 +181,39 @@ if (isset($_SESSION['user_id'])) {
         alt="Profile" 
         class="user-profile-pic"
         onclick="toggleUserMenu()"
-        onerror="this.src='images/placeholder-teacher.svg'"
+        onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'"
     >
-    <div class="user-menu-dropdown" id="userMenuDropdown">
-        <a href="index.php">Home</a>
-        <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
-            <a href="schedule.php">Schedule</a>
-            <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>">View Profile</a>
-            <a href="classroom.php">Classroom</a>
+    <div class="user-menu-dropdown <?php echo $has_sidebar ? 'has-sidebar' : ''; ?>" id="userMenuDropdown">
+        <?php 
+        // On pages with sidebar, only show essential links (Messages, Support, Logout)
+        // On pages without sidebar, show all navigation links
+        if (!$has_sidebar):
+        ?>
+            <a href="index.php">Home</a>
+            <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
+                <a href="schedule.php">Schedule</a>
+                <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>">View Profile</a>
+                <a href="classroom.php">Classroom</a>
+            <?php endif; ?>
+            <?php if ($user_role === 'visitor'): ?>
+                <a href="visitor-dashboard.php">My Dashboard</a>
+                <a href="payment.php">Upgrade to Student</a>
+            <?php elseif ($user_role === 'student'): ?>
+                <a href="schedule.php">Book Lesson</a>
+                <a href="student-dashboard.php">My Profile</a>
+            <?php endif; ?>
+            <?php if ($user_role === 'teacher'): ?>
+                <a href="teacher-dashboard.php">Dashboard</a>
+                <a href="apply-teacher.php">More Info</a>
+            <?php endif; ?>
+            <?php if ($user_role === 'admin'): ?>
+                <a href="admin-dashboard.php">Admin Panel</a>
+            <?php endif; ?>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid #eee;">
         <?php endif; ?>
-        <?php if ($user_role === 'student'): ?>
-            <a href="schedule.php">Book Lesson</a>
-            <a href="student-dashboard.php">My Profile</a>
-        <?php endif; ?>
-        <?php if ($user_role === 'teacher'): ?>
-            <a href="teacher-dashboard.php">Dashboard</a>
-            <a href="apply-teacher.php">More Info</a>
-        <?php endif; ?>
-        <?php if ($user_role === 'admin'): ?>
-            <a href="admin-dashboard.php">Admin Panel</a>
-        <?php endif; ?>
+        <!-- Always show these essential links -->
+        <a href="message_threads.php">Messages</a>
+        <a href="support_contact.php">Support</a>
         <hr style="margin: 5px 0; border: none; border-top: 1px solid #eee;">
         <a href="logout.php" class="menu-logout">Logout</a>
     </div>

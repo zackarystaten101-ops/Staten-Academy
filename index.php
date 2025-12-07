@@ -33,7 +33,48 @@ if (!isset($conn) || $conn->connect_error) {
 }
 
 // Load dashboard functions
-require_once __DIR__ . '/includes/dashboard-functions.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+
+// Ensure getAssetPath function is available
+if (!function_exists('getAssetPath')) {
+    function getAssetPath($asset) {
+        // Remove leading slash if present
+        $asset = ltrim($asset, '/');
+        
+        // Build base asset path
+        if (strpos($asset, 'assets/') === 0) {
+            $assetPath = $asset;
+        } else {
+            $assetPath = 'assets/' . $asset;
+        }
+        
+        // Get base path from SCRIPT_NAME - more reliable for subdirectories
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $basePath = dirname($scriptName);
+        $basePath = str_replace('\\', '/', $basePath);
+        
+        // Handle root case
+        if ($basePath === '.' || $basePath === '/' || empty($basePath)) {
+            $basePath = '';
+        } else {
+            // Ensure leading slash and remove trailing
+            $basePath = '/' . trim($basePath, '/');
+        }
+        
+        // Check if file exists in public/ directory (local development)
+        // Use absolute path from project root
+        $publicAssetPath = __DIR__ . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $assetPath);
+        
+        // If file exists in public/ directory, use that path
+        if (file_exists($publicAssetPath)) {
+            // For local dev with public/ directory structure
+            return $basePath . '/public/' . $assetPath;
+        }
+        
+        // For cPanel flat structure (files directly in public_html/assets/)
+        return $basePath . '/' . $assetPath;
+    }
+}
 
 // Get filter parameters
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -133,11 +174,15 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="description" content="Welcome to Staten Academy - Learn English with professional teachers and flexible plans.">
     <title>Staten Academy - Learn English</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .filter-bar {
@@ -254,13 +299,98 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 width: 100%;
             }
         }
+        
+        /* Plans Section Styles */
+        .plans-section {
+            background: #f9fbff;
+            padding: 60px 20px;
+            margin-top: 40px;
+        }
+        .plans-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .plans-section h2 {
+            color: #004080;
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .plans-intro {
+            text-align: center;
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+        .single-class-box {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 40px;
+            border: 2px solid #0b6cf5;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .single-class-box h3 {
+            color: #004080;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        .single-class-box p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .single-class-price {
+            font-size: 2.5rem;
+            color: #0b6cf5;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .single-class-price span {
+            font-size: 1rem;
+            color: #666;
+            font-weight: normal;
+        }
+        .btn-buy {
+            display: inline-block;
+            background: #0b6cf5;
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            margin-top: 10px;
+        }
+        .btn-buy:hover {
+            transform: scale(1.05);
+            background: #0056b3;
+        }
+        .plans-subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #004080;
+            font-size: 1.8rem;
+        }
+        .plans-disclaimer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
     <header class="site-header" role="banner">
         <div class="header-left">
             <a href="index.php" style="text-decoration: none; display: flex; align-items: center;">
-                <img src="logo.png" alt="Staten Academy logo" class="site-logo">
+                <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo">
             </a>
         </div>
 
@@ -288,6 +418,11 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             <a class="nav-btn" href="#teachers">
                 <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
                 <span class="nav-label">Teachers</span>
+            </a>
+            
+            <a class="nav-btn" href="#plans">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M7.5 21H2V9h5.5v12zm7.25-18h-5.5v18h5.5V3zM22 11h-5.5v10H22V11z"/></svg>
+                <span class="nav-label">Plans</span>
             </a>
             
             <a class="nav-btn" href="#about">
@@ -318,6 +453,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
 
     <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
 
+    <main id="main-content">
     <section id="teachers" class="teachers">
         <h2>Meet Our Teachers</h2>
         
@@ -369,7 +505,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <span class="teacher-price">$<?php echo number_format($teacher['hourly_rate'], 0); ?>/hr</span>
                 <?php endif; ?>
                 <a href="profile.php?id=<?php echo $teacher['id']; ?>" style="text-decoration: none; color: inherit;">
-                    <img src="<?php echo htmlspecialchars($teacher['profile_pic']); ?>" alt="<?php echo htmlspecialchars($teacher['name']); ?>" onerror="this.onerror=null;this.src='images/placeholder-teacher.svg'">
+                    <img src="<?php echo htmlspecialchars(!empty($teacher['profile_pic']) ? $teacher['profile_pic'] : getAssetPath('images/placeholder-teacher.svg')); ?>" alt="<?php echo htmlspecialchars($teacher['name']); ?>" onerror="this.onerror=null;this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                     <div class="teacher-info">
                         <h3><?php echo htmlspecialchars($teacher['name']); ?></h3>
                         <?php if (!empty($teacher['specialty'])): ?>
@@ -418,6 +554,74 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         </div>
     </section>
 
+    <section id="plans" class="plans-section">
+        <div class="plans-container">
+            <h2>Our Plans & Pricing</h2>
+            <p class="plans-intro">Choose the perfect plan for your English learning journey</p>
+            
+            <!-- Trial / Individual Class -->
+            <div class="single-class-box">
+                <h3>Trial Lesson / Individual Class</h3>
+                <p>Perfect for trying out a teacher or flexible scheduling.</p>
+                <div class="single-class-price">$30 <span>/ hour</span></div>
+                <a href="payment.php" class="btn-buy">Book Now</a>
+            </div>
+
+            <!-- Subscription Plans -->
+            <h3 class="plans-subtitle">Monthly Subscriptions</h3>
+            
+            <div class="plans-grid">
+                
+                <a href="payment.php" class="plan">
+                    <div class="plan-body">
+                        <h3>Economy Plan</h3>
+                        <p class="desc">1 class per week with a certified teacher.</p>
+                        <p class="desc" style="color: #d9534f; font-weight: 600; margin-top: 8px; font-size: 0.9rem;"><i class="fas fa-info-circle"></i> Teacher will be assigned</p>
+                        <p class="price">$85 / month</p>
+                    </div>
+                </a>
+
+                <a href="payment.php" class="plan">
+                    <div class="plan-body">
+                        <h3>Basic Plan</h3>
+                        <p class="desc">2 classes per week. Choose your own tutor.</p>
+                        <p class="price">$240 / month</p>
+                    </div>
+                </a>
+
+                <a href="payment.php" class="plan">
+                    <div class="plan-body">
+                        <h3>Standard Plan</h3>
+                        <p class="desc">4 classes per week, extra learning resources.</p>
+                        <p class="price">$400 / month</p>
+                    </div>
+                </a>
+
+                <a href="payment.php" class="plan">
+                    <div class="plan-body">
+                        <h3>Premium Plan</h3>
+                        <p class="desc">Unlimited classes, exclusive materials.</p>
+                        <p class="price">$850 / month</p>
+                    </div>
+                </a>
+
+            </div>
+            
+            <p class="plans-disclaimer">* Plans renew automatically. Cancel anytime.</p>
+            
+            <!-- Custom Plan Option -->
+            <div style="text-align: center; margin-top: 40px; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+                <h3 style="color: #004080; margin-bottom: 15px; font-size: 1.8rem;">Need a Custom Plan?</h3>
+                <p style="color: #666; margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto;">
+                    Build your own plan with the exact number of hours and courses you need. Choose your teacher, add extra courses, and include group support classes.
+                </p>
+                <a href="custom-plan.php" style="display: inline-block; background: linear-gradient(135deg, #0b6cf5 0%, #0056b3 100%); color: white; padding: 15px 40px; border-radius: 50px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: transform 0.2s, box-shadow 0.2s;">
+                    <i class="fas fa-cog"></i> Create Custom Plan
+                </a>
+            </div>
+        </div>
+    </section>
+
     <section id="about" class="about-us" style="background: white; padding: 60px 20px; margin-top: 40px;">
         <div class="container" style="text-align: center; max-width: 900px; margin: 0 auto;">
             <h2 style="color: #004080; font-size: 2.5rem; margin-bottom: 20px;">About Staten Academy</h2>
@@ -441,11 +645,12 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             </div>
         </div>
     </section>
+    </main>
 
     <footer>
         <p>Contact us: info@statenacademy.com | Phone: +1 234 567 890</p>
         <p>&copy; 2023 Staten Academy. All rights reserved.</p>
     </footer>
-    <script src="js/menu.js" defer></script>
+    <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>

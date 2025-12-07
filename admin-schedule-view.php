@@ -99,7 +99,19 @@ $stmt->bind_param("i", $admin_id);
 $stmt->execute();
 $admin_profile = $stmt->get_result()->fetch_assoc();
 $stmt->close();
-$_SESSION['profile_pic'] = $admin_profile['profile_pic'] ?? 'images/placeholder-teacher.svg';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+if (!function_exists('getAssetPath')) {
+    function getAssetPath($asset) {
+        $asset = ltrim($asset, '/');
+        if (strpos($asset, 'assets/') === 0) {
+            $assetPath = $asset;
+        } else {
+            $assetPath = 'assets/' . $asset;
+        }
+        return '/' . $assetPath;
+    }
+}
+$_SESSION['profile_pic'] = $admin_profile['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -48,7 +48,7 @@ $sql = "CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255),
     google_id VARCHAR(255),
     name VARCHAR(50),
-    role ENUM('student', 'teacher', 'admin') DEFAULT 'student',
+    role ENUM('visitor', 'new_student', 'student', 'teacher', 'admin') DEFAULT 'visitor',
     dob DATE,
     bio TEXT,
     hours_taught INT DEFAULT 0,
@@ -56,10 +56,24 @@ $sql = "CREATE TABLE IF NOT EXISTS users (
     calendly_link VARCHAR(255),
     application_status ENUM('none', 'pending', 'approved', 'rejected') DEFAULT 'none',
     reg_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)";
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
 if ($conn->query($sql) === FALSE) {
-    die("Error creating table: " . $conn->error);
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating users table: " . $conn->error);
+        die("Error creating table: " . $conn->error);
+    } else {
+        error_log("Error creating users table: " . $conn->error);
+        die("Database error. Please contact the administrator.");
+    }
+}
+
+// Ensure users table is using InnoDB engine (required for foreign keys)
+$engine_check = $conn->query("SHOW TABLE STATUS WHERE Name='users'");
+if ($engine_check && $engine_row = $engine_check->fetch_assoc()) {
+    if (strtoupper($engine_row['Engine']) !== 'INNODB') {
+        $conn->query("ALTER TABLE users ENGINE=InnoDB");
+    }
 }
 
 // Add new columns if they don't exist (migration)
@@ -82,6 +96,24 @@ if (!in_array('age_visibility', $existing_cols)) $conn->query("ALTER TABLE users
 if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN specialty VARCHAR(100) DEFAULT NULL AFTER age_visibility");
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 
+// Phase 1: Visitor role and subscription fields
+// Update role ENUM to include 'visitor' if not already updated
+$role_check = $conn->query("SHOW COLUMNS FROM users WHERE Field='role'");
+if ($role_check && $role_row = $role_check->fetch_assoc()) {
+    $role_type = $role_row['Type'];
+    if (strpos($role_type, 'new_student') === false) {
+        // Need to alter the ENUM - MySQL requires dropping and recreating
+        $conn->query("ALTER TABLE users MODIFY COLUMN role ENUM('visitor', 'new_student', 'student', 'teacher', 'admin') DEFAULT 'visitor'");
+    }
+}
+
+if (!in_array('has_purchased_class', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN has_purchased_class BOOLEAN DEFAULT FALSE AFTER role");
+if (!in_array('first_purchase_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN first_purchase_date TIMESTAMP NULL AFTER has_purchased_class");
+if (!in_array('subscription_plan_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_plan_id INT NULL AFTER first_purchase_date");
+if (!in_array('subscription_status', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_status ENUM('none', 'active', 'cancelled', 'expired') DEFAULT 'none' AFTER subscription_plan_id");
+if (!in_array('subscription_start_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_start_date TIMESTAMP NULL AFTER subscription_status");
+if (!in_array('subscription_end_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_end_date TIMESTAMP NULL AFTER subscription_start_date");
+
 // Create pending profile updates table
 $sql = "CREATE TABLE IF NOT EXISTS pending_updates (
     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -91,10 +123,15 @@ $sql = "CREATE TABLE IF NOT EXISTS pending_updates (
     profile_pic VARCHAR(255),
     about_text TEXT,
     video_url VARCHAR(255),
-    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating pending updates table: " . $conn->error); }
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='pending_updates' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE pending_updates ADD CONSTRAINT fk_pending_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Add columns to pending_updates if they don't exist
 $pending_cols = $conn->query("SHOW COLUMNS FROM pending_updates");
@@ -109,11 +146,19 @@ $sql = "CREATE TABLE IF NOT EXISTS bookings (
     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     student_id INT(6) UNSIGNED,
     teacher_id INT(6) UNSIGNED,
-    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (student_id) REFERENCES users(id),
-    FOREIGN KEY (teacher_id) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating bookings table: " . $conn->error); }
+    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='bookings' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE bookings ADD CONSTRAINT fk_bookings_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='bookings' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE bookings ADD CONSTRAINT fk_bookings_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Create messages table
 $sql = "CREATE TABLE IF NOT EXISTS messages (
@@ -122,11 +167,19 @@ $sql = "CREATE TABLE IF NOT EXISTS messages (
     receiver_id INT(6) UNSIGNED,
     message TEXT,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_read BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (sender_id) REFERENCES users(id),
-    FOREIGN KEY (receiver_id) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating messages table: " . $conn->error); }
+    is_read BOOLEAN DEFAULT FALSE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='messages' AND COLUMN_NAME='sender_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE messages ADD CONSTRAINT fk_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='messages' AND COLUMN_NAME='receiver_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE messages ADD CONSTRAINT fk_messages_receiver FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Create classroom materials table
 $sql = "CREATE TABLE IF NOT EXISTS classroom_materials (
@@ -137,10 +190,15 @@ $sql = "CREATE TABLE IF NOT EXISTS classroom_materials (
     link_url VARCHAR(255),
     type ENUM('file', 'link', 'video') DEFAULT 'file',
     uploaded_by INT(6) UNSIGNED,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (uploaded_by) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating materials table: " . $conn->error); }
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='classroom_materials' AND COLUMN_NAME='uploaded_by' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE classroom_materials ADD CONSTRAINT fk_materials_uploaded FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Create message_threads table (for user-to-user conversations)
 $sql = "CREATE TABLE IF NOT EXISTS message_threads (
@@ -149,11 +207,19 @@ $sql = "CREATE TABLE IF NOT EXISTS message_threads (
     recipient_id INT(6) UNSIGNED,
     last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     thread_type ENUM('user', 'support') DEFAULT 'user',
-    UNIQUE KEY unique_thread (initiator_id, recipient_id, thread_type),
-    FOREIGN KEY (initiator_id) REFERENCES users(id),
-    FOREIGN KEY (recipient_id) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating message_threads table: " . $conn->error); }
+    UNIQUE KEY unique_thread (initiator_id, recipient_id, thread_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='message_threads' AND COLUMN_NAME='initiator_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE message_threads ADD CONSTRAINT fk_threads_initiator FOREIGN KEY (initiator_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='message_threads' AND COLUMN_NAME='recipient_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE message_threads ADD CONSTRAINT fk_threads_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Create support_messages table (for support tickets)
 $sql = "CREATE TABLE IF NOT EXISTS support_messages (
@@ -163,10 +229,15 @@ $sql = "CREATE TABLE IF NOT EXISTS support_messages (
     message TEXT NOT NULL,
     subject VARCHAR(255),
     status ENUM('open', 'read', 'closed') DEFAULT 'open',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (sender_id) REFERENCES users(id)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating support_messages table: " . $conn->error); }
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='support_messages' AND COLUMN_NAME='sender_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE support_messages ADD CONSTRAINT fk_support_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Add columns to messages table if they don't exist (migrate existing table)
 $msg_cols = $conn->query("SHOW COLUMNS FROM messages");
@@ -193,10 +264,15 @@ $sql = "CREATE TABLE IF NOT EXISTS teacher_availability (
     is_available BOOLEAN DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY unique_teacher_slot (teacher_id, day_of_week, start_time)
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating teacher_availability table: " . $conn->error); }
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_availability' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE teacher_availability ADD CONSTRAINT fk_availability_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Create lessons table (for booked lessons)
 $sql = "CREATE TABLE IF NOT EXISTS lessons (
@@ -209,13 +285,418 @@ $sql = "CREATE TABLE IF NOT EXISTS lessons (
     status ENUM('scheduled', 'completed', 'cancelled') DEFAULT 'scheduled',
     google_calendar_event_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
-)";
-if ($conn->query($sql) === FALSE) { die("Error creating lessons table: " . $conn->error); }
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE lessons ADD CONSTRAINT fk_lessons_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE lessons ADD CONSTRAINT fk_lessons_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Add columns to users table for Google Calendar integration if they don't exist
 if (!in_array('google_calendar_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
 if (!in_array('google_calendar_token_expiry', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
 if (!in_array('google_calendar_refresh_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+
+// Create reviews table (for teacher reviews by students)
+// Drop existing table if it has bad foreign keys
+$reviews_exists = $conn->query("SHOW TABLES LIKE 'reviews'");
+if ($reviews_exists && $reviews_exists->num_rows > 0) {
+    // Drop the table and recreate it cleanly to avoid foreign key constraint errors
+    $conn->query("SET FOREIGN_KEY_CHECKS=0");
+    $conn->query("DROP TABLE IF EXISTS reviews");
+    $conn->query("SET FOREIGN_KEY_CHECKS=1");
+}
+
+$sql = "CREATE TABLE reviews (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    student_id INT(6) UNSIGNED NOT NULL,
+    booking_id INT(6) UNSIGNED DEFAULT NULL,
+    rating TINYINT NOT NULL,
+    review_text TEXT,
+    is_public BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_student (student_id),
+    INDEX idx_booking (booking_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+$create_result = $conn->query($sql);
+if ($create_result === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating reviews table: " . $conn->error);
+    }
+}
+
+// Add foreign keys separately after table creation
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='reviews' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $fk_result = $conn->query("ALTER TABLE reviews ADD CONSTRAINT fk_reviews_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+    if ($fk_result === FALSE && defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Warning: Could not add foreign key fk_reviews_teacher: " . $conn->error);
+    }
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='reviews' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $fk_result = $conn->query("ALTER TABLE reviews ADD CONSTRAINT fk_reviews_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+    if ($fk_result === FALSE && defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Warning: Could not add foreign key fk_reviews_student: " . $conn->error);
+    }
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='reviews' AND COLUMN_NAME='booking_id' AND REFERENCED_TABLE_NAME='bookings'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $fk_result = $conn->query("ALTER TABLE reviews ADD CONSTRAINT fk_reviews_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL");
+    if ($fk_result === FALSE && defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Warning: Could not add foreign key fk_reviews_booking: " . $conn->error);
+    }
+}
+
+// Phase 2: Course System Tables
+// Create course_categories table
+$sql = "CREATE TABLE IF NOT EXISTS course_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    icon VARCHAR(50) DEFAULT 'fa-book',
+    color VARCHAR(7) DEFAULT '#004080',
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating course_categories table: " . $conn->error);
+    }
+}
+
+// Create courses table (after course_categories exists)
+// First, ensure course_categories table exists and is InnoDB
+$cat_table = $conn->query("SHOW TABLE STATUS WHERE Name='course_categories'");
+if ($cat_table && $cat_row = $cat_table->fetch_assoc()) {
+    if (strtoupper($cat_row['Engine']) !== 'INNODB') {
+        $conn->query("ALTER TABLE course_categories ENGINE=InnoDB");
+    }
+}
+
+// Create courses table without inline foreign keys
+// Drop existing table if it has bad foreign keys (will recreate below)
+$courses_exists = $conn->query("SHOW TABLES LIKE 'courses'");
+if ($courses_exists && $courses_exists->num_rows > 0) {
+    // Drop the table and recreate it cleanly to avoid foreign key constraint errors
+    $conn->query("SET FOREIGN_KEY_CHECKS=0");
+    $conn->query("DROP TABLE IF EXISTS courses");
+    $conn->query("SET FOREIGN_KEY_CHECKS=1");
+}
+
+$sql = "CREATE TABLE courses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    thumbnail_url VARCHAR(500),
+    category_id INT NULL,
+    difficulty_level ENUM('beginner', 'intermediate', 'advanced') DEFAULT 'beginner',
+    duration_minutes INT DEFAULT 0,
+    instructor_id INT(6) UNSIGNED NULL,
+    is_featured BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_category (category_id),
+    INDEX idx_instructor (instructor_id),
+    INDEX idx_featured (is_featured),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+$create_result = $conn->query($sql);
+if ($create_result === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating courses table: " . $conn->error);
+    }
+}
+
+// Add foreign keys separately after table creation to avoid constraint errors
+// Wait a moment to ensure table is fully created
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='courses' AND COLUMN_NAME='category_id' AND REFERENCED_TABLE_NAME='course_categories'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $fk_result = $conn->query("ALTER TABLE courses ADD CONSTRAINT fk_courses_category FOREIGN KEY (category_id) REFERENCES course_categories(id) ON DELETE SET NULL");
+    if ($fk_result === FALSE && defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Warning: Could not add foreign key fk_courses_category: " . $conn->error);
+    }
+}
+
+$fk_check2 = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='courses' AND COLUMN_NAME='instructor_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check2 || $fk_check2->num_rows == 0) {
+    $fk_result = $conn->query("ALTER TABLE courses ADD CONSTRAINT fk_courses_instructor FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL");
+    if ($fk_result === FALSE && defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Warning: Could not add foreign key fk_courses_instructor: " . $conn->error);
+    }
+}
+
+// Create course_lessons table
+$sql = "CREATE TABLE IF NOT EXISTS course_lessons (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    course_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    video_url VARCHAR(500),
+    video_type ENUM('youtube', 'vimeo', 'self_hosted', 'external') DEFAULT 'youtube',
+    duration_minutes INT DEFAULT 0,
+    lesson_order INT DEFAULT 0,
+    is_preview BOOLEAN DEFAULT FALSE,
+    resources JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_course (course_id),
+    INDEX idx_order (course_id, lesson_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='course_lessons' AND CONSTRAINT_NAME='fk_lessons_course'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE course_lessons ADD CONSTRAINT fk_lessons_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE");
+}
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating course_lessons table: " . $conn->error);
+    }
+}
+
+// Create course_enrollments table
+$sql = "CREATE TABLE IF NOT EXISTS course_enrollments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT(6) UNSIGNED NOT NULL,
+    course_id INT NOT NULL,
+    enrollment_type ENUM('plan', 'purchase', 'free') DEFAULT 'plan',
+    plan_id INT NULL,
+    enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NULL,
+    UNIQUE KEY unique_enrollment (user_id, course_id),
+    INDEX idx_user (user_id),
+    INDEX idx_course (course_id),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='course_enrollments' AND CONSTRAINT_NAME='fk_enrollments_user'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE course_enrollments ADD CONSTRAINT fk_enrollments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='course_enrollments' AND CONSTRAINT_NAME='fk_enrollments_course'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE course_enrollments ADD CONSTRAINT fk_enrollments_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE");
+}
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating course_enrollments table: " . $conn->error);
+    }
+}
+
+// Create user_course_progress table
+$sql = "CREATE TABLE IF NOT EXISTS user_course_progress (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT(6) UNSIGNED NOT NULL,
+    course_id INT NOT NULL,
+    lesson_id INT NULL,
+    progress_percentage DECIMAL(5,2) DEFAULT 0,
+    completed_lessons JSON,
+    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    UNIQUE KEY unique_user_course (user_id, course_id),
+    INDEX idx_user (user_id),
+    INDEX idx_course (course_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_course_progress' AND CONSTRAINT_NAME='fk_progress_user'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_course_progress ADD CONSTRAINT fk_progress_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_course_progress' AND CONSTRAINT_NAME='fk_progress_course'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_course_progress ADD CONSTRAINT fk_progress_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_course_progress' AND CONSTRAINT_NAME='fk_progress_lesson'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_course_progress ADD CONSTRAINT fk_progress_lesson FOREIGN KEY (lesson_id) REFERENCES course_lessons(id) ON DELETE SET NULL");
+}
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating user_course_progress table: " . $conn->error);
+    }
+}
+
+// Create course_reviews table
+$sql = "CREATE TABLE IF NOT EXISTS course_reviews (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    course_id INT NOT NULL,
+    user_id INT(6) UNSIGNED NOT NULL,
+    rating INT CHECK (rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_review (course_id, user_id),
+    INDEX idx_course (course_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='course_reviews' AND CONSTRAINT_NAME='fk_reviews_course'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE course_reviews ADD CONSTRAINT fk_reviews_course FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='course_reviews' AND CONSTRAINT_NAME='fk_reviews_user'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE course_reviews ADD CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Phase 3: Subscription Plans Table
+$sql = "CREATE TABLE IF NOT EXISTS subscription_plans (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    price DECIMAL(10,2) NOT NULL,
+    stripe_price_id VARCHAR(255),
+    classes_per_week INT DEFAULT 0,
+    max_course_categories INT DEFAULT 0,
+    has_unlimited_classes BOOLEAN DEFAULT FALSE,
+    has_all_courses BOOLEAN DEFAULT FALSE,
+    features JSON,
+    is_active BOOLEAN DEFAULT TRUE,
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_active (is_active),
+    INDEX idx_order (display_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating subscription_plans table: " . $conn->error);
+    }
+}
+
+// Create user_selected_courses table
+$sql = "CREATE TABLE IF NOT EXISTS user_selected_courses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT(6) UNSIGNED NOT NULL,
+    category_id INT NOT NULL,
+    plan_id INT NOT NULL,
+    selected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_category_plan (user_id, category_id, plan_id),
+    INDEX idx_user (user_id),
+    INDEX idx_category (category_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys separately
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_selected_courses' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_selected_courses ADD CONSTRAINT fk_selected_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_selected_courses' AND COLUMN_NAME='category_id' AND REFERENCED_TABLE_NAME='course_categories'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_selected_courses ADD CONSTRAINT fk_selected_category FOREIGN KEY (category_id) REFERENCES course_categories(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='user_selected_courses' AND COLUMN_NAME='plan_id' AND REFERENCED_TABLE_NAME='subscription_plans'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE user_selected_courses ADD CONSTRAINT fk_selected_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE");
+}
+
+// Seed initial course categories (if table exists and is empty)
+$category_check = $conn->query("SELECT COUNT(*) as count FROM course_categories");
+if ($category_check) {
+    $cat_count = $category_check->fetch_assoc()['count'] ?? 0;
+    if ($cat_count == 0) {
+        $categories = [
+            ['name' => 'Grammar Fundamentals', 'description' => 'Basic to advanced grammar rules', 'icon' => 'fa-book', 'color' => '#004080', 'display_order' => 1],
+            ['name' => 'Conversational English', 'description' => 'Real-world conversation skills', 'icon' => 'fa-comments', 'color' => '#0b6cf5', 'display_order' => 2],
+            ['name' => 'Business English', 'description' => 'Professional communication', 'icon' => 'fa-briefcase', 'color' => '#28a745', 'display_order' => 3],
+            ['name' => 'Academic English', 'description' => 'IELTS, TOEFL preparation', 'icon' => 'fa-graduation-cap', 'color' => '#ffc107', 'display_order' => 4],
+            ['name' => 'Pronunciation & Accent', 'description' => 'Speaking and pronunciation', 'icon' => 'fa-microphone', 'color' => '#dc3545', 'display_order' => 5],
+            ['name' => 'Writing Skills', 'description' => 'Essay writing, emails, reports', 'icon' => 'fa-pen', 'color' => '#6f42c1', 'display_order' => 6],
+            ['name' => 'Listening Comprehension', 'description' => 'Audio-based learning', 'icon' => 'fa-headphones', 'color' => '#20c997', 'display_order' => 7],
+            ['name' => 'Vocabulary Building', 'description' => 'Word lists and usage', 'icon' => 'fa-book-open', 'color' => '#fd7e14', 'display_order' => 8],
+            ['name' => 'Cultural Context', 'description' => 'English-speaking cultures', 'icon' => 'fa-globe', 'color' => '#17a2b8', 'display_order' => 9],
+            ['name' => 'Test Preparation', 'description' => 'Exam-specific courses', 'icon' => 'fa-clipboard-check', 'color' => '#e83e8c', 'display_order' => 10]
+        ];
+        
+        foreach ($categories as $cat) {
+            $check = $conn->query("SELECT id FROM course_categories WHERE name = '" . $conn->real_escape_string($cat['name']) . "'");
+            if ($check && $check->num_rows == 0) {
+                $stmt = $conn->prepare("INSERT INTO course_categories (name, description, icon, color, display_order) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssi", $cat['name'], $cat['description'], $cat['icon'], $cat['color'], $cat['display_order']);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+    }
+}
+
+// Seed subscription plans (if table exists and is empty)
+$plan_check = $conn->query("SELECT COUNT(*) as count FROM subscription_plans");
+if ($plan_check) {
+    $plan_count = $plan_check->fetch_assoc()['count'] ?? 0;
+    if ($plan_count == 0) {
+        $plans = [
+            ['name' => 'Single Class', 'description' => 'One-time payment for a single class', 'price' => 30.00, 'classes_per_week' => 0, 'max_course_categories' => 0, 'has_unlimited_classes' => false, 'has_all_courses' => false, 'display_order' => 1],
+            ['name' => 'Economy Plan', 'description' => '1 class per week with a certified teacher', 'price' => 85.00, 'classes_per_week' => 1, 'max_course_categories' => 1, 'has_unlimited_classes' => false, 'has_all_courses' => false, 'display_order' => 2],
+            ['name' => 'Basic Plan', 'description' => '2 classes per week. Choose your own tutor', 'price' => 240.00, 'classes_per_week' => 2, 'max_course_categories' => 2, 'has_unlimited_classes' => false, 'has_all_courses' => false, 'display_order' => 3],
+            ['name' => 'Standard Plan', 'description' => '4 classes per week, extra learning resources', 'price' => 400.00, 'classes_per_week' => 4, 'max_course_categories' => 4, 'has_unlimited_classes' => false, 'has_all_courses' => false, 'display_order' => 4],
+            ['name' => 'Premium Plan', 'description' => 'Unlimited classes, exclusive materials', 'price' => 850.00, 'classes_per_week' => 0, 'max_course_categories' => 0, 'has_unlimited_classes' => true, 'has_all_courses' => true, 'display_order' => 5]
+        ];
+        
+        foreach ($plans as $plan) {
+            $check = $conn->query("SELECT id FROM subscription_plans WHERE name = '" . $conn->real_escape_string($plan['name']) . "'");
+            if ($check && $check->num_rows == 0) {
+                $features = json_encode(['priority_booking', 'progress_tracking', 'certificates']);
+                $stmt = $conn->prepare("INSERT INTO subscription_plans (name, description, price, classes_per_week, max_course_categories, has_unlimited_classes, has_all_courses, features, display_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssdiiissi", $plan['name'], $plan['description'], $plan['price'], $plan['classes_per_week'], $plan['max_course_categories'], $plan['has_unlimited_classes'], $plan['has_all_courses'], $features, $plan['display_order']);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+    }
+}
+
+// Create custom_plans table for user-defined custom subscription plans
+$sql = "CREATE TABLE IF NOT EXISTS custom_plans (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT(6) UNSIGNED NOT NULL,
+    plan_name VARCHAR(100) DEFAULT 'Custom Plan',
+    hours_per_week INT NOT NULL DEFAULT 1,
+    choose_own_teacher BOOLEAN DEFAULT TRUE,
+    hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 30.00,
+    extra_courses_count INT DEFAULT 0,
+    group_classes_count INT DEFAULT 0,
+    base_monthly_price DECIMAL(10,2) NOT NULL,
+    courses_extra DECIMAL(10,2) DEFAULT 0.00,
+    group_classes_extra DECIMAL(10,2) DEFAULT 0.00,
+    total_monthly_price DECIMAL(10,2) NOT NULL,
+    selected_course_ids JSON,
+    stripe_price_id VARCHAR(255) DEFAULT NULL,
+    stripe_subscription_id VARCHAR(255) DEFAULT NULL,
+    status ENUM('draft', 'active', 'cancelled', 'expired') DEFAULT 'draft',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+if ($conn->query($sql) === FALSE) {
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Error creating custom_plans table: " . $conn->error);
+    }
+}
+
+// Add foreign key for custom_plans
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='custom_plans' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE custom_plans ADD CONSTRAINT fk_custom_plan_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}

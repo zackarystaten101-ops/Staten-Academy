@@ -6,7 +6,7 @@
 
 session_start();
 require_once 'db.php';
-require_once 'includes/dashboard-functions.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -62,13 +62,13 @@ foreach ($notifications as $n) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notifications - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="dashboard-layout">
 
-<?php include 'includes/dashboard-header.php'; ?>
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
 <div class="content-wrapper">
     <div class="main" style="max-width: 800px; margin: 0 auto;">

@@ -174,14 +174,31 @@ function submitAssignment($conn, $student_id) {
         
         if (in_array(strtolower($ext), $allowed) && $file['size'] <= 10 * 1024 * 1024) {
             $filename = 'assignment_' . $assignment_id . '_' . time() . '.' . $ext;
-            $target = '../uploads/assignments/' . $filename;
             
-            if (!is_dir('../uploads/assignments')) {
-                mkdir('../uploads/assignments', 0755, true);
+            // Determine upload directory - works for both localhost and cPanel
+            $upload_base = dirname(__DIR__);
+            $public_uploads_dir = $upload_base . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'assignments';
+            $flat_uploads_dir = $upload_base . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'assignments';
+            
+            if (is_dir($public_uploads_dir)) {
+                $target_dir = $public_uploads_dir;
+            } elseif (is_dir($flat_uploads_dir)) {
+                $target_dir = $flat_uploads_dir;
+            } else {
+                $target_dir = is_dir($upload_base . DIRECTORY_SEPARATOR . 'public') ? $public_uploads_dir : $flat_uploads_dir;
+                @mkdir($target_dir, 0755, true);
+            }
+            
+            $target = $target_dir . DIRECTORY_SEPARATOR . $filename;
+            
+            // Security check: verify file was actually uploaded
+            if (!is_uploaded_file($file['tmp_name'])) {
+                echo json_encode(['error' => 'Invalid upload detected. Security check failed.']);
+                return;
             }
             
             if (move_uploaded_file($file['tmp_name'], $target)) {
-                $file_path = 'uploads/assignments/' . $filename;
+                $file_path = '/uploads/assignments/' . $filename;
             }
         }
     }

@@ -1,9 +1,22 @@
 <?php
-session_start();
-require_once 'db.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
 
 // Security check: Must be Admin
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
+    ob_end_clean(); // Clear output buffer before die
     die("Access denied.");
 }
 
@@ -12,83 +25,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
      if ($action === 'make_teacher') {
          $user_id = intval($_POST['user_id']);
-         
-         // Check if user has pending profile updates and auto-approve them
-         $pending_check = $conn->prepare("SELECT id, name, bio, profile_pic, about_text, video_url FROM pending_updates WHERE user_id = ?");
-         $pending_check->bind_param("i", $user_id);
-         $pending_check->execute();
-         $pending_result = $pending_check->get_result();
-         
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
-         $stmt->execute();
-         $stmt->close();
-         
-         // Auto-approve pending profile updates if they exist
-         if ($pending_result->num_rows > 0) {
-             $pending_update = $pending_result->fetch_assoc();
-             
-             $update_stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, about_text = ?, video_url = ? WHERE id = ?");
-             $update_stmt->bind_param("ssssi", 
-                 $pending_update['bio'], 
-                 $pending_update['profile_pic'], 
-                 $pending_update['about_text'], 
-                 $pending_update['video_url'], 
-                 $user_id
-             );
-             $update_stmt->execute();
-             $update_stmt->close();
-             
-             $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE user_id = ?");
-             $del_stmt->bind_param("i", $user_id);
-             $del_stmt->execute();
-             $del_stmt->close();
-         }
-         
-         $pending_check->close();
      } elseif ($action === 'make_student') {
          $user_id = intval($_POST['user_id']);
          $stmt = $conn->prepare("UPDATE users SET role = 'student' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
      } elseif ($action === 'approve_teacher') {
          $user_id = intval($_POST['user_id']);
-         
-         // First, check if user has pending profile updates
-         $pending_check = $conn->prepare("SELECT id, name, bio, profile_pic, about_text, video_url FROM pending_updates WHERE user_id = ?");
-         $pending_check->bind_param("i", $user_id);
-         $pending_check->execute();
-         $pending_result = $pending_check->get_result();
-         
-         // Approve the teacher application
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
          $stmt->bind_param("i", $user_id);
-         $stmt->execute();
-         $stmt->close();
-         
-         // If there are pending profile updates, auto-approve them
-         if ($pending_result->num_rows > 0) {
-             $pending_update = $pending_result->fetch_assoc();
-             
-             // Apply the pending profile updates to the user
-             $update_stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, about_text = ?, video_url = ? WHERE id = ?");
-             $update_stmt->bind_param("ssssi", 
-                 $pending_update['bio'], 
-                 $pending_update['profile_pic'], 
-                 $pending_update['about_text'], 
-                 $pending_update['video_url'], 
-                 $user_id
-             );
-             $update_stmt->execute();
-             $update_stmt->close();
-             
-             // Delete the pending update record
-             $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE user_id = ?");
-             $del_stmt->bind_param("i", $user_id);
-             $del_stmt->execute();
-             $del_stmt->close();
-         }
-         
-         $pending_check->close();
      } elseif ($action === 'reject_teacher') {
          $user_id = intval($_POST['user_id']);
          $stmt = $conn->prepare("UPDATE users SET application_status = 'rejected' WHERE id = ?");
@@ -123,9 +69,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
              $del_stmt->execute();
              $del_stmt->close();
          }
-         $update_stmt->close();
-         header("Location: admin-dashboard.php?msg=success");
-         exit();
+        $update_stmt->close();
+        ob_end_clean(); // Clear output buffer before redirect
+        header("Location: admin-dashboard.php?msg=success");
+        exit();
      } elseif ($action === 'reject_profile') {
          $update_id = intval($_POST['update_id']);
          
@@ -157,12 +104,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
      if (isset($stmt)) {
          if ($stmt->execute()) {
+             ob_end_clean(); // Clear output buffer before redirect
              header("Location: admin-dashboard.php?msg=success");
+             exit();
          } else {
+             ob_end_clean(); // Clear output buffer before echo
              echo "Error updating record: " . $conn->error;
          }
          $stmt->close();
      }
  }
+ ob_end_clean(); // Clear output buffer before closing
  $conn->close();
 ?>

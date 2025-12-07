@@ -1,9 +1,22 @@
 <?php
-session_start();
-require_once 'db.php';
-require_once 'google-calendar-config.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/google-calendar-config.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'teacher') {
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: login.php");
     exit();
 }
@@ -19,6 +32,9 @@ $stmt->bind_param("i", $teacher_id);
 $stmt->execute();
 $teacher = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+
+// Set $user for header component
+$user = $teacher;
 
 // Check if Google Calendar is connected
 $has_calendar = !empty($teacher['google_calendar_token']);
@@ -105,6 +121,9 @@ $upcoming_lessons = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// Set page title for header
+$page_title = 'Calendar Setup';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -112,18 +131,33 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Su
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calendar Setup - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <?php
+    // Ensure getAssetPath is available
+    if (!function_exists('getAssetPath')) {
+        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        } else {
+            function getAssetPath($asset) {
+                $asset = ltrim($asset, '/');
+                if (strpos($asset, 'assets/') === 0) {
+                    $assetPath = $asset;
+                } else {
+                    $assetPath = 'assets/' . $asset;
+                }
+                return '/' . $assetPath;
+            }
+        }
+    }
+    ?>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background: #f4f4f9; margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: Arial, sans-serif; }
-        .header-bar { background: #004080; color: white; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header-bar h2 { margin: 0; }
-        .main-wrapper { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { width: 250px; background: #2c3e50; color: white; padding-top: 20px; overflow-y: auto; }
-        .sidebar a { display: block; padding: 12px 20px; color: #adb5bd; text-decoration: none; transition: 0.2s; }
-        .sidebar a:hover, .sidebar a.active { background: #34495e; color: white; }
-        .content { flex: 1; overflow-y: auto; padding: 30px; }
-        .container { max-width: 1000px; }
+        /* Calendar page specific styles */
+        .calendar-container { max-width: 1200px; margin: 0 auto; }
 
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .card h3 { margin-top: 0; color: #004080; border-bottom: 2px solid #0b6cf5; padding-bottom: 10px; }
@@ -168,26 +202,18 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Su
         .connected-status strong { color: #155724; }
     </style>
 </head>
-<body>
-    <header class="header-bar">
-        <h2><i class="fas fa-calendar"></i> Calendar Setup</h2>
-        <div><?php echo htmlspecialchars($teacher['name']); ?></div>
-    </header>
+<body class="dashboard-layout">
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
-    <div class="main-wrapper">
-        <div class="sidebar">
-            <h3>Teacher Portal</h3>
-            <a href="teacher-dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-            <a href="teacher-calendar-setup.php" class="active"><i class="fas fa-calendar"></i> Calendar Setup</a>
-            <a href="schedule.php"><i class="fas fa-clock"></i> View Bookings</a>
-            <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <hr style="border: none; border-top: 1px solid #444; margin: 15px 0;">
-            <a href="message_threads.php"><i class="fas fa-comments"></i> Messages</a>
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
+<div class="content-wrapper">
+    <?php 
+    // Set active tab for sidebar
+    $active_tab = 'calendar-setup';
+    include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
+    ?>
 
-        <div class="content">
-            <div class="container">
+    <div class="main">
+        <div class="calendar-container">
                 <!-- Success/Error Messages -->
                 <?php if ($success_msg): ?>
                     <div class="alert alert-success"><i class="fas fa-check-circle"></i> <?php echo $success_msg; ?></div>
@@ -308,8 +334,12 @@ $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Su
                         <p style="color: #999; padding: 20px; text-align: center;">No upcoming lessons scheduled.</p>
                     <?php endif; ?>
                 </div>
-            </div>
         </div>
     </div>
+</div>
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

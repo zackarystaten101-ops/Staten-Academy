@@ -9,14 +9,14 @@
  */
 
 if (!isset($user) && isset($_SESSION['user_id'])) {
-    require_once __DIR__ . '/../db.php';
+    require_once __DIR__ . '/../../../db.php';
     require_once __DIR__ . '/dashboard-functions.php';
     $user = getUserById($conn, $_SESSION['user_id']);
 }
 
 $user_name = $user['name'] ?? $_SESSION['user_name'] ?? 'User';
 $user_role = $user['role'] ?? $_SESSION['user_role'] ?? 'guest';
-$user_pic = $user['profile_pic'] ?? 'images/placeholder-teacher.svg';
+$user_pic = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 $notification_count = isset($conn) ? getUnreadNotificationCount($conn, $_SESSION['user_id'] ?? 0) : 0;
 $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id'] ?? 0) : 0;
 ?>
@@ -26,10 +26,23 @@ $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id
         <button class="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Toggle menu">
             <i class="fas fa-bars"></i>
         </button>
-        <a href="index.php" class="header-logo-link">
-            <img src="logo.png" alt="Logo" class="header-logo">
+        <a href="index.php" class="header-logo-link" title="Go to Website Home">
+            <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Logo" class="header-logo">
             <h2>Staten Academy</h2>
         </a>
+        <?php if ($user_role === 'teacher'): ?>
+            <a href="index.php" class="header-home-btn" title="Go to Website Home">
+                <i class="fas fa-home"></i> <span>Home</span>
+            </a>
+        <?php elseif ($user_role === 'student'): ?>
+            <a href="index.php" class="header-home-btn" title="Go to Website Home">
+                <i class="fas fa-home"></i> <span>Home</span>
+            </a>
+        <?php elseif ($user_role === 'admin'): ?>
+            <a href="index.php" class="header-home-btn" title="Go to Website Home">
+                <i class="fas fa-home"></i> <span>Home</span>
+            </a>
+        <?php endif; ?>
     </div>
     
     <div class="header-bar-center">
@@ -77,7 +90,7 @@ $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id
                 <div class="header-bar-info-name"><?php echo h($user_name); ?></div>
                 <div class="header-bar-info-role"><?php echo ucfirst(h($user_role)); ?></div>
             </div>
-            <img src="<?php echo h($user_pic); ?>" alt="Profile" class="header-bar-profile-pic" onerror="this.src='images/placeholder-teacher.svg'">
+            <img src="<?php echo h($user_pic); ?>" alt="Profile" class="header-bar-profile-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
             
             <!-- Profile Dropdown -->
             <div class="profile-dropdown" id="profileDropdown">
@@ -196,5 +209,54 @@ document.addEventListener('click', function(e) {
         document.getElementById('profileDropdown')?.classList.remove('active');
     }
 });
+
+// Make switchTab function available globally for header home button
+if (typeof switchTab === 'undefined') {
+    window.switchTab = function(id) {
+        // Prevent any page navigation
+        if (event) event.preventDefault();
+        
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        const targetTab = document.getElementById(id);
+        if (targetTab) {
+            targetTab.classList.add('active');
+        }
+        
+        document.querySelectorAll('.sidebar-menu a').forEach(el => el.classList.remove('active'));
+        const activeLink = document.querySelector(`.sidebar-menu a[onclick*="${id}"]`);
+        if (activeLink) activeLink.classList.add('active');
+        
+        // Also check sidebar header button
+        const sidebarHeader = document.querySelector('.sidebar-header a');
+        if (sidebarHeader && (id === 'overview' || id === 'dashboard')) {
+            sidebarHeader.classList.add('active');
+        }
+        
+        // Scroll to top of main content
+        const mainContent = document.querySelector('.main');
+        if (mainContent) mainContent.scrollTop = 0;
+        
+        // Update URL hash without triggering page reload
+        if (window.location.hash !== '#' + id) {
+            window.history.pushState(null, null, '#' + id);
+        }
+    };
+    
+    // Handle hash changes for browser back/forward
+    window.addEventListener('hashchange', function() {
+        const hash = window.location.hash.substring(1);
+        if (hash && document.getElementById(hash)) {
+            window.switchTab(hash);
+        }
+    });
+    
+    // Handle initial hash on load
+    document.addEventListener('DOMContentLoaded', function() {
+        const hash = window.location.hash.substring(1);
+        if (hash && document.getElementById(hash)) {
+            window.switchTab(hash);
+        }
+    });
+}
 </script>
 

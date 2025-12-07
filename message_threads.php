@@ -1,14 +1,32 @@
 <?php
-session_start();
-require_once 'db.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
-$user_role = $_SESSION['user_role'];
+$user_id = $_SESSION['user_id'] ?? null;
+$user_role = $_SESSION['user_role'] ?? 'guest';
+
+if (!$user_id) {
+    header("Location: login.php");
+    exit();
+}
 
 // Fetch current user
 $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
@@ -16,6 +34,13 @@ $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $current_user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+
+// Set $user for header component
+$user = $current_user;
+
+// Set page title for header
+$page_title = 'Messages';
+$_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 
 // Get conversation ID from query parameter
 $thread_id = isset($_GET['thread_id']) ? intval($_GET['thread_id']) : 0;
@@ -38,8 +63,8 @@ if ($other_user_id > 0) {
     }
     
     // Check message permissions
-    // Teachers can ONLY reply to messages from students
-    if ($user_role === 'teacher' && $other_user['role'] === 'student') {
+    // Teachers can ONLY reply to messages from students (including new_student)
+    if ($user_role === 'teacher' && ($other_user['role'] === 'student' || $other_user['role'] === 'new_student')) {
         $check = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct'");
         $check->bind_param("ii", $other_user_id, $user_id);
         $check->execute();
@@ -51,7 +76,7 @@ if ($other_user_id > 0) {
     
     // Fetch messages (only direct messages, ordered by time)
     $stmt = $conn->prepare("
-        SELECT m.id, m.sender_id, m.receiver_id, m.message, m.sent_at, u.name as sender_name, u.profile_pic 
+        SELECT m.id, m.sender_id, m.receiver_id, m.message, m.sent_at, m.is_read, u.name as sender_name, u.profile_pic 
         FROM messages m 
         JOIN users u ON m.sender_id = u.id
         WHERE m.message_type = 'direct'
@@ -63,6 +88,14 @@ if ($other_user_id > 0) {
     $result = $stmt->get_result();
     $messages = $result->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
+    
+    // Mark messages as read when user views the conversation
+    if (count($messages) > 0) {
+        $stmt = $conn->prepare("UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0 AND message_type = 'direct'");
+        $stmt->bind_param("ii", $user_id, $other_user_id);
+        $stmt->execute();
+        $stmt->close();
+    }
 }
 
 // Handle message sending (AJAX or POST)
@@ -131,24 +164,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Fetch conversations (with last message preview)
 $conversations = [];
-$stmt = $conn->prepare("
-    SELECT DISTINCT 
+// Get all unique conversation partners
+$sql = "
+    SELECT 
         CASE 
             WHEN sender_id = ? THEN receiver_id 
             ELSE sender_id 
         END as other_user_id,
-        MAX(m.sent_at) as last_message_time
-    FROM messages m
-    WHERE m.message_type = 'direct'
-    AND (m.sender_id = ? OR m.receiver_id = ?)
+        MAX(sent_at) as last_message_time
+    FROM messages
+    WHERE message_type = 'direct'
+    AND (sender_id = ? OR receiver_id = ?)
     GROUP BY other_user_id
     ORDER BY last_message_time DESC
-");
-$stmt->bind_param("iii", $user_id, $user_id, $user_id);
-$stmt->execute();
-$conv_result = $stmt->get_result();
+";
+$stmt = $conn->prepare($sql);
+if ($stmt) {
+    $stmt->bind_param("iii", $user_id, $user_id, $user_id);
+    $stmt->execute();
+    $conv_result = $stmt->get_result();
+} else {
+    // Fallback if prepared statement fails
+    $conv_result = false;
+    error_log("Failed to prepare conversation query: " . $conn->error);
+}
 
-while ($conv = $conv_result->fetch_assoc()) {
+if ($conv_result) {
+    while ($conv = $conv_result->fetch_assoc()) {
     $other_id = $conv['other_user_id'];
     
     // Fetch user details
@@ -177,89 +219,28 @@ while ($conv = $conv_result->fetch_assoc()) {
         $user_info['last_message_time'] = $last_msg['sent_at'] ?? '';
         $conversations[] = $user_info;
     }
+    }
+    $stmt->close();
 }
-$stmt->close();
 
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Messages - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body { 
-            background: #f0f2f5; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        .container { 
-            display: flex; 
-            height: 100vh; 
-            flex-direction: column;
-        }
-        
-        .content-wrapper {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        
-        .sidebar { 
-            width: 250px; 
-            background: #2c3e50; 
-            color: white; 
-            padding-top: 20px; 
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-        
-        .sidebar a { 
-            display: block; 
-            padding: 15px 20px; 
-            color: #adb5bd; 
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        
-        .sidebar a:hover, .sidebar a.active { 
-            background: #34495e; 
-            color: white; 
-        }
-        
-        .sidebar h3 { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            color: white;
-            font-size: 1.1rem;
-        }
-        
-        .sidebar hr {
-            border: none;
-            border-top: 1px solid #444;
-            margin: 15px 0;
-        }
-        
-        .header { 
-            background: #004080; 
-            color: white; 
-            padding: 15px 20px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .header-left h2 { margin: 0; font-size: 1.3rem; }
-        
-        .content { 
+        /* Messages page specific styles */
+        .messages-layout { 
             display: flex; 
             flex: 1; 
             overflow: hidden;
@@ -545,50 +526,18 @@ $stmt->close();
         }
     </style>
 </head>
-<body>
+<body class="dashboard-layout">
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
-<div class="container">
-    <!-- Header -->
-    <div class="header">
-        <div class="header-left">
-            <a href="index.php" style="color: white; text-decoration: none; display: flex; align-items: center; gap: 10px;">
-                <img src="logo.png" alt="Logo" style="width: 35px; height: 35px; object-fit: contain;">
-                <h2>Messages</h2>
-            </a>
-        </div>
-        <a href="<?php echo ($user_role === 'student' ? 'student-dashboard.php' : ($user_role === 'teacher' ? 'teacher-dashboard.php' : 'admin-dashboard.php')); ?>" style="color: white; text-decoration: none;">
-            <i class="fas fa-arrow-left"></i> Back
-        </a>
-    </div>
+<div class="content-wrapper">
+    <?php 
+    // Set active tab for sidebar - messages is accessed from sidebar, so we'll handle it differently
+    $active_tab = 'messages';
+    include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
+    ?>
     
-    <div class="content-wrapper">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <h3><?php echo ucfirst($user_role); ?> Portal</h3>
-            <?php if ($user_role === 'teacher'): ?>
-                <a href="teacher-dashboard.php"><i class="fas fa-home"></i> Overview</a>
-                <a href="schedule.php"><i class="fas fa-calendar"></i> Schedule</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($user_role === 'student'): ?>
-                <a href="student-dashboard.php"><i class="fas fa-home"></i> Overview</a>
-                <a href="schedule.php"><i class="fas fa-calendar"></i> Schedule</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($user_role === 'admin'): ?>
-                <a href="admin-dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                <a href="classroom.php"><i class="fas fa-book"></i> Classroom</a>
-            <?php endif; ?>
-            <a href="message_threads.php" class="active"><i class="fas fa-comments"></i> Messages</a>
-            <a href="support_contact.php"><i class="fas fa-headset"></i> Support</a>
-            <hr>
-            <a href="index.php"><i class="fas fa-arrow-left"></i> Home Page</a>
-            <?php if ($user_role === 'teacher'): ?>
-                <a href="profile.php?id=<?php echo $user_id; ?>"><i class="fas fa-eye"></i> View Profile</a>
-            <?php endif; ?>
-            <hr>
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
-    
-        <div class="content">
+    <div class="main messages-layout" style="display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+        <div class="content" style="display: flex; flex: 1; overflow: hidden; gap: 0;">
         <!-- Conversations List -->
         <div class="conversations-panel">
             <div class="conversations-header">
@@ -599,7 +548,7 @@ $stmt->close();
                 <?php foreach ($conversations as $conv): ?>
                     <div class="conversation-item <?php echo ($other_user && $other_user['id'] == $conv['id']) ? 'active' : ''; ?>" 
                          onclick="location.href='message_threads.php?user_id=<?php echo $conv['id']; ?>'">
-                        <img src="<?php echo htmlspecialchars($conv['profile_pic']); ?>" alt="" class="conv-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                        <img src="<?php echo htmlspecialchars($conv['profile_pic']); ?>" alt="" class="conv-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                         <div class="conv-info">
                             <div class="conv-header">
                                 <div class="conv-name"><?php echo htmlspecialchars($conv['name']); ?></div>
@@ -623,7 +572,7 @@ $stmt->close();
             <?php if ($other_user): ?>
                 <!-- Chat Header -->
                 <div class="chat-header">
-                    <img src="<?php echo htmlspecialchars($other_user['profile_pic']); ?>" alt="" onerror="this.src='images/placeholder-teacher.svg'">
+                    <img src="<?php echo htmlspecialchars($other_user['profile_pic']); ?>" alt="" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                     <div class="chat-header-info">
                         <h3><?php echo htmlspecialchars($other_user['name']); ?></h3>
                         <p><?php echo ucfirst($other_user['role']); ?> • <?php echo htmlspecialchars($other_user['email']); ?></p>
@@ -642,7 +591,7 @@ $stmt->close();
                     <?php if (count($messages) > 0): ?>
                         <?php foreach ($messages as $msg): ?>
                             <div class="message <?php echo ($msg['sender_id'] == $user_id) ? 'sent' : 'received'; ?>">
-                                <img src="<?php echo htmlspecialchars($msg['profile_pic']); ?>" alt="" class="message-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                                <img src="<?php echo htmlspecialchars($msg['profile_pic']); ?>" alt="" class="message-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <div>
                                     <div class="message-bubble"><?php echo htmlspecialchars($msg['message']); ?></div>
                                     <div class="message-time"><?php echo date('M d, H:i', strtotime($msg['sent_at'])); ?></div>
@@ -774,8 +723,9 @@ $stmt->close();
                             minute: '2-digit'
                         });
                         
+                        const placeholderImg = '<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>';
                         div.innerHTML = `
-                            <img src="${msg.profile_pic || 'images/placeholder-teacher.svg'}" alt="" class="message-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                            <img src="${msg.profile_pic || placeholderImg}" alt="" class="message-pic" onerror="this.src='${placeholderImg}'">
                             <div>
                                 <div class="message-bubble">${escapeHtml(msg.message)}</div>
                                 <div class="message-time">${timeStr}</div>
@@ -815,3 +765,7 @@ $stmt->close();
 
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

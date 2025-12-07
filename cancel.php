@@ -7,7 +7,25 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment Cancelled - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <?php
+    // Ensure getAssetPath is available
+    if (!function_exists('getAssetPath')) {
+        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        } else {
+            function getAssetPath($asset) {
+                $asset = ltrim($asset, '/');
+                if (strpos($asset, 'assets/') === 0) {
+                    $assetPath = $asset;
+                } else {
+                    $assetPath = 'assets/' . $asset;
+                }
+                return '/' . $assetPath;
+            }
+        }
+    }
+    ?>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <style>
         .message-box {
             max-width: 600px;

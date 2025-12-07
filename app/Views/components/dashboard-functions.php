@@ -4,6 +4,11 @@
  * Shared utility functions for all dashboard pages
  */
 
+// Load Security Helper if available
+if (file_exists(__DIR__ . '/../../Helpers/SecurityHelper.php')) {
+    require_once __DIR__ . '/../../Helpers/SecurityHelper.php';
+}
+
 /**
  * Get user data by ID
  */
@@ -156,7 +161,8 @@ function getStudentStats($conn, $student_id) {
  * Get teacher's student count
  */
 function getTeacherStudentCount($conn, $teacher_id) {
-    $stmt = $conn->prepare("SELECT COUNT(DISTINCT student_id) as count FROM bookings WHERE teacher_id = ?");
+    // Only count students who have actually booked lessons with this teacher
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT l.student_id) as count FROM lessons l JOIN users u ON l.student_id = u.id WHERE l.teacher_id = ? AND u.role IN ('student', 'new_student')");
     $stmt->bind_param("i", $teacher_id);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
@@ -274,6 +280,54 @@ function h($string) {
 }
 
 /**
+ * Get asset path - works for both local development and cPanel deployment
+ * @param string $asset Relative path from assets directory (e.g., 'styles.css', 'css/dashboard.css', 'logo.png')
+ * @return string Correct URL path to asset (always uses forward slashes)
+ */
+function getAssetPath($asset) {
+    // Remove leading slash if present
+    $asset = ltrim($asset, '/');
+    
+    // Build base asset path
+    if (strpos($asset, 'assets/') === 0) {
+        $assetPath = $asset;
+    } else {
+        $assetPath = 'assets/' . $asset;
+    }
+    
+    // Get base path from REQUEST_URI - more reliable for subdirectories
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    
+    // Extract the directory path from SCRIPT_NAME
+    $basePath = dirname($scriptName);
+    $basePath = str_replace('\\', '/', $basePath);
+    
+    // Handle root case
+    if ($basePath === '.' || $basePath === '/' || empty($basePath)) {
+        $basePath = '';
+    } else {
+        // Ensure leading slash and remove trailing
+        $basePath = '/' . trim($basePath, '/');
+    }
+    
+    // Check if we're in local development (public/ directory exists)
+    // Go up 3 levels from app/Views/components to project root
+    $baseDir = dirname(dirname(dirname(__DIR__)));
+    $publicDir = $baseDir . DIRECTORY_SEPARATOR . 'public';
+    $publicAssetsDir = $publicDir . DIRECTORY_SEPARATOR . 'assets';
+    
+    // For local development: if public/assets/ directory exists, always use /public/ path
+    // This handles the case where files are in public/assets/ directory
+    if (is_dir($publicAssetsDir)) {
+        return $basePath . '/public/' . $assetPath;
+    }
+    
+    // For cPanel flat structure (files directly in public_html/assets/)
+    return $basePath . '/' . $assetPath;
+}
+
+/**
  * Check if user is favorite teacher for current student
  */
 function isTeacherFavorite($conn, $student_id, $teacher_id) {
@@ -285,6 +339,54 @@ function isTeacherFavorite($conn, $student_id, $teacher_id) {
     $isFavorite = $result->num_rows > 0;
     $stmt->close();
     return $isFavorite;
+}
+
+/**
+ * Get upload directory path for file system operations
+ * Works for both localhost (with public/ directory) and cPanel (flat structure)
+ * @param string $subdir Subdirectory within uploads (e.g., 'images', 'resources', 'assignments')
+ * @return string Absolute file system path to upload directory
+ */
+function getUploadDir($subdir = 'images') {
+    $base_dir = dirname(dirname(dirname(__DIR__)));
+    $public_uploads = $base_dir . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $subdir;
+    $flat_uploads = $base_dir . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $subdir;
+    
+    // Check which structure exists
+    if (is_dir($public_uploads)) {
+        return $public_uploads;
+    } elseif (is_dir($flat_uploads)) {
+        return $flat_uploads;
+    } else {
+        // Create directory based on what exists at base level
+        if (is_dir($base_dir . DIRECTORY_SEPARATOR . 'public')) {
+            $target_dir = $public_uploads;
+        } else {
+            $target_dir = $flat_uploads;
+        }
+        @mkdir($target_dir, 0755, true);
+        return $target_dir;
+    }
+}
+
+/**
+ * Get upload URL path for web access
+ * Works for both localhost (with public/ directory) and cPanel (flat structure)
+ * @param string $filepath Relative file path from uploads directory
+ * @return string URL path to uploaded file
+ */
+function getUploadUrl($filepath) {
+    $filepath = ltrim($filepath, '/');
+    $base_dir = dirname(dirname(dirname(__DIR__)));
+    $public_uploads = $base_dir . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads';
+    
+    // Check if public/uploads exists
+    if (is_dir($public_uploads)) {
+        return '/uploads/' . $filepath;
+    } else {
+        // Flat structure
+        return '/uploads/' . $filepath;
+    }
 }
 
 /**

@@ -1,56 +1,51 @@
-# Environment configuration (contains API keys and secrets)
-# CRITICAL: Never commit this file - it contains production credentials
+# Environment files
 env.php
+env.production.php
 *.env
-.env
-.env.local
-.env.production
-.env.*.local
 
-# Log files
+# Database
+*.sql
+*.db
+
+# Logs
 *.log
-debug_*.log
+logs/
 
-# Uploaded files (optional, depending on your deployment)
-# uploads/
-
-# IDE and editor files
-.idea/
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
 
-# OS generated files
+# OS
 .DS_Store
-.DS_Store?
-._*
 Thumbs.db
+desktop.ini
 
-# Dependency directories
+# Dependencies
 vendor/
 node_modules/
 
-# Cache files
-*.cache
+# Uploads (user-generated content)
+uploads/
+public/uploads/
 
-# Deployment verification scripts (temporary)
-verify-production.php
-test-connection.php
-error-handler.php
+# Temporary files
+tmp/
+temp/
+*.tmp
 
-# Large media files (should not be in Git - slows down commits/pushes)
-*.mp4
-*.mov
-*.avi
-*.mkv
-*.webm
-*.flv
-# Keep small images, but exclude very large ones
-# *.jpg
-# *.jpeg
-# *.png
-# Uncomment above if you want to exclude all images
-# Large images (over 1MB typically) should be excluded
-# You can add specific large files here:
-# Zack Introduction.mp4
+# Archive (optional - uncomment if you don't want to track archived files)
+# archive/
+
+# Test files
+test-*.php
+verify-*.php
+create_test_student.php
+create_test_student.sql
+
+# Backup files
+*.bak
+*.backup
+*~

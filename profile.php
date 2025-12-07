@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once 'db.php';
-require_once 'includes/dashboard-functions.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
 if (!isset($_GET['id'])) {
     header("Location: index.php");
@@ -29,19 +29,23 @@ $rating_data = getTeacherRating($conn, $teacher_id);
 
 // Get reviews
 $reviews = [];
-$reviews_result = $conn->query("
+$stmt = $conn->prepare("
     SELECT r.*, u.name as student_name, u.profile_pic as student_pic
     FROM reviews r
     JOIN users u ON r.student_id = u.id
-    WHERE r.teacher_id = $teacher_id
+    WHERE r.teacher_id = ?
     ORDER BY r.created_at DESC
     LIMIT 10
 ");
+$stmt->bind_param("i", $teacher_id);
+$stmt->execute();
+$reviews_result = $stmt->get_result();
 if ($reviews_result) {
     while ($row = $reviews_result->fetch_assoc()) {
         $reviews[] = $row;
     }
 }
+$stmt->close();
 
 // Check if favorite
 $is_favorite = false;
@@ -111,11 +115,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title><?php echo htmlspecialchars($teacher['name']); ?> - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/mobile.css">
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .teacher-profile { max-width: 900px; margin: 40px auto; padding: 0 20px; }
@@ -153,14 +161,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
         .content-section h2 i { color: var(--primary); }
         
         .pricing-highlight { 
-            background: linear-gradient(135deg, #f8fbff 0%, #e1f0ff 100%); 
-            border: 1px solid #e1f0ff; 
+            background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%); 
+            border: 3px solid #ff9800; 
             padding: 25px; 
             border-radius: 12px; 
             text-align: center; 
-            margin-top: 20px; 
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.2);
+            position: relative;
         }
-        .price-large { font-size: 2.8rem; color: #0b6cf5; font-weight: bold; margin: 10px 0; }
+        .pricing-highlight::before {
+            content: "Popular";
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff9800;
+            color: white;
+            padding: 4px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .price-large { font-size: 2.8rem; color: #ff9800; font-weight: bold; margin: 10px 0; }
+        
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .plan {
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+            border: 1px solid rgba(16,24,40,0.04);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .plan:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(16,24,40,0.12);
+        }
+        .plan-body h3 {
+            color: #004080;
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+        }
+        .plan-body .desc {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 0 0 15px 0;
+            line-height: 1.4;
+        }
+        .plan-body .price {
+            color: #0b6cf5;
+            font-weight: 700;
+            font-size: 1.3rem;
+            background: rgba(11,108,245,0.06);
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 8px;
+        }
+        .plan-button {
+            width: 100%;
+            background: none;
+            border: none;
+            text-align: left;
+            padding: 0;
+            cursor: pointer;
+        }
         
         .btn-book {
             display: inline-flex;
@@ -274,7 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
 </head>
 <body>
     <header class="site-header" role="banner">
-        <div class="header-left"><a href="index.php"><img src="logo.png" alt="Staten Academy logo" class="site-logo"></a></div>
+        <div class="header-left"><a href="index.php"><img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo"></a></div>
         <div class="header-center">
             <div class="branding"><h1 class="site-title">Staten Academy</h1></div>
         </div>
@@ -316,7 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
             </form>
             <?php endif; ?>
             
-            <img src="<?php echo htmlspecialchars($teacher['profile_pic']); ?>" alt="<?php echo htmlspecialchars($teacher['name']); ?>" class="profile-pic-large" onerror="this.src='images/placeholder-teacher.svg'">
+            <img src="<?php echo htmlspecialchars($teacher['profile_pic']); ?>" alt="<?php echo htmlspecialchars($teacher['name']); ?>" class="profile-pic-large" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
             <h1><?php echo htmlspecialchars($teacher['name']); ?></h1>
             
             <?php if (!empty($teacher['specialty'])): ?>
@@ -366,21 +437,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
 
         <section class="content-section">
             <h2><i class="fas fa-dollar-sign"></i> Pricing & Booking</h2>
+            
+            <!-- Single Class Option (Visually Distinct) -->
             <div class="pricing-highlight">
-                <h3>Single Lesson</h3>
+                <h3>Single Class / Trial Lesson</h3>
                 <div class="price-large">
                     <?php echo $teacher['hourly_rate'] ? '$' . number_format($teacher['hourly_rate'], 0) : '$30'; ?>
                 </div>
-                <p>per hour</p>
+                <p style="margin: 10px 0 20px; color: #666;">per hour</p>
+                <form action="create_checkout_session.php" method="POST" style="display: inline-block;">
+                    <input type="hidden" name="price_id" value="price_1SXv22Fg7Fwmuz0xYimW2nGp">
+                    <input type="hidden" name="mode" value="payment">
+                    <button type="submit" class="btn-book" style="margin: 0;">
+                        <i class="fas fa-calendar-plus"></i> Book Now
+                    </button>
+                </form>
             </div>
-            <p style="margin-top: 20px; text-align: center; color: #666;">
-                Monthly plans available after your first lesson.
+            
+            <!-- Subscription Plans -->
+            <h3 style="text-align: center; margin: 40px 0 20px; color: #004080; font-size: 1.5rem;">
+                <i class="fas fa-calendar-check"></i> Monthly Subscription Plans
+            </h3>
+            
+            <div class="plans-grid">
+                <div class="plan">
+                    <form action="create_checkout_session.php" method="POST" style="height: 100%;">
+                        <input type="hidden" name="price_id" value="price_1SXvP8Fg7Fwmuz0x0bCZPbp2">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-button">
+                            <div class="plan-body">
+                                <h3>Economy Plan</h3>
+                                <p class="desc">1 class per week with a certified teacher.</p>
+                                <p class="desc" style="color: #d9534f; font-weight: 600; margin-top: 8px; font-size: 0.9rem;"><i class="fas fa-info-circle"></i> Teacher will be assigned</p>
+                                <p class="price">$85 / month</p>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="plan">
+                    <form action="create_checkout_session.php" method="POST" style="height: 100%;">
+                        <input type="hidden" name="price_id" value="price_BASIC_PLACEHOLDER">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-button">
+                            <div class="plan-body">
+                                <h3>Basic Plan</h3>
+                                <p class="desc">2 classes per week. Choose your own tutor.</p>
+                                <p class="price">$240 / month</p>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="plan">
+                    <form action="create_checkout_session.php" method="POST" style="height: 100%;">
+                        <input type="hidden" name="price_id" value="price_STANDARD_PLACEHOLDER">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-button">
+                            <div class="plan-body">
+                                <h3>Standard Plan</h3>
+                                <p class="desc">4 classes per week, extra learning resources.</p>
+                                <p class="price">$400 / month</p>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="plan">
+                    <form action="create_checkout_session.php" method="POST" style="height: 100%;">
+                        <input type="hidden" name="price_id" value="price_PREMIUM_PLACEHOLDER">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-button">
+                            <div class="plan-body">
+                                <h3>Premium Plan</h3>
+                                <p class="desc">Unlimited classes, exclusive materials.</p>
+                                <p class="price">$850 / month</p>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px; color: #666; font-size: 0.9rem;">
+                <i class="fas fa-info-circle"></i> Plans renew automatically. Cancel anytime.
             </p>
             
             <div style="text-align: center; margin-top: 30px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
                 <a href="schedule.php?teacher=<?php echo urlencode($teacher['name']); ?>" class="btn-book">
                     <i class="fas fa-calendar-plus"></i>
-                    Book a Lesson
+                    Schedule a Lesson
                 </a>
                 <?php if ($user_role === 'student' && $user_id): ?>
                 <a href="message_threads.php?user_id=<?php echo $teacher_id; ?>" class="btn-message">
@@ -430,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
                 <?php foreach ($reviews as $review): ?>
                 <div class="review-card">
                     <div class="review-header">
-                        <img src="<?php echo htmlspecialchars($review['student_pic']); ?>" alt="" class="review-avatar" onerror="this.src='images/placeholder-teacher.svg'">
+                        <img src="<?php echo htmlspecialchars($review['student_pic']); ?>" alt="" class="review-avatar" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                         <div class="review-meta">
                             <div class="review-author"><?php echo htmlspecialchars($review['student_name']); ?></div>
                             <div class="review-date"><?php echo formatRelativeTime($review['created_at']); ?></div>
@@ -456,6 +601,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_favorite']) &&
         <p>Contact us: info@statenacademy.com | Phone: +1 234 567 890</p>
         <p>&copy; 2023 Staten Academy. All rights reserved.</p>
     </footer>
-    <script src="js/menu.js" defer></script>
+    <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>

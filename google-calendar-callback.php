@@ -1,7 +1,19 @@
 <?php
-session_start();
-require_once 'db.php';
-require_once 'google-calendar-config.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/google-calendar-config.php';
 
 // Verify state parameter
 if (!isset($_GET['state']) || $_GET['state'] !== ($_SESSION['google_oauth_state'] ?? '')) {
@@ -58,12 +70,10 @@ $stmt->close();
 $redirect_url = 'index.php';
 if ($user['role'] === 'teacher') {
     $redirect_url = 'teacher-calendar-setup.php';
-} elseif ($user['role'] === 'student') {
-    $redirect_url = 'student-dashboard.php';
 } elseif ($user['role'] === 'admin') {
     $redirect_url = 'admin-dashboard.php';
 }
 
+ob_end_clean(); // Clear output buffer before redirect
 header('Location: ' . $redirect_url . '?calendar=connected');
 exit();
-?>

@@ -1,5 +1,31 @@
 <?php
 session_start();
+require_once 'db.php';
+
+// Upgrade visitor to student on successful payment
+if (isset($_SESSION['user_id'])) {
+    $user_id = $_SESSION['user_id'];
+    
+    // Check if user is a visitor
+    $stmt = $conn->prepare("SELECT role, has_purchased_class FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($user && ($user['role'] === 'visitor' || $user['role'] === 'new_student' || !$user['has_purchased_class'])) {
+        // Upgrade to student after purchase
+        $now = date('Y-m-d H:i:s');
+        $stmt = $conn->prepare("UPDATE users SET role = 'student', has_purchased_class = TRUE, first_purchase_date = ? WHERE id = ?");
+        $stmt->bind_param("si", $now, $user_id);
+        $stmt->execute();
+        $stmt->close();
+        
+        // Update session
+        $_SESSION['user_role'] = 'student';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -7,7 +33,25 @@ session_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment Successful - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <?php
+    // Ensure getAssetPath is available
+    if (!function_exists('getAssetPath')) {
+        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        } else {
+            function getAssetPath($asset) {
+                $asset = ltrim($asset, '/');
+                if (strpos($asset, 'assets/') === 0) {
+                    $assetPath = $asset;
+                } else {
+                    $assetPath = 'assets/' . $asset;
+                }
+                return '/' . $assetPath;
+            }
+        }
+    }
+    ?>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <style>
         .message-box {
             max-width: 600px;

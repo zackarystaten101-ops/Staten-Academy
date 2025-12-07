@@ -194,6 +194,59 @@ header.site-header > div[style*="position: absolute; right: 90px"] {
   }
 }
 
+/* Touch-friendly button sizes (minimum 44x44px) */
+button, .btn, .btn-primary, .btn-outline, a.button, input[type="submit"], input[type="button"] {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 12px 20px;
+  touch-action: manipulation; /* Prevents double-tap zoom delay */
+}
+
+/* Improve touch targets for small buttons */
+.btn-sm {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 8px 16px;
+}
+
+/* Better spacing for mobile */
+@media (max-width: 768px) {
+  button, .btn {
+    padding: 14px 24px; /* Larger padding on mobile */
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+  
+  /* Adequate spacing between clickable elements */
+  a, button, input, select, textarea {
+    margin-bottom: 12px;
+  }
+  
+  /* Prevent accidental text selection on buttons */
+  button, .btn {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Additional breakpoints */
+@media (max-width: 480px) {
+  .mobile-menu {
+    width: 280px;
+    max-width: 90vw;
+  }
+  
+  button, .btn {
+    width: 100%; /* Full-width buttons on very small screens */
+    margin-bottom: 10px;
+  }
+}
+
+@media (max-width: 320px) {
+  .mobile-menu {
+    width: 100vw;
+  }
+}
+
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
    .mobile-menu,
@@ -203,4 +256,15 @@ header.site-header > div[style*="position: absolute; right: 90px"] {
      animation: none !important;
      transition: none !important;
    }
+}
+
+/* Prevent double-tap zoom on buttons and links */
+a, button, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Improve scrolling on mobile */
+html {
+  -webkit-overflow-scrolling: touch;
+  overflow-scrolling: touch;
 }

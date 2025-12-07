@@ -58,7 +58,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                      $_SESSION['user_id'] = $id;
                      $_SESSION['user_name'] = $name;
                      $_SESSION['user_role'] = $role;
-                     $_SESSION['profile_pic'] = $full_user['profile_pic'] ?? 'images/placeholder-teacher.svg';
+                     $_SESSION['profile_pic'] = $full_user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 
                     // Redirect Logic
                     // Clear output buffer before redirect to ensure no output is sent
@@ -76,9 +76,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         header("Location: teacher-dashboard.php");
                         exit();
                     } 
-                    else {
+                    else if ($role === 'visitor' || $role === 'new_student') {
+                        // Visitors and new_students: Check if they were trying to book a specific teacher
+                        if (isset($_SESSION['redirect_teacher'])) {
+                            $teacher = $_SESSION['redirect_teacher'];
+                            unset($_SESSION['redirect_teacher']);
+                            header("Location: schedule.php?teacher=" . urlencode($teacher));
+                        } else {
+                            // Default landing page - use student dashboard for new_student
+                            if ($role === 'new_student') {
+                                header("Location: student-dashboard.php");
+                            } else {
+                                header("Location: visitor-dashboard.php");
+                            }
+                        }
+                        exit();
+                    }
+                    else if ($role === 'student') {
                         // Students: Check if they were trying to book a specific teacher
-                        $_SESSION['user_role'] = 'student';
                         if (isset($_SESSION['redirect_teacher'])) {
                             $teacher = $_SESSION['redirect_teacher'];
                             unset($_SESSION['redirect_teacher']);
@@ -129,16 +144,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
              $_SESSION['user_id'] = $id;
              $_SESSION['user_name'] = $name;
              $_SESSION['user_role'] = $role;
-             $_SESSION['profile_pic'] = $pic_user['profile_pic'] ?? 'images/placeholder-teacher.svg';
+             $_SESSION['profile_pic'] = $pic_user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
         } else {
             // Register new Google user
             $stmt->close();
             
-            $new_role = 'student';
+            // New Google users start as new_student, become student after purchase
+            $new_role = 'new_student';
 
-            $stmt = $conn->prepare("INSERT INTO users (name, email, google_id, role, profile_pic) VALUES (?, ?, ?, ?, ?)");
-            $default_pic = 'images/placeholder-teacher.svg';
-            $stmt->bind_param("sssss", $name, $email, $google_id, $new_role, $default_pic);
+            $stmt = $conn->prepare("INSERT INTO users (name, email, google_id, role, profile_pic) VALUES (?, ?, ?, 'new_student', ?)");
+            $default_pic = getAssetPath('images/placeholder-teacher.svg');
+            $stmt->bind_param("ssss", $name, $email, $google_id, $default_pic);
             if($stmt->execute()) {
                 $_SESSION['user_id'] = $stmt->insert_id;
                 $_SESSION['user_name'] = $name;
@@ -161,16 +177,47 @@ $conn->close();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Login - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/mobile.css">
-    <link rel="stylesheet" href="css/auth.css">
+    <?php
+    // Ensure getAssetPath is available
+    if (!function_exists('getAssetPath')) {
+        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        } else {
+            function getAssetPath($asset) {
+                $asset = ltrim($asset, '/');
+                if (strpos($asset, 'assets/') === 0) {
+                    $assetPath = $asset;
+                } else {
+                    $assetPath = 'assets/' . $asset;
+                }
+                return '/' . $assetPath;
+            }
+        }
+    }
+    ?>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/auth.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <header class="site-header">
-        <div class="header-left"><a href="index.php"><img src="logo.png" alt="Logo" class="site-logo"></a></div>
+        <div class="header-left">
+            <a href="index.php" style="text-decoration: none; display: flex; align-items: center;">
+                <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo">
+            </a>
+        </div>
+        <div class="header-center">
+            <div class="branding">
+                <h1 class="site-title">Staten Academy</h1>
+            </div>
+        </div>
     </header>
 
     <div class="auth-container">

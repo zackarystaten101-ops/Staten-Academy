@@ -1,9 +1,22 @@
 <?php
-session_start();
-require_once 'db.php';
-require_once 'includes/dashboard-functions.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: login.php");
     exit();
 }
@@ -28,13 +41,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 
     if (isset($_FILES['profile_pic_file']) && $_FILES['profile_pic_file']['error'] === UPLOAD_ERR_OK) {
         $file = $_FILES['profile_pic_file'];
-        $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array(strtolower($ext), $allowed)) {
+        if (in_array($ext, $allowed) && $file['size'] <= 5 * 1024 * 1024) {
             $filename = 'user_' . $admin_id . '_' . time() . '.' . $ext;
-            $target_path = 'images/' . $filename;
+            
+            // Determine upload directory - works for both localhost and cPanel
+            $upload_base = __DIR__;
+            $public_images_dir = $upload_base . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'images';
+            $flat_images_dir = $upload_base . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'images';
+            
+            if (is_dir($public_images_dir)) {
+                $target_dir = $public_images_dir;
+            } elseif (is_dir($flat_images_dir)) {
+                $target_dir = $flat_images_dir;
+            } else {
+                $target_dir = is_dir($upload_base . DIRECTORY_SEPARATOR . 'public') ? $public_images_dir : $flat_images_dir;
+                @mkdir($target_dir, 0755, true);
+            }
+            
+            $target_path = $target_dir . DIRECTORY_SEPARATOR . $filename;
             if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                $profile_pic = $target_path;
+                $profile_pic = '/assets/images/' . $filename;
             }
         }
     } elseif (!empty($_POST['profile_pic_url'])) {
@@ -46,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $stmt->execute();
     $stmt->close();
     
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: admin-dashboard.php#my-profile");
     exit();
 }
@@ -84,26 +113,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_material'])) {
     $stmt->execute();
     $stmt->close();
     
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: admin-dashboard.php#classroom");
     exit();
 }
 
 // Fetch data
 $pending_updates = $conn->query("SELECT p.*, u.email as user_email FROM pending_updates p JOIN users u ON p.user_id = u.id");
+if (!$pending_updates) {
+    error_log("Error fetching pending updates: " . $conn->error);
+    $pending_updates = new mysqli_result($conn);
+}
+
 $applications = $conn->query("SELECT * FROM users WHERE application_status='pending'");
+if (!$applications) {
+    error_log("Error fetching applications: " . $conn->error);
+    $applications = new mysqli_result($conn);
+}
+
 $students = $conn->query("SELECT * FROM users WHERE role='student' ORDER BY reg_date DESC");
+if (!$students) {
+    error_log("Error fetching students: " . $conn->error);
+    $students = new mysqli_result($conn);
+}
+
 $teachers = $conn->query("SELECT u.*, 
     (SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id) as avg_rating,
     (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
     (SELECT COUNT(DISTINCT student_id) FROM bookings WHERE teacher_id = u.id) as student_count
     FROM users u WHERE u.role='teacher' ORDER BY u.id DESC");
+if (!$teachers) {
+    error_log("Error fetching teachers: " . $conn->error);
+    $teachers = new mysqli_result($conn);
+}
+
 $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
+if (!$materials) {
+    error_log("Error fetching materials: " . $conn->error);
+    $materials = new mysqli_result($conn);
+}
+
 $support_messages = $conn->query("
     SELECT sm.*, u.name as sender_name, u.profile_pic, u.role 
     FROM support_messages sm 
     JOIN users u ON sm.sender_id = u.id 
     ORDER BY sm.created_at DESC
 ");
+if (!$support_messages) {
+    error_log("Error fetching support messages: " . $conn->error);
+    $support_messages = new mysqli_result($conn);
+}
 
 // Revenue analytics
 $total_revenue = 0;
@@ -120,6 +179,10 @@ $recent_bookings = $conn->query("
     JOIN users t ON b.teacher_id = t.id 
     ORDER BY b.booking_date DESC LIMIT 10
 ");
+if (!$recent_bookings) {
+    error_log("Error fetching recent bookings: " . $conn->error);
+    $recent_bookings = new mysqli_result($conn);
+}
 
 // Engagement metrics
 $inactive_students = $conn->query("
@@ -129,6 +192,10 @@ $inactive_students = $conn->query("
     ORDER BY u.last_active ASC
     LIMIT 10
 ");
+if (!$inactive_students) {
+    error_log("Error fetching inactive students: " . $conn->error);
+    $inactive_students = new mysqli_result($conn);
+}
 
 $unread_support = $admin_stats['open_support'];
 $active_tab = 'dashboard';
@@ -137,21 +204,25 @@ $active_tab = 'dashboard';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Admin Dashboard - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
 </head>
 <body class="dashboard-layout">
 
-<?php include 'includes/dashboard-header.php'; ?>
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
 <div class="content-wrapper">
     <?php 
     // Make admin_stats available to sidebar
     $admin_stats_for_sidebar = $admin_stats;
-    include 'includes/dashboard-sidebar.php'; 
+    include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
     ?>
 
     <div class="main">
@@ -277,15 +348,15 @@ $active_tab = 'dashboard';
                             if ($count++ >= 10) break;
                         ?>
                         <tr>
-                            <td>
+                            <td data-label="Teacher">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <img src="<?php echo h($t['profile_pic']); ?>" alt="" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                    <img src="<?php echo h($t['profile_pic']); ?>" alt="<?php echo h($t['name']); ?>" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                     <?php echo h($t['name']); ?>
                                 </div>
                             </td>
-                            <td><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
-                            <td><?php echo $t['student_count'] ?? 0; ?></td>
-                            <td><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
+                            <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
+                            <td data-label="Students"><?php echo $t['student_count'] ?? 0; ?></td>
+                            <td data-label="Hours"><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
                         </tr>
                         <?php endwhile; ?>
                     </tbody>
@@ -307,10 +378,10 @@ $active_tab = 'dashboard';
                     <tbody>
                         <?php while ($s = $inactive_students->fetch_assoc()): ?>
                         <tr>
-                            <td><?php echo h($s['name']); ?></td>
-                            <td><?php echo h($s['email']); ?></td>
-                            <td><?php echo date('M d, Y', strtotime($s['reg_date'])); ?></td>
-                            <td>
+                            <td data-label="Student"><?php echo h($s['name']); ?></td>
+                            <td data-label="Email"><?php echo h($s['email']); ?></td>
+                            <td data-label="Joined"><?php echo date('M d, Y', strtotime($s['reg_date'])); ?></td>
+                            <td data-label="Actions">
                                 <a href="mailto:<?php echo h($s['email']); ?>" class="btn-outline btn-sm">Send Email</a>
                             </td>
                         </tr>
@@ -363,22 +434,22 @@ $active_tab = 'dashboard';
                     <tbody>
                         <?php while($app = $applications->fetch_assoc()): ?>
                         <tr>
-                            <td>
+                            <td data-label="Applicant">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <img src="<?php echo h($app['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                    <img src="<?php echo h($app['profile_pic']); ?>" alt="<?php echo h($app['name']); ?>" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                     <?php echo h($app['name']); ?>
                                 </div>
                             </td>
-                            <td><?php echo h($app['email']); ?></td>
-                            <td><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?><?php echo strlen($app['bio'] ?? '') > 50 ? '...' : ''; ?></td>
-                            <td>
+                            <td data-label="Email"><?php echo h($app['email']); ?></td>
+                            <td data-label="Bio"><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?><?php echo strlen($app['bio'] ?? '') > 50 ? '...' : ''; ?></td>
+                            <td data-label="Calendly">
                                 <?php if ($app['calendly_link']): ?>
                                 <a href="<?php echo h($app['calendly_link']); ?>" target="_blank" class="btn-outline btn-sm">View</a>
                                 <?php else: ?>
                                 <span style="color: var(--gray);">Not set</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Actions">
                                 <form action="admin-actions.php" method="POST" style="display: inline-flex; gap: 5px;">
                                     <input type="hidden" name="user_id" value="<?php echo $app['id']; ?>">
                                     <button type="submit" name="action" value="approve_teacher" class="btn-success btn-sm">Approve</button>
@@ -472,22 +543,22 @@ $active_tab = 'dashboard';
                     $applications->data_seek(0);
                     while($app = $applications->fetch_assoc()): ?>
                     <tr>
-                        <td>
+                        <td data-label="Applicant">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <img src="<?php echo h($app['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                <img src="<?php echo h($app['profile_pic']); ?>" alt="<?php echo h($app['name']); ?>" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <?php echo h($app['name']); ?>
                             </div>
                         </td>
-                        <td><?php echo h($app['email']); ?></td>
-                        <td><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?>...</td>
-                        <td>
+                        <td data-label="Email"><?php echo h($app['email']); ?></td>
+                        <td data-label="Bio"><?php echo h(substr($app['bio'] ?? '', 0, 50)); ?>...</td>
+                        <td data-label="Calendly">
                             <?php if ($app['calendly_link']): ?>
                             <a href="<?php echo h($app['calendly_link']); ?>" target="_blank" class="btn-outline btn-sm">View</a>
                             <?php else: ?>
                             <span style="color: var(--gray);">Not set</span>
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <td data-label="Actions">
                             <form action="admin-actions.php" method="POST" style="display: inline-flex; gap: 5px;">
                                 <input type="hidden" name="user_id" value="<?php echo $app['id']; ?>">
                                 <button type="submit" name="action" value="approve_teacher" class="btn-success btn-sm">Approve</button>
@@ -583,21 +654,21 @@ $active_tab = 'dashboard';
                     while($t = $teachers->fetch_assoc()): 
                     ?>
                     <tr>
-                        <td>
+                        <td data-label="Teacher">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <img src="<?php echo h($t['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                <img src="<?php echo h($t['profile_pic']); ?>" alt="<?php echo h($t['name']); ?>" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <?php echo h($t['name']); ?>
                             </div>
                         </td>
-                        <td><?php echo h($t['email']); ?></td>
-                        <td><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
-                        <td><?php echo $t['student_count'] ?? 0; ?></td>
-                        <td><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
-                        <td>
+                        <td data-label="Email"><?php echo h($t['email']); ?></td>
+                        <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
+                        <td data-label="Students"><?php echo $t['student_count'] ?? 0; ?></td>
+                        <td data-label="Hours"><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
+                        <td data-label="Actions">
                             <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
                             <form action="admin-actions.php" method="POST" style="display: inline;">
                                 <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
-                                <button type="submit" name="action" value="make_student" class="btn-danger btn-sm" onclick="return confirm('Demote this teacher to student?')">Demote</button>
+                                <button type="submit" name="action" value="make_student" class="btn-danger btn-sm" onclick="return handleDemoteClick(event, this)">Demote</button>
                             </form>
                         </td>
                     </tr>
@@ -622,16 +693,16 @@ $active_tab = 'dashboard';
                 <tbody>
                     <?php while($s = $students->fetch_assoc()): ?>
                     <tr>
-                        <td>
+                        <td data-label="Student">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <img src="<?php echo h($s['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                <img src="<?php echo h($s['profile_pic']); ?>" alt="<?php echo h($s['name']); ?>" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <?php echo h($s['name']); ?>
                             </div>
                         </td>
-                        <td><?php echo h($s['email']); ?></td>
-                        <td><?php echo date('M d, Y', strtotime($s['reg_date'])); ?></td>
-                        <td><?php echo h(substr($s['bio'] ?? 'No bio', 0, 40)); ?>...</td>
-                        <td>
+                        <td data-label="Email"><?php echo h($s['email']); ?></td>
+                        <td data-label="Joined"><?php echo date('M d, Y', strtotime($s['reg_date'])); ?></td>
+                        <td data-label="Bio"><?php echo h(substr($s['bio'] ?? 'No bio', 0, 40)); ?>...</td>
+                        <td data-label="Actions">
                             <form action="admin-actions.php" method="POST" style="display: inline;">
                                 <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
                                 <button type="submit" name="action" value="make_teacher" class="btn-success btn-sm">Promote</button>
@@ -676,7 +747,7 @@ $active_tab = 'dashboard';
                     <tr class="support-row" data-role="<?php echo $sm['sender_role']; ?>">
                         <td>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <img src="<?php echo h($sm['profile_pic']); ?>" alt="" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='images/placeholder-teacher.svg'">
+                                <img src="<?php echo h($sm['profile_pic']); ?>" alt="" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <?php echo h($sm['sender_name']); ?>
                             </div>
                         </td>
@@ -778,7 +849,7 @@ $active_tab = 'dashboard';
                         <div style="text-align: center;">
                             <img src="<?php echo h($user['profile_pic']); ?>" alt="Profile" 
                                  style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid var(--primary-light);"
-                                 onerror="this.src='images/placeholder-teacher.svg'">
+                                 onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                             <div style="margin-top: 15px;">
                                 <label class="btn-outline btn-sm" style="cursor: pointer;">
                                     <i class="fas fa-camera"></i> Change
@@ -888,7 +959,7 @@ $active_tab = 'dashboard';
         <!-- Security Tab -->
         <div id="my-security" class="tab-content">
             <h1>Security Settings</h1>
-            <?php include 'includes/password-change-form.php'; ?>
+            <?php include __DIR__ . '/app/Views/components/password-change-form.php'; ?>
         </div>
 
     </div>
@@ -908,17 +979,49 @@ $active_tab = 'dashboard';
 
 <script>
 function switchTab(id) {
+    if (event) event.preventDefault();
+    
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    const targetTab = document.getElementById(id);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
     
     document.querySelectorAll('.sidebar-menu a').forEach(el => el.classList.remove('active'));
     const activeLink = document.querySelector(`.sidebar-menu a[onclick*="${id}"]`);
     if (activeLink) activeLink.classList.add('active');
     
-    window.location.hash = id;
+    // Also check sidebar header button
+    const sidebarHeader = document.querySelector('.sidebar-header a');
+    if (sidebarHeader && id === 'dashboard') {
+        sidebarHeader.classList.add('active');
+    }
+    
+    // Scroll to top of main content
+    const mainContent = document.querySelector('.main');
+    if (mainContent) mainContent.scrollTop = 0;
+    
+    // Update URL hash without triggering page reload
+    if (window.location.hash !== '#' + id) {
+        window.history.pushState(null, null, '#' + id);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const hash = window.location.hash.substring(1);
+    if (hash && document.getElementById(hash)) {
+        switchTab(hash);
+    } else {
+        // Default to dashboard if no hash
+        const dashboardTab = document.getElementById('dashboard');
+        if (dashboardTab) {
+            dashboardTab.classList.add('active');
+        }
+    }
+});
+
+// Handle browser back/forward buttons (hashchange event)
+window.addEventListener('hashchange', function() {
     const hash = window.location.hash.substring(1);
     if (hash && document.getElementById(hash)) {
         switchTab(hash);
@@ -950,7 +1053,28 @@ function toggleMobileSidebar() {
     document.querySelector('.sidebar').classList.toggle('active');
     document.querySelector('.sidebar-overlay').classList.toggle('active');
 }
+
+// Handle demote confirmation with toast
+async function handleDemoteClick(event, button) {
+    event.preventDefault();
+    if (typeof toast !== 'undefined') {
+        const confirmed = await toast.confirm('Demote this teacher to student?', 'Confirm Demotion');
+        if (confirmed) {
+            button.closest('form').submit();
+        }
+        return false;
+    } else {
+        if (confirm('Demote this teacher to student?')) {
+            return true;
+        }
+        return false;
+    }
+}
 </script>
 
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

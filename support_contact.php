@@ -1,9 +1,22 @@
 <?php
-session_start();
-require_once 'db.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
 
 // Only logged-in users can access
 if (!isset($_SESSION['user_id'])) {
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: login.php");
     exit();
 }
@@ -51,9 +64,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Contact Support - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <?php
+    // Ensure getAssetPath is available
+    if (!function_exists('getAssetPath')) {
+        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        } else {
+            function getAssetPath($asset) {
+                $asset = ltrim($asset, '/');
+                if (strpos($asset, 'assets/') === 0) {
+                    $assetPath = $asset;
+                } else {
+                    $assetPath = 'assets/' . $asset;
+                }
+                return '/' . $assetPath;
+            }
+        }
+    }
+    ?>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { 
@@ -233,7 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     <div class="back-link">
         <?php 
-        if ($user_role === 'student') {
+        if ($user_role === 'student' || $user_role === 'new_student') {
             echo '<a href="student-dashboard.php"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>';
         } elseif ($user_role === 'teacher') {
             echo '<a href="teacher-dashboard.php"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>';
@@ -248,3 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

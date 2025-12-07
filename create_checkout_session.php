@@ -75,7 +75,8 @@ if ($http_code !== 200) {
     if (isset($session['error']['message'])) {
         echo $session['error']['message'];
     } else {
-        print_r($session);
+        // Debug: Session created successfully
+        // print_r($session); // Commented out for production
     }
     exit;
 }

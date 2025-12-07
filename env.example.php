@@ -29,11 +29,34 @@ define('STRIPE_PUBLISHABLE_KEY', 'pk_test_YOUR_TEST_PUBLISHABLE_KEY_HERE');
 // 1. Create a project
 // 2. Enable Google Calendar API
 // 3. Create OAuth 2.0 credentials (Web Application)
-// 4. Add authorized redirect URIs
+// 4. Add authorized redirect URIs (see instructions below)
 // ===========================================
 define('GOOGLE_CLIENT_ID', 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET', 'YOUR_CLIENT_SECRET_HERE');
+
+// Google OAuth Redirect URI Configuration
+// IMPORTANT: You must add the redirect URI to Google Console for both environments
+//
+// OPTION 1: Manual Configuration (Recommended for production)
+// Set the exact URL that matches your server setup:
+// - For localhost: 'http://localhost/Web%20page/Staten-Academy/google-calendar-callback.php'
+// - For production: 'https://yourdomain.com/google-calendar-callback.php'
+// Make sure to URL-encode spaces as %20
 define('GOOGLE_REDIRECT_URI', 'http://localhost/Web%20page/Staten-Academy/google-calendar-callback.php');
+
+// OPTION 2: Dynamic Configuration (Auto-detection)
+// Uncomment the block below to automatically generate redirect URI based on current server
+// Note: You still need to add BOTH localhost AND production URLs to Google Console
+// if (!defined('GOOGLE_REDIRECT_URI')) {
+//     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 ? 'https' : 'http';
+//     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+//     $scriptPath = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+//     $scriptPath = str_replace('\\', '/', $scriptPath);
+//     if ($scriptPath === '.' || $scriptPath === '/') $scriptPath = '';
+//     $scriptPath = rtrim($scriptPath, '/');
+//     define('GOOGLE_REDIRECT_URI', $protocol . '://' . $host . $scriptPath . '/google-calendar-callback.php');
+// }
+
 define('GOOGLE_SCOPES', 'https://www.googleapis.com/auth/calendar');
 
 // ===========================================
@@ -41,5 +64,6 @@ define('GOOGLE_SCOPES', 'https://www.googleapis.com/auth/calendar');
 // ===========================================
 define('APP_ENV', 'development'); // 'development' or 'production'
 define('APP_DEBUG', true); // Set to false in production
-?>
 
+// IMPORTANT: Do NOT add any whitespace, newlines, or characters after this closing tag
+// Best practice: Remove the closing ?> tag entirely (PHP doesn't require it)

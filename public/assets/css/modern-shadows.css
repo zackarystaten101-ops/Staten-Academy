@@ -1,0 +1,172 @@
+/**
+ * MODERN SHADOWS & ENHANCED STYLING
+ * 
+ * TO ENABLE: Include this stylesheet after main styles.css
+ * TO DISABLE: Simply remove or comment out the stylesheet link in your HTML files
+ * 
+ * This file adds:
+ * - Enhanced shadows on header
+ * - Modern shadow effects on cards and elements
+ * - Improved depth and visual hierarchy
+ * - Subtle animations and transitions
+ */
+
+/* Header Shadow Enhancement */
+header.site-header {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 
+                0 2px 8px rgba(0, 0, 0, 0.08),
+                0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+    position: relative;
+    z-index: 1000;
+}
+
+/* Add subtle shadow separation */
+header.site-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, 
+        transparent, 
+        rgba(0, 0, 0, 0.08) 20%, 
+        rgba(0, 0, 0, 0.08) 80%, 
+        transparent
+    );
+}
+
+/* Enhanced Card Shadows */
+.card, .profile-card, .plan, .teacher-card {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08),
+                0 2px 8px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(0, 0, 0, 0.03) !important;
+    transition: box-shadow 0.3s ease, transform 0.3s ease !important;
+}
+
+.card:hover, .profile-card:hover, .plan:hover, .teacher-card:hover {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12),
+                0 4px 16px rgba(0, 0, 0, 0.08),
+                0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+    transform: translateY(-4px) !important;
+}
+
+/* Form Input Shadows */
+input[type="text"], 
+input[type="email"], 
+input[type="password"], 
+input[type="number"],
+textarea, 
+select {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+
+input[type="text"]:focus, 
+input[type="email"]:focus, 
+input[type="password"]:focus, 
+input[type="number"]:focus,
+textarea:focus, 
+select:focus {
+    box-shadow: 0 4px 12px rgba(11, 108, 245, 0.15),
+                0 0 0 3px rgba(11, 108, 245, 0.1),
+                0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    outline: none !important;
+}
+
+/* Button Shadows */
+.btn-primary, .btn-submit, button[type="submit"] {
+    box-shadow: 0 4px 12px rgba(11, 108, 245, 0.25),
+                0 2px 4px rgba(11, 108, 245, 0.15) !important;
+    transition: box-shadow 0.3s ease, transform 0.2s ease !important;
+}
+
+.btn-primary:hover, .btn-submit:hover, button[type="submit"]:hover {
+    box-shadow: 0 6px 20px rgba(11, 108, 245, 0.35),
+                0 4px 8px rgba(11, 108, 245, 0.2) !important;
+    transform: translateY(-2px) !important;
+}
+
+.btn-primary:active, .btn-submit:active, button[type="submit"]:active {
+    box-shadow: 0 2px 8px rgba(11, 108, 245, 0.25),
+                0 1px 2px rgba(11, 108, 245, 0.15) !important;
+    transform: translateY(0) !important;
+}
+
+/* Modal/Dialog Shadows */
+.modal, .auth-container {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
+                0 8px 24px rgba(0, 0, 0, 0.1),
+                0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Dashboard Cards */
+.stat-card, .earnings-card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
+                0 2px 6px rgba(0, 0, 0, 0.04) !important;
+    transition: box-shadow 0.3s ease, transform 0.3s ease !important;
+}
+
+.stat-card:hover, .earnings-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+                0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Table Shadows */
+.data-table {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Navigation Menu Shadows */
+.mobile-menu, .user-menu-dropdown {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+                0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Enhanced Focus States */
+a:focus-visible, 
+button:focus-visible {
+    outline: 3px solid rgba(11, 108, 245, 0.4) !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9),
+                0 4px 12px rgba(11, 108, 245, 0.2) !important;
+}
+
+/* Subtle Background Pattern */
+body {
+    background-image: 
+        radial-gradient(circle at 20% 50%, rgba(11, 108, 245, 0.02) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(11, 108, 245, 0.02) 0%, transparent 50%);
+}
+
+/* Loading/Spinner Shadows */
+.spinner, .loading {
+    filter: drop-shadow(0 2px 8px rgba(11, 108, 245, 0.2));
+}
+
+/* Toast Notification Shadows */
+.toast-notification {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15),
+                0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Responsive Shadow Adjustments */
+@media (max-width: 768px) {
+    header.site-header {
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1),
+                    0 1px 4px rgba(0, 0, 0, 0.06) !important;
+    }
+    
+    .card, .profile-card, .plan, .teacher-card {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06),
+                    0 1px 4px rgba(0, 0, 0, 0.04) !important;
+    }
+    
+    .card:hover, .profile-card:hover, .plan:hover, .teacher-card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1),
+                    0 2px 8px rgba(0, 0, 0, 0.06) !important;
+    }
+}
+

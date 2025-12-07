@@ -11,10 +11,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-// Check if user is logged in
+// Check if user is logged in and is a student (not new_student)
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
+    exit();
+}
+
+// Only allow students (who have purchased) to book lessons
+if ($_SESSION['user_role'] !== 'student') {
+    http_response_code(403);
+    echo json_encode(['error' => 'Please purchase a lesson plan first to book lessons.']);
     exit();
 }
 
@@ -97,6 +104,13 @@ if (!$stmt->execute()) {
 
 $lesson_id = $stmt->insert_id;
 $stmt->close();
+
+// Also create a booking record for compatibility
+$booking_stmt = $conn->prepare("INSERT IGNORE INTO bookings (student_id, teacher_id, booking_date) VALUES (?, ?, ?)");
+$booking_date = date('Y-m-d H:i:s');
+$booking_stmt->bind_param("iis", $student_id, $teacher_id, $booking_date);
+$booking_stmt->execute();
+$booking_stmt->close();
 
 // Try to create Google Calendar event if teacher has connected calendar
 if (!empty($teacher['google_calendar_token'])) {

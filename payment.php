@@ -8,8 +8,28 @@ $user_role = $_SESSION['user_role'] ?? null;
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Plans & Pricing - Staten Academy</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="css/mobile.css">
+  <?php
+  // Ensure getAssetPath is available
+  if (!function_exists('getAssetPath')) {
+      if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+          require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+      } else {
+          function getAssetPath($asset) {
+              $asset = ltrim($asset, '/');
+              if (strpos($asset, 'assets/') === 0) {
+                  $assetPath = $asset;
+              } else {
+                  $assetPath = 'assets/' . $asset;
+              }
+              return '/' . $assetPath;
+          }
+      }
+  }
+  ?>
+  <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+  <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+  <!-- MODERN SHADOWS - To disable, comment out the line below -->
+  <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
   <style>
     .payment-header {
         text-align: center;
@@ -71,7 +91,7 @@ $user_role = $_SESSION['user_role'] ?? null;
 
   <header class="site-header" role="banner">
     <div class="header-left">
-      <a href="index.php"><img src="logo.png" alt="Staten Academy logo" class="site-logo"></a>
+      <a href="index.php"><img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo"></a>
     </div>
     <div class="header-center">
         <div class="branding">
@@ -137,6 +157,7 @@ $user_role = $_SESSION['user_role'] ?? null;
                     <div class="plan-body">
                         <h3>Economy Plan</h3>
                         <p class="desc">1 class per week with a certified teacher.</p>
+                        <p class="desc" style="color: #d9534f; font-weight: 600; margin-top: 8px; font-size: 0.9rem;"><i class="fas fa-info-circle"></i> Teacher will be assigned</p>
                         <p class="price">$85 / month</p>
                     </div>
                 </button>
@@ -193,7 +214,7 @@ $user_role = $_SESSION['user_role'] ?? null;
     <p>Contact us: info@statenacademy.com | Phone: +1 234 567 890</p>
     <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
   </footer>
-  <script src="js/menu.js" defer></script>
+  <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>
 

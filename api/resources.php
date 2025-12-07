@@ -4,10 +4,23 @@
  * Handle resource uploads and management
  */
 
-session_start();
-require_once '../db.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/../env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['user_role'] !== 'teacher' && $_SESSION['user_role'] !== 'admin')) {
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: ../login.php");
     exit;
 }
@@ -23,7 +36,9 @@ switch ($action) {
         deleteResource($conn, $teacher_id);
         break;
     default:
+        ob_end_clean(); // Clear output buffer before redirect
         header("Location: ../teacher-dashboard.php#resources");
+        exit;
 }
 
 function uploadResource($conn, $teacher_id) {
@@ -33,6 +48,7 @@ function uploadResource($conn, $teacher_id) {
     $external_url = trim($_POST['external_url'] ?? '');
     
     if (empty($title)) {
+        ob_end_clean(); // Clear output buffer before redirect
         header("Location: ../teacher-dashboard.php#resources");
         exit;
     }
@@ -48,14 +64,42 @@ function uploadResource($conn, $teacher_id) {
         
         if (in_array($ext, $allowed) && $file['size'] <= 10 * 1024 * 1024) {
             $filename = 'resource_' . $teacher_id . '_' . time() . '.' . $ext;
-            $target = '../uploads/resources/' . $filename;
             
-            if (!is_dir('../uploads/resources')) {
-                mkdir('../uploads/resources', 0755, true);
+            // Determine upload directory - works for both localhost and cPanel
+            $upload_base = dirname(__DIR__);
+            $public_uploads_dir = $upload_base . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'resources';
+            $flat_uploads_dir = $upload_base . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'resources';
+            
+            if (is_dir($public_uploads_dir)) {
+                $target_dir = $public_uploads_dir;
+            } elseif (is_dir($flat_uploads_dir)) {
+                $target_dir = $flat_uploads_dir;
+            } else {
+                $target_dir = is_dir($upload_base . DIRECTORY_SEPARATOR . 'public') ? $public_uploads_dir : $flat_uploads_dir;
+                if (!@mkdir($target_dir, 0755, true)) {
+                    error_log("Failed to create upload directory: " . $target_dir);
+                }
             }
             
-            if (move_uploaded_file($file['tmp_name'], $target)) {
-                $file_path = 'uploads/resources/' . $filename;
+            // Ensure directory is writable
+            if (!is_writable($target_dir)) {
+                @chmod($target_dir, 0755);
+            }
+            
+            $target = $target_dir . DIRECTORY_SEPARATOR . $filename;
+            
+            // Security check: verify file was actually uploaded
+            if (!is_uploaded_file($file['tmp_name'])) {
+                error_log("Security check failed for: " . $file['tmp_name']);
+                ob_end_clean();
+                header("Location: ../teacher-dashboard.php#resources");
+                exit;
+            } elseif (!move_uploaded_file($file['tmp_name'], $target)) {
+                error_log("Failed to move uploaded file: " . $file['tmp_name'] . " to " . $target);
+                error_log("Upload error: " . $file['error']);
+            } else {
+                @chmod($target, 0644); // Ensure file is readable
+                $file_path = '/uploads/resources/' . $filename;
                 $file_type = $ext;
             }
         }
@@ -75,6 +119,7 @@ function uploadResource($conn, $teacher_id) {
         $stmt->close();
     }
     
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: ../teacher-dashboard.php#resources");
     exit;
 }
@@ -102,6 +147,7 @@ function deleteResource($conn, $teacher_id) {
     }
     $stmt->close();
     
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: ../teacher-dashboard.php#resources");
     exit;
 }

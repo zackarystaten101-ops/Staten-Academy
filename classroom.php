@@ -1,56 +1,69 @@
 <?php
-session_start();
-require_once 'db.php';
+// Start output buffering to prevent "headers already sent" errors
+ob_start();
+
+// Load environment configuration first
+if (!defined('DB_HOST')) {
+    require_once __DIR__ . '/env.php';
+}
+
+// Start session before any output
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+
+// Ensure getAssetPath function is available
+if (!function_exists('getAssetPath')) {
+    function getAssetPath($asset) {
+        $asset = ltrim($asset, '/');
+        if (strpos($asset, 'assets/') === 0) {
+            $assetPath = $asset;
+        } else {
+            $assetPath = 'assets/' . $asset;
+        }
+        return '/' . $assetPath;
+    }
+}
 
 if (!isset($_SESSION['user_id'])) {
-     header("Location: login.php");
-     exit();
- }
+    ob_end_clean(); // Clear output buffer before redirect
+    header("Location: login.php");
+    exit();
+}
 
 $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
+
+// Fetch user data for header
+$user_id = $_SESSION['user_id'];
+$stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$user = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+// Set page title for header
+$page_title = 'My Classroom';
+$_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>My Classroom - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { display: flex; flex-direction: column; height: 100vh; background: #f4f4f9; margin: 0; }
-        .site-header { flex-shrink: 0; }
-        .main-wrapper { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { 
-            width: 250px; 
-            background: #2c3e50; 
-            color: white; 
-            padding-top: 20px; 
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-        .sidebar a { 
-            display: block; 
-            padding: 15px 20px; 
-            color: #adb5bd; 
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .sidebar a:hover, .sidebar a.active { 
-            background: #34495e; 
-            color: white; 
-        }
-        .sidebar h3 { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            color: white;
-            font-size: 1.1rem;
-        }
-        .sidebar hr {
-            border: none;
-            border-top: 1px solid #444;
-            margin: 15px 0;
-        }
-        .classroom-content { flex: 1; overflow-y: auto; padding: 40px; }
+        /* Classroom page specific styles */
         .container { max-width: 900px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .material-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 20px; transition: transform 0.2s; }
@@ -107,79 +120,41 @@ $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at
             border-color: #0b6cf5;
             color: #0b6cf5;
         }
+        
+        /* Hide hamburger menu and mobile menu on desktop for pages with sidebar */
+        @media (min-width: 769px) {
+            .menu-toggle {
+                display: none !important;
+            }
+            #mobile-menu {
+                display: none !important;
+                visibility: hidden !important;
+            }
+            .mobile-backdrop {
+                display: none !important;
+            }
+        }
+        
+        /* Show hamburger menu on mobile */
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block !important;
+            }
+        }
     </style>
 </head>
-<body>
-    <header class="site-header">
-        <div class="header-left"><a href="index.php"><img src="logo.png" alt="Logo" class="site-logo"></a></div>
-        <div class="header-center"><div class="branding"><h1 class="site-title">My Classroom</h1></div></div>
-        <?php include 'header-user.php'; ?>
-        
-        <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
-            <span class="hamburger" aria-hidden="true"></span>
-        </button>
-        
-        <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
-            <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
-            <a class="nav-btn" href="index.php">Home</a>
-            <?php if (isset($_SESSION['user_id'])): ?>
-                <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
-                    <a class="nav-btn" href="schedule.php">Schedule</a>
-                    <a class="nav-btn" href="classroom.php">Classroom</a>
-                    <a class="nav-btn" href="profile.php?id=<?php echo $_SESSION['user_id']; ?>">View Profile</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'student'): ?>
-                    <a class="nav-btn" href="schedule.php">Book Lesson</a>
-                    <a class="nav-btn" href="student-dashboard.php">My Profile</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'teacher'): ?>
-                    <a class="nav-btn" href="teacher-dashboard.php">Dashboard</a>
-                    <a class="nav-btn" href="apply-teacher.php">More Info</a>
-                <?php endif; ?>
-                <?php if ($user_role === 'admin'): ?>
-                    <a class="nav-btn" href="admin-dashboard.php">Admin Panel</a>
-                <?php endif; ?>
-                <a class="nav-btn" href="message_threads.php">Messages</a>
-                <a class="nav-btn" href="support_contact.php">Support</a>
-                <a class="nav-btn" href="logout.php">Logout</a>
-            <?php endif; ?>
-        </div>
-    </header>
-    <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
+<body class="dashboard-layout">
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
-    <div class="main-wrapper">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <h3><?php echo ucfirst($_SESSION['user_role'] ?? 'User'); ?> Portal</h3>
-            <?php if ($_SESSION['user_role'] === 'teacher'): ?>
-                <a href="teacher-dashboard.php"><i class="fas fa-home"></i> Overview</a>
-                <a href="teacher-dashboard.php#profile"><i class="fas fa-user-edit"></i> My Profile</a>
-                <a href="schedule.php"><i class="fas fa-calendar"></i> Schedule</a>
-                <a href="classroom.php" class="active"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($_SESSION['user_role'] === 'student'): ?>
-                <a href="student-dashboard.php"><i class="fas fa-home"></i> Overview</a>
-                <a href="student-dashboard.php#profile"><i class="fas fa-user-edit"></i> My Profile</a>
-                <a href="schedule.php"><i class="fas fa-calendar"></i> Schedule</a>
-                <a href="classroom.php" class="active"><i class="fas fa-book"></i> Classroom</a>
-            <?php elseif ($_SESSION['user_role'] === 'admin'): ?>
-                <a href="admin-dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                <a href="admin-dashboard.php#approvals"><i class="fas fa-check-circle"></i> Approvals</a>
-                <a href="admin-dashboard.php#support"><i class="fas fa-headset"></i> Support Messages</a>
-                <a href="classroom.php" class="active"><i class="fas fa-book"></i> Classroom</a>
-            <?php endif; ?>
-            <a href="message_threads.php"><i class="fas fa-comments"></i> Messages</a>
-            <a href="support_contact.php"><i class="fas fa-headset"></i> Support</a>
-            <hr>
-            <a href="index.php"><i class="fas fa-arrow-left"></i> Home Page</a>
-            <?php if ($_SESSION['user_role'] === 'teacher'): ?>
-                <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>"><i class="fas fa-eye"></i> View Profile</a>
-            <?php endif; ?>
-            <hr>
-            <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-        </div>
+<div class="content-wrapper">
+    <?php 
+    // Set active tab for sidebar - classroom is accessed from sidebar
+    $active_tab = 'classroom';
+    include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
+    ?>
 
-        <div class="classroom-content">
-            <div class="container" style="margin-top: 0;">
+    <div class="main">
+        <div class="container">
         <h1 style="color: #004080;">Learning Materials</h1>
         <p>Access resources, assignments, and videos for your classes.</p>
         
@@ -191,9 +166,12 @@ $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at
                 <p style="color: #666; margin: 0;">Posted on <?php echo date('F j, Y', strtotime($m['created_at'])); ?></p>
             </div>
         <?php endwhile; ?>
-            </div>
         </div>
     </div>
-    <script src="js/menu.js" defer></script>
+</div>
 </body>
 </html>
+<?php
+// End output buffering
+ob_end_flush();
+?>

@@ -1,17 +1,17 @@
 <?php
 session_start();
-require_once 'db.php';
-require_once 'includes/dashboard-functions.php';
-require_once 'google-calendar-config.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+require_once __DIR__ . '/google-calendar-config.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'student') {
+if (!isset($_SESSION['user_id']) || ($_SESSION['user_role'] !== 'student' && $_SESSION['user_role'] !== 'new_student')) {
     header("Location: login.php");
     exit();
 }
 
 $student_id = $_SESSION['user_id'];
 $user = getUserById($conn, $student_id);
-$user_role = 'student';
+$user_role = $_SESSION['user_role']; // Keep actual role (student or new_student)
 
 // Initialize Google Calendar API
 $api = new GoogleCalendarAPI($conn);
@@ -30,13 +30,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 
     if (isset($_FILES['profile_pic_file']) && $_FILES['profile_pic_file']['error'] === UPLOAD_ERR_OK) {
         $file = $_FILES['profile_pic_file'];
-        $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array(strtolower($ext), $allowed)) {
+        if (in_array($ext, $allowed) && $file['size'] <= 5 * 1024 * 1024) {
             $filename = 'student_' . $student_id . '_' . time() . '.' . $ext;
-            $target_path = 'images/' . $filename;
+            
+            // Determine upload directory - works for both localhost and cPanel
+            $upload_base = __DIR__;
+            $public_images_dir = $upload_base . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'images';
+            $flat_images_dir = $upload_base . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'images';
+            
+            if (is_dir($public_images_dir)) {
+                $target_dir = $public_images_dir;
+            } elseif (is_dir($flat_images_dir)) {
+                $target_dir = $flat_images_dir;
+            } else {
+                $target_dir = is_dir($upload_base . DIRECTORY_SEPARATOR . 'public') ? $public_images_dir : $flat_images_dir;
+                @mkdir($target_dir, 0755, true);
+            }
+            
+            $target_path = $target_dir . DIRECTORY_SEPARATOR . $filename;
             if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                $profile_pic = $target_path;
+                $profile_pic = '/assets/images/' . $filename;
             }
         }
     }
@@ -124,83 +139,107 @@ $stmt->close();
 
 // Fetch Favorite Teachers
 $favorites = [];
-$fav_result = $conn->query("SELECT ft.teacher_id, u.name, u.profile_pic, u.bio, u.avg_rating, u.review_count 
+$stmt = $conn->prepare("SELECT ft.teacher_id, u.name, u.profile_pic, u.bio, u.avg_rating, u.review_count 
     FROM favorite_teachers ft 
     JOIN users u ON ft.teacher_id = u.id 
-    WHERE ft.student_id = $student_id");
-if ($fav_result) {
+    WHERE ft.student_id = ?");
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $fav_result = $stmt->get_result();
     while ($row = $fav_result->fetch_assoc()) {
         $favorites[] = $row;
     }
+    $stmt->close();
 }
 
 // Fetch Teachers from bookings for "My Teachers" tab
 $my_teachers = [];
-$teachers_result = $conn->query("
+$stmt = $conn->prepare("
     SELECT DISTINCT u.id, u.name, u.profile_pic, u.bio, u.avg_rating, u.review_count,
-           (SELECT COUNT(*) FROM bookings WHERE student_id = $student_id AND teacher_id = u.id) as lesson_count
+           (SELECT COUNT(*) FROM bookings WHERE student_id = ? AND teacher_id = u.id) as lesson_count
     FROM users u 
     JOIN bookings b ON u.id = b.teacher_id 
-    WHERE b.student_id = $student_id
+    WHERE b.student_id = ?
 ");
-if ($teachers_result) {
+if ($stmt) {
+    $stmt->bind_param("ii", $student_id, $student_id);
+    $stmt->execute();
+    $teachers_result = $stmt->get_result();
     while ($row = $teachers_result->fetch_assoc()) {
         $my_teachers[] = $row;
     }
+    $stmt->close();
 }
 
 // Fetch Learning Goals
 $goals = [];
-$goals_result = $conn->query("SELECT * FROM learning_goals WHERE student_id = $student_id ORDER BY completed ASC, deadline ASC");
-if ($goals_result) {
+$stmt = $conn->prepare("SELECT * FROM learning_goals WHERE student_id = ? ORDER BY completed ASC, deadline ASC");
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $goals_result = $stmt->get_result();
     while ($row = $goals_result->fetch_assoc()) {
         $goals[] = $row;
     }
+    $stmt->close();
 }
 
 // Fetch Assignments
 $assignments = [];
-$assign_result = $conn->query("
+$stmt = $conn->prepare("
     SELECT a.*, u.name as teacher_name 
     FROM assignments a 
     JOIN users u ON a.teacher_id = u.id 
-    WHERE a.student_id = $student_id 
+    WHERE a.student_id = ? 
     ORDER BY CASE WHEN a.status = 'pending' THEN 0 ELSE 1 END, a.due_date ASC
 ");
-if ($assign_result) {
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $assign_result = $stmt->get_result();
     while ($row = $assign_result->fetch_assoc()) {
         $assignments[] = $row;
     }
+    $stmt->close();
 }
 
 // Fetch Student's Reviews
 $my_reviews = [];
-$reviews_result = $conn->query("
+$stmt = $conn->prepare("
     SELECT r.*, u.name as teacher_name, u.profile_pic as teacher_pic
     FROM reviews r
     JOIN users u ON r.teacher_id = u.id
-    WHERE r.student_id = $student_id
+    WHERE r.student_id = ?
     ORDER BY r.created_at DESC
 ");
-if ($reviews_result) {
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $reviews_result = $stmt->get_result();
     while ($row = $reviews_result->fetch_assoc()) {
         $my_reviews[] = $row;
     }
+    $stmt->close();
 }
 
 // Get teachers available to review (booked but not reviewed yet)
 $reviewable_teachers = [];
-$reviewable_result = $conn->query("
+$stmt = $conn->prepare("
     SELECT DISTINCT u.id, u.name, u.profile_pic
     FROM users u
     JOIN bookings b ON u.id = b.teacher_id
-    WHERE b.student_id = $student_id
-    AND u.id NOT IN (SELECT teacher_id FROM reviews WHERE student_id = $student_id)
+    WHERE b.student_id = ?
+    AND u.id NOT IN (SELECT teacher_id FROM reviews WHERE student_id = ?)
 ");
-if ($reviewable_result) {
+if ($stmt) {
+    $stmt->bind_param("ii", $student_id, $student_id);
+    $stmt->execute();
+    $reviewable_result = $stmt->get_result();
     while ($row = $reviewable_result->fetch_assoc()) {
         $reviewable_teachers[] = $row;
     }
+    $stmt->close();
 }
 
 $active_tab = 'overview';
@@ -209,18 +248,24 @@ $active_tab = 'overview';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Student Dashboard - Staten Academy</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <!-- MODERN SHADOWS - To disable, comment out the line below -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
 </head>
 <body class="dashboard-layout">
 
-<?php include 'includes/dashboard-header.php'; ?>
+<?php include __DIR__ . '/app/Views/components/dashboard-header.php'; ?>
 
 <div class="content-wrapper">
-    <?php include 'includes/dashboard-sidebar.php'; ?>
+    <?php include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; ?>
 
     <div class="main">
         
@@ -278,6 +323,20 @@ $active_tab = 'overview';
                         <i class="fas fa-bullseye"></i>
                         <span>Set Goal</span>
                     </a>
+                    <?php
+                    // Check if user has pending or no teacher application
+                    $app_check = $conn->prepare("SELECT application_status FROM users WHERE id = ?");
+                    $app_check->bind_param("i", $student_id);
+                    $app_check->execute();
+                    $app_result = $app_check->get_result();
+                    $app_status = $app_result->fetch_assoc()['application_status'] ?? 'none';
+                    $app_check->close();
+                    if ($app_status === 'none' || $app_status === 'rejected'): ?>
+                    <a href="apply-teacher.php" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span>Apply to Teach</span>
+                    </a>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -334,7 +393,7 @@ $active_tab = 'overview';
                         <div style="text-align: center;">
                             <img src="<?php echo h($user['profile_pic']); ?>" alt="Profile" 
                                  style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid var(--primary-light);"
-                                 onerror="this.src='images/placeholder-teacher.svg'">
+                                 onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                             <div style="margin-top: 15px;">
                                 <label class="btn-outline btn-sm" style="cursor: pointer;">
                                     <i class="fas fa-camera"></i> Change Photo
@@ -415,7 +474,7 @@ $active_tab = 'overview';
             <?php if (count($my_teachers) > 0): ?>
                 <?php foreach ($my_teachers as $teacher): ?>
                 <div class="teacher-item">
-                    <img src="<?php echo h($teacher['profile_pic']); ?>" alt="" class="teacher-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                    <img src="<?php echo h($teacher['profile_pic']); ?>" alt="" class="teacher-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                     <div style="flex: 1;">
                         <strong><?php echo h($teacher['name']); ?></strong>
                         <div style="font-size: 0.85rem; color: var(--gray);">
@@ -449,7 +508,7 @@ $active_tab = 'overview';
             <h2 style="margin-top: 40px;"><i class="fas fa-heart" style="color: #ff6b6b;"></i> Favorite Teachers</h2>
             <?php foreach ($favorites as $fav): ?>
             <div class="teacher-item">
-                <img src="<?php echo h($fav['profile_pic']); ?>" alt="" class="teacher-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                <img src="<?php echo h($fav['profile_pic']); ?>" alt="" class="teacher-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                 <div style="flex: 1;">
                     <strong><?php echo h($fav['name']); ?></strong>
                     <div style="font-size: 0.85rem; color: var(--gray);">
@@ -472,7 +531,7 @@ $active_tab = 'overview';
                     </p>
                     <?php while($booking = $bookings->fetch_assoc()): ?>
                         <div class="booking-item">
-                            <img src="<?php echo h($booking['teacher_pic']); ?>" alt="" class="booking-pic" onerror="this.src='images/placeholder-teacher.svg'">
+                            <img src="<?php echo h($booking['teacher_pic']); ?>" alt="" class="booking-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                             <div style="flex: 1;">
                                 <strong><?php echo h($booking['teacher_name']); ?></strong>
                                 <div style="font-size: 0.85rem; color: var(--gray);">
@@ -659,7 +718,7 @@ $active_tab = 'overview';
                 <?php foreach ($my_reviews as $review): ?>
                 <div class="review-card">
                     <div class="review-header">
-                        <img src="<?php echo h($review['teacher_pic']); ?>" alt="" class="review-avatar" onerror="this.src='images/placeholder-teacher.svg'">
+                        <img src="<?php echo h($review['teacher_pic']); ?>" alt="" class="review-avatar" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                         <div class="review-meta">
                             <div class="review-author"><?php echo h($review['teacher_name']); ?></div>
                             <div class="review-date"><?php echo formatRelativeTime($review['created_at']); ?></div>
@@ -683,7 +742,7 @@ $active_tab = 'overview';
         <!-- Security Tab -->
         <div id="security" class="tab-content">
             <h1>Security Settings</h1>
-            <?php include 'includes/password-change-form.php'; ?>
+            <?php include __DIR__ . '/app/Views/components/password-change-form.php'; ?>
         </div>
 
     </div>
@@ -692,18 +751,51 @@ $active_tab = 'overview';
 <script>
 // Tab switching with URL hash
 function switchTab(id) {
+    // Prevent any page navigation
+    if (event) event.preventDefault();
+    
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    const targetTab = document.getElementById(id);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
     
     document.querySelectorAll('.sidebar-menu a').forEach(el => el.classList.remove('active'));
     const activeLink = document.querySelector(`.sidebar-menu a[onclick*="${id}"]`);
     if (activeLink) activeLink.classList.add('active');
     
-    window.location.hash = id;
+    // Also check sidebar header button
+    const sidebarHeader = document.querySelector('.sidebar-header a');
+    if (sidebarHeader && id === 'overview') {
+        sidebarHeader.classList.add('active');
+    }
+    
+    // Scroll to top of main content
+    const mainContent = document.querySelector('.main');
+    if (mainContent) mainContent.scrollTop = 0;
+    
+    // Update URL hash without triggering page reload
+    if (window.location.hash !== '#' + id) {
+        window.history.pushState(null, null, '#' + id);
+    }
 }
 
 // Handle URL hash on load
 document.addEventListener('DOMContentLoaded', function() {
+    const hash = window.location.hash.substring(1);
+    if (hash && document.getElementById(hash)) {
+        switchTab(hash);
+    } else {
+        // Default to overview if no hash
+        const overviewTab = document.getElementById('overview');
+        if (overviewTab) {
+            overviewTab.classList.add('active');
+        }
+    }
+});
+
+// Handle browser back/forward buttons (hashchange event)
+window.addEventListener('hashchange', function() {
     const hash = window.location.hash.substring(1);
     if (hash && document.getElementById(hash)) {
         switchTab(hash);
