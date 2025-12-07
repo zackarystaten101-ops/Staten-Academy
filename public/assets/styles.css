@@ -12,6 +12,20 @@ body {
   background-color: #f4f4f9;
   color: #333;
   padding: 20px;
+  margin: 0;
+}
+
+/* Responsive body padding */
+@media (max-width: 768px) {
+  body {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  body {
+    padding: 8px;
+  }
 }
 
 /* Container for Profiles */
@@ -189,11 +203,31 @@ body
   font-size: 0.95rem;
 }
 
-/* Small-screen tweaks */
+/* Responsive plans grid */
+@media (max-width: 992px) {
+  .plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  .plan {
+    padding: 16px;
+  }
+}
+
 @media (max-width: 600px) {
   .plans-grid {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
+  
   .plan {
     padding: 14px;
   }
@@ -211,14 +245,7 @@ body
   width: 100%;
 }
 
-/* make responsive: single column on smaller screens */
-@media (max-width: 800px) {
-  .plans-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-}
-/* ...existing code... */
+/* Responsive plans grid - handled in comprehensive media queries below */
 /* ...existing code... */
 
 /* Ensure grid shows two cards per row and allow items to shrink */
@@ -238,13 +265,7 @@ body
   display: block;
 }
 
-/* responsive fallback */
-@media (max-width: 800px) {
-  .plans-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-}
+/* Responsive plans grid - consolidated styles above */
 
 /* ...existing code... */
 /* ...existing code... */
@@ -303,14 +324,84 @@ header.site-header {
   text-shadow: 0 3px 10px rgba(0,0,0,0.55); /* readability over gradients/images */
 }
 
-/* Responsive: revert to normal flow on small screens */
-@media (max-width: 700px) {
+/* Responsive: tablet and mobile improvements */
+@media (max-width: 1024px) {
+  header.site-header {
+    padding: 14px 18px;
+    min-height: 68px;
+  }
+  
+  .header-center {
+    width: min(85%, 800px);
+  }
+  
+  .site-logo {
+    width: 72px;
+    max-height: 56px;
+  }
+}
+
+@media (max-width: 768px) {
+  header.site-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 64px;
+    padding: 10px 14px;
+    position: relative;
+  }
+  
+  .header-left {
+    flex: 0 0 auto;
+    z-index: 35;
+  }
+  
+  .header-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    max-width: 70%;
+    pointer-events: none;
+    padding: 0;
+  }
+  
+  .header-center .branding h1 {
+    font-size: 1.1rem;
+    line-height: 1.2;
+  }
+  
+  .header-center .branding p {
+    font-size: 0.75rem;
+    display: none; /* Hide tagline on mobile */
+  }
+  
+  .site-nav {
+    display: none; /* Hide nav buttons on mobile - use hamburger menu */
+  }
+  
+  .site-logo {
+    width: 56px;
+    max-height: 44px;
+  }
+}
+
+/* Responsive: revert to normal flow on very small screens */
+@media (max-width: 480px) {
   header.site-header {
     flex-direction: column;
     align-items: center;
     min-height: auto;
-    padding: 12px 16px;
+    padding: 10px 12px;
+    gap: 8px;
   }
+  
+  .header-left {
+    width: 100%;
+    justify-content: center;
+  }
+  
   .header-center {
     position: relative;
     left: auto;
@@ -318,7 +409,17 @@ header.site-header {
     transform: none;
     width: 100%;
     pointer-events: auto;
-    padding: 6px 0;
+    padding: 4px 0;
+    max-width: 100%;
+  }
+  
+  .header-center .branding h1 {
+    font-size: 1rem;
+  }
+  
+  .site-logo {
+    width: 48px;
+    max-height: 40px;
   }
 }
 
@@ -344,13 +445,7 @@ header.site-header {
   align-self: center;
 }
 
-/* Smaller logo on narrow screens */
-@media (max-width: 700px) {
-  .site-logo {
-    width: 64px;
-    max-height: 48px;
-  }
-}
+/* Logo responsive sizes handled in header media queries above */
 
 /* Remove header-nav rules (override if present) */
 .header-nav { display: none !important; }
@@ -484,16 +579,77 @@ header.site-header {
   font-size: 0.95rem;
 }
 
+/* Responsive teachers grid */
 @media (max-width: 1200px) {
    .teachers-grid {
-       grid-template-columns: repeat(2, 1fr);
+       grid-template-columns: repeat(3, 1fr);
+       gap: 16px;
    }
  }
 
- @media (max-width: 700px) {
-   .teacher-card img { height: auto; }
+@media (max-width: 992px) {
+   .teachers-grid {
+       grid-template-columns: repeat(2, 1fr);
+       gap: 14px;
+   }
+   
+   .teachers h2 {
+       font-size: 1.3rem;
+   }
+ }
+
+@media (max-width: 768px) {
+   .teachers {
+       padding: 14px 16px;
+   }
+   
+   .teachers h2 {
+       font-size: 1.2rem;
+       margin-bottom: 10px;
+   }
+   
+   .teachers-grid {
+       grid-template-columns: repeat(2, 1fr);
+       gap: 12px;
+   }
+   
+   .teacher-card {
+       border-radius: 8px;
+   }
+   
+   .teacher-info {
+       padding: 10px 12px 12px;
+   }
+   
+   .teacher-info h3 {
+       font-size: 1rem;
+   }
+   
+   .teacher-info p {
+       font-size: 0.9rem;
+   }
+ }
+
+ @media (max-width: 576px) {
+   .teachers {
+       padding: 12px 14px;
+   }
+   
+   .teachers h2 {
+       font-size: 1.1rem;
+   }
+   
+   .teacher-card img { 
+       height: auto; 
+   }
+   
    .teachers-grid {
        grid-template-columns: 1fr;
+       gap: 14px;
+   }
+   
+   .teacher-info {
+       padding: 12px 14px 14px;
    }
  }
  /* Mobile-specific rules were moved to `mobile.css` for separation. */

@@ -154,9 +154,74 @@ if (isset($_SESSION['user_id'])) {
         background: #ffe6e6;
     }
 
-    @media (max-width: 900px) {
+    /* Responsive header user section */
+    @media (max-width: 1024px) {
         .header-user-section {
-            display: none;
+            right: 70px;
+            gap: 12px;
+        }
+        
+        .user-info-text {
+            display: none; /* Hide text on tablet, show only picture */
+        }
+        
+        .user-profile-pic {
+            width: 40px;
+            height: 40px;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .header-user-section {
+            right: 50px;
+            top: 14px;
+            gap: 8px;
+        }
+        
+        .user-profile-pic {
+            width: 36px;
+            height: 36px;
+            border-width: 1.5px;
+        }
+        
+        .user-menu-dropdown {
+            top: 50px;
+            right: -10px;
+            min-width: 160px;
+            font-size: 0.9rem;
+        }
+        
+        .user-menu-dropdown a {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .header-user-section {
+            right: 40px;
+            top: 12px;
+        }
+        
+        .user-profile-pic {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .user-menu-dropdown {
+            top: 45px;
+            right: -20px;
+            min-width: 150px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .header-user-section {
+            position: relative;
+            right: auto;
+            top: auto;
+            margin-top: 8px;
+            justify-content: center;
         }
     }
 </style>
