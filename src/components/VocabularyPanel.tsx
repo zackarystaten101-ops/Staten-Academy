@@ -324,3 +324,4 @@ const VocabularyPanel: React.FC<VocabularyPanelProps> = ({ teacherId, sessionId,
 
 export default VocabularyPanel;
 
+

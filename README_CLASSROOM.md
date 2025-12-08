@@ -203,3 +203,4 @@ websocket/
 - Vocabulary cards can be locked by teachers
 - WebSocket connections verify session membership
 
+

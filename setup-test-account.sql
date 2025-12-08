@@ -44,3 +44,4 @@ VALUES
 -- SELECT COUNT(*) as total_lessons FROM lessons WHERE student_id = @student_id AND teacher_id = @teacher_id;
 -- SELECT COUNT(*) as upcoming_lessons FROM lessons WHERE student_id = @student_id AND teacher_id = @teacher_id AND status = 'scheduled' AND lesson_date >= CURDATE();
 
+
