@@ -157,10 +157,14 @@ $stmt->close();
 
 // Fetch Favorite Teachers
 $favorites = [];
-$stmt = $conn->prepare("SELECT ft.teacher_id, u.name, u.profile_pic, u.bio, u.avg_rating, u.review_count 
+$stmt = $conn->prepare("
+    SELECT ft.teacher_id, u.name, u.profile_pic, u.bio, 
+           (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating,
+           (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count
     FROM favorite_teachers ft 
     JOIN users u ON ft.teacher_id = u.id 
-    WHERE ft.student_id = ?");
+    WHERE ft.student_id = ?
+");
 if ($stmt) {
     $stmt->bind_param("i", $student_id);
     $stmt->execute();
@@ -174,7 +178,9 @@ if ($stmt) {
 // Fetch Teachers from bookings for "My Teachers" tab
 $my_teachers = [];
 $stmt = $conn->prepare("
-    SELECT DISTINCT u.id, u.name, u.profile_pic, u.bio, u.avg_rating, u.review_count,
+    SELECT DISTINCT u.id, u.name, u.profile_pic, u.bio, 
+           (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating,
+           (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
            (SELECT COUNT(*) FROM bookings WHERE student_id = ? AND teacher_id = u.id) as lesson_count
     FROM users u 
     JOIN bookings b ON u.id = b.teacher_id 

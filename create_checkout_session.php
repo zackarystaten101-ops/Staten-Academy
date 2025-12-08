@@ -1,6 +1,11 @@
 <?php
 require_once 'config.php';
 
+// Check if Stripe API key is configured
+if (!defined('STRIPE_SECRET_KEY') || empty(STRIPE_SECRET_KEY) || strpos(STRIPE_SECRET_KEY, 'YOUR_') === 0 || (strpos(STRIPE_SECRET_KEY, 'sk_test_') !== 0 && strpos(STRIPE_SECRET_KEY, 'sk_live_') !== 0)) {
+    die("Error: Stripe API key is not configured. Please set STRIPE_SECRET_KEY in env.php with a valid Stripe secret key (sk_test_... or sk_live_...).");
+}
+
 // Check if Price ID is provided
 if (!isset($_POST['price_id'])) {
     die("Error: No Price ID provided.");
@@ -71,12 +76,27 @@ $session = json_decode($response, true);
 
 if ($http_code !== 200) {
     // Handle API Error
-    echo "Error creating checkout session: ";
+    $error_message = "Error creating checkout session: ";
     if (isset($session['error']['message'])) {
-        echo $session['error']['message'];
+        $error_message .= $session['error']['message'];
+        
+        // Provide helpful guidance for common errors
+        if (isset($session['error']['type']) && $session['error']['type'] === 'invalid_request_error') {
+            if (strpos($session['error']['message'], 'Invalid API Key') !== false) {
+                $error_message .= "\n\nPlease check your STRIPE_SECRET_KEY in env.php. Make sure it's a valid Stripe secret key (starts with sk_test_ for test mode or sk_live_ for live mode).";
+            }
+        }
     } else {
-        // Debug: Session created successfully
-        // print_r($session); // Commented out for production
+        $error_message .= "HTTP Error " . $http_code . ". Please check your Stripe API configuration.";
+    }
+    
+    // In production, log the error but show user-friendly message
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        error_log("Stripe API Error: " . json_encode($session));
+        echo $error_message;
+    } else {
+        echo "Error processing payment. Please contact support if this issue persists.";
+        error_log("Stripe API Error: " . json_encode($session));
     }
     exit;
 }
