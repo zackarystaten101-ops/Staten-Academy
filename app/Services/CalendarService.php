@@ -13,10 +13,14 @@ class CalendarService {
     
     public function __construct($conn) {
         $this->conn = $conn;
-        $this->client_id = GOOGLE_CLIENT_ID;
-        $this->client_secret = GOOGLE_CLIENT_SECRET;
-        $this->redirect_uri = GOOGLE_REDIRECT_URI;
-        $this->scopes = GOOGLE_SCOPES;
+        // Load env.php if constants not defined
+        if (!defined('GOOGLE_CLIENT_ID')) {
+            require_once __DIR__ . '/../../env.php';
+        }
+        $this->client_id = defined('GOOGLE_CLIENT_ID') ? GOOGLE_CLIENT_ID : '';
+        $this->client_secret = defined('GOOGLE_CLIENT_SECRET') ? GOOGLE_CLIENT_SECRET : '';
+        $this->redirect_uri = defined('GOOGLE_REDIRECT_URI') ? GOOGLE_REDIRECT_URI : '';
+        $this->scopes = defined('GOOGLE_SCOPES') ? GOOGLE_SCOPES : 'https://www.googleapis.com/auth/calendar';
     }
     
     /**
@@ -220,6 +224,203 @@ class CalendarService {
         }
         
         return ['available' => true];
+    }
+    
+    /**
+     * Get available slots with timezone conversion
+     */
+    public function getAvailableSlotsWithTimezone($teacherId, $date, $userTimezone = 'UTC') {
+        require_once __DIR__ . '/TimezoneService.php';
+        $tzService = new TimezoneService($this->conn);
+        
+        $dayOfWeek = date('l', strtotime($date));
+        $stmt = $this->conn->prepare("
+            SELECT day_of_week, start_time, end_time, is_available 
+            FROM teacher_availability 
+            WHERE teacher_id = ? AND day_of_week = ? AND is_available = 1
+            ORDER BY start_time
+        ");
+        $stmt->bind_param("is", $teacherId, $dayOfWeek);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $slots = [];
+        while ($row = $result->fetch_assoc()) {
+            // Convert times to user's timezone for display
+            $utcDateTime = $date . ' ' . $row['start_time'];
+            $localTime = $tzService->convertUTCToLocalDateTime($utcDateTime, $userTimezone);
+            $row['display_start_time'] = $localTime['time'];
+            $row['display_end_time'] = date('H:i', strtotime($row['end_time']));
+            $slots[] = $row;
+        }
+        $stmt->close();
+        return $slots;
+    }
+    
+    /**
+     * Check time-off conflicts
+     */
+    public function checkTimeOffConflicts($teacherId, $startDate, $endDate) {
+        require_once __DIR__ . '/../Models/TimeOff.php';
+        $timeOffModel = new TimeOff($this->conn);
+        return $timeOffModel->hasConflict($teacherId, $startDate, $endDate);
+    }
+    
+    /**
+     * Validate booking notice period
+     */
+    public function validateBookingNotice($teacherId, $lessonDateTime) {
+        // Get teacher's booking notice requirement
+        $stmt = $this->conn->prepare("SELECT booking_notice_hours FROM users WHERE id = ? AND role = 'teacher'");
+        $stmt->bind_param("i", $teacherId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $teacher = $result->fetch_assoc();
+        $stmt->close();
+        
+        $noticeHours = $teacher && $teacher['booking_notice_hours'] ? (int)$teacher['booking_notice_hours'] : 24;
+        
+        $lessonTimestamp = strtotime($lessonDateTime);
+        $currentTimestamp = time();
+        $hoursUntilLesson = ($lessonTimestamp - $currentTimestamp) / 3600;
+        
+        if ($hoursUntilLesson < $noticeHours) {
+            return [
+                'valid' => false,
+                'reason' => "Booking must be made at least {$noticeHours} hours in advance. This lesson is only " . round($hoursUntilLesson, 1) . " hours away."
+            ];
+        }
+        
+        return ['valid' => true];
+    }
+    
+    /**
+     * Create recurring lesson series
+     */
+    public function createRecurringLesson($teacherId, $studentId, $seriesData) {
+        require_once __DIR__ . '/../Models/RecurringLesson.php';
+        require_once __DIR__ . '/../Models/Lesson.php';
+        
+        $recurringModel = new RecurringLesson($this->conn);
+        $lessonModel = new Lesson($this->conn);
+        
+        // Create recurring lesson record
+        $recurringId = $recurringModel->createRecurring(
+            $teacherId,
+            $studentId,
+            $seriesData['day_of_week'],
+            $seriesData['start_time'],
+            $seriesData['end_time'],
+            $seriesData['start_date'],
+            $seriesData['end_date'] ?? null,
+            $seriesData['frequency_weeks'] ?? 1
+        );
+        
+        if (!$recurringId) {
+            return ['error' => 'Failed to create recurring lesson'];
+        }
+        
+        // Generate individual lesson dates
+        $lessonDates = $recurringModel->generateLessonDates($recurringId, $seriesData['number_of_weeks'] ?? 52);
+        $createdLessons = [];
+        
+        foreach ($lessonDates as $lessonDate) {
+            $lessonId = $lessonModel->createLesson(
+                $teacherId,
+                $studentId,
+                $lessonDate,
+                $seriesData['start_time'],
+                $seriesData['end_time'],
+                null, // googleEventId
+                'recurring', // lessonType
+                $recurringId // recurringLessonId
+            );
+            
+            if ($lessonId) {
+                // Update lesson with recurring series info
+                $lessonModel->update($lessonId, [
+                    'series_start_date' => $seriesData['start_date'],
+                    'series_end_date' => $seriesData['end_date'] ?? null,
+                    'series_frequency_weeks' => $seriesData['frequency_weeks'] ?? 1
+                ]);
+                $createdLessons[] = $lessonId;
+            }
+        }
+        
+        return ['success' => true, 'recurring_id' => $recurringId, 'lessons_created' => count($createdLessons)];
+    }
+    
+    /**
+     * Pause recurring lessons during time-off
+     */
+    public function pauseRecurringLessons($teacherId, $startDate, $endDate) {
+        require_once __DIR__ . '/../Models/RecurringLesson.php';
+        $recurringModel = new RecurringLesson($this->conn);
+        return $recurringModel->pauseForTimeOff($teacherId, $startDate, $endDate);
+    }
+    
+    /**
+     * Get lessons with color codes
+     */
+    public function getLessonsWithColors($userId, $dateFrom = null, $dateTo = null, $role = 'student') {
+        $colorMap = [
+            'scheduled' => '#0b6cf5', // Blue
+            'completed' => '#28a745', // Green
+            'cancelled' => '#dc3545',  // Red
+            'pending' => '#ffc107'      // Yellow
+        ];
+        
+        // Build query based on role and date range
+        if ($dateFrom && $dateTo) {
+            if ($role === 'teacher') {
+                $stmt = $this->conn->prepare("
+                    SELECT l.*, u.name as student_name, u.email as student_email
+                    FROM lessons l
+                    JOIN users u ON l.student_id = u.id
+                    WHERE l.teacher_id = ? AND l.lesson_date BETWEEN ? AND ?
+                    ORDER BY l.lesson_date, l.start_time
+                ");
+                $stmt->bind_param("iss", $userId, $dateFrom, $dateTo);
+            } else {
+                $stmt = $this->conn->prepare("
+                    SELECT l.*, u.name as teacher_name, u.email as teacher_email
+                    FROM lessons l
+                    JOIN users u ON l.teacher_id = u.id
+                    WHERE l.student_id = ? AND l.lesson_date BETWEEN ? AND ?
+                    ORDER BY l.lesson_date, l.start_time
+                ");
+                $stmt->bind_param("iss", $userId, $dateFrom, $dateTo);
+            }
+        } else {
+            if ($role === 'teacher') {
+                $stmt = $this->conn->prepare("
+                    SELECT l.*, u.name as student_name, u.email as student_email
+                    FROM lessons l
+                    JOIN users u ON l.student_id = u.id
+                    WHERE l.teacher_id = ?
+                    ORDER BY l.lesson_date, l.start_time
+                ");
+                $stmt->bind_param("i", $userId);
+            } else {
+                $stmt = $this->conn->prepare("
+                    SELECT l.*, u.name as teacher_name, u.email as teacher_email
+                    FROM lessons l
+                    JOIN users u ON l.teacher_id = u.id
+                    WHERE l.student_id = ?
+                    ORDER BY l.lesson_date, l.start_time
+                ");
+                $stmt->bind_param("i", $userId);
+            }
+        }
+        
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $lessons = [];
+        while ($row = $result->fetch_assoc()) {
+            $row['color_code'] = $row['color_code'] ?? $colorMap[$row['status']] ?? '#0b6cf5';
+            $lessons[] = $row;
+        }
+        $stmt->close();
+        return $lessons;
     }
 }
 

@@ -171,7 +171,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 // If there's an error or not a POST request, show login form with error
-$conn->close();
+// Don't close connection here - it might be needed for the form display
 ?>
 <!DOCTYPE html>
 <html lang="en">

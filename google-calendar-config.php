@@ -8,9 +8,8 @@
  * 3. Enable Google Calendar API
  * 4. Create OAuth 2.0 credentials (Web Application)
  * 5. Add authorized redirect URIs:
- *    - http://localhost/Web%20page/Staten-Academy/google-calendar-callback.php
- *    - https://yourdomain.com/Web%20page/Staten-Academy/google-calendar-callback.php
- *    (Adjust the path based on your actual server setup)
+ *    - http://localhost/Staten%20Accademy%20Webpage/google-calendar-callback.php
+ *    - https://yourdomain.com/Staten%20Accademy%20Webpage/google-calendar-callback.php
  * 6. Download the OAuth 2.0 Client ID JSON file
  * 7. Update credentials in env.php
  */
@@ -118,19 +117,27 @@ class GoogleCalendarAPI {
      * Create an event on Google Calendar
      */
     public function createEvent($access_token, $lesson_data) {
+        // Get user's timezone if provided, otherwise default to UTC
+        $timezone = $lesson_data['timezone'] ?? 'UTC';
+        
         $event = [
             'summary' => $lesson_data['title'],
             'description' => $lesson_data['description'] ?? '',
             'start' => [
                 'dateTime' => $lesson_data['start_datetime'],
-                'timeZone' => 'UTC'
+                'timeZone' => $timezone
             ],
             'end' => [
                 'dateTime' => $lesson_data['end_datetime'],
-                'timeZone' => 'UTC'
+                'timeZone' => $timezone
             ],
             'attendees' => $lesson_data['attendees'] ?? []
         ];
+        
+        // Add recurrence rule if this is a recurring lesson
+        if (isset($lesson_data['recurrence']) && !empty($lesson_data['recurrence'])) {
+            $event['recurrence'] = [$lesson_data['recurrence']];
+        }
 
         $ch = curl_init('https://www.googleapis.com/calendar/v3/calendars/primary/events');
         

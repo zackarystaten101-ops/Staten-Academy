@@ -27,6 +27,8 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/google-calendar-config.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+require_once __DIR__ . '/app/Services/TimezoneService.php';
+require_once __DIR__ . '/app/Services/CalendarService.php';
 
 // Ensure getAssetPath function is available
 if (!function_exists('getAssetPath')) {
@@ -51,11 +53,36 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $api = new GoogleCalendarAPI($conn);
+$tzService = new TimezoneService($conn);
+$calendarService = new CalendarService($conn);
 $selected_teacher = null;
 $teacher_data = null;
 $availability_slots = [];
 $current_lessons = [];
+$student_upcoming_lessons = [];
 $user_role = $_SESSION['user_role'] ?? 'student';
+
+// Get user's timezone
+$user_timezone = $tzService->getUserTimezone($user_id);
+
+// Fetch student's upcoming lessons (for students)
+if ($user_role === 'student' || $user_role === 'new_student') {
+    $stmt = $conn->prepare("
+        SELECT l.*, u.name as teacher_name, u.profile_pic as teacher_pic
+        FROM lessons l
+        JOIN users u ON l.teacher_id = u.id
+        WHERE l.student_id = ? AND l.lesson_date >= CURDATE() AND l.status = 'scheduled'
+        ORDER BY l.lesson_date ASC, l.start_time ASC
+        LIMIT 10
+    ");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $student_upcoming_lessons[] = $row;
+    }
+    $stmt->close();
+}
 
 // If teacher parameter is set, fetch teacher details
 if (isset($_GET['teacher'])) {
@@ -133,6 +160,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         exit();
     }
 
+    // Check booking notice requirement
+    $lessonDateTime = $lesson_date . ' ' . $start_time . ':00';
+    $noticeCheck = $calendarService->validateBookingNotice($teacher_id, $lessonDateTime);
+    if (!$noticeCheck['valid']) {
+        http_response_code(400);
+        echo json_encode(['error' => $noticeCheck['reason']]);
+        exit();
+    }
+
+    // Check time-off conflicts
+    if ($calendarService->checkTimeOffConflicts($teacher_id, $lesson_date, $lesson_date)) {
+        http_response_code(409);
+        echo json_encode(['error' => 'Teacher is on time-off during this period']);
+        exit();
+    }
+
     $availability_check = $api->isSlotAvailable($teacher_id, $lesson_date, $start_time, $end_time);
     if (!$availability_check['available']) {
         http_response_code(409);
@@ -157,8 +200,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Create lesson record
     $google_event_id = null;
     $stmt = $conn->prepare("
-        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status)
-        VALUES (?, ?, ?, ?, ?, 'scheduled')
+        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, lesson_type, color_code)
+        VALUES (?, ?, ?, ?, ?, 'scheduled', 'single', '#0b6cf5')
     ");
     $stmt->bind_param("iisss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time);
 
@@ -198,11 +241,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $start_datetime = $lesson_date . 'T' . $start_time . ':00';
         $end_datetime = $lesson_date . 'T' . $end_time . ':00';
         
+        // Create classroom join URL
+        $classroom_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . 
+                        '://' . $_SERVER['HTTP_HOST'] . 
+                        dirname($_SERVER['PHP_SELF']) . 
+                        '/classroom.php?lessonId=' . $lesson_id;
+        
         $event_data = [
             'title' => 'Lesson: ' . htmlspecialchars($student['name']),
-            'description' => 'Student: ' . htmlspecialchars($student['name']) . ' (' . htmlspecialchars($student['email']) . ')',
+            'description' => 'Student: ' . htmlspecialchars($student['name']) . ' (' . htmlspecialchars($student['email']) . ')' . "\n\n" .
+                           'Join Classroom: ' . $classroom_url,
             'start_datetime' => $start_datetime,
-            'end_datetime' => $end_datetime
+            'end_datetime' => $end_datetime,
+            'location' => $classroom_url
         ];
 
         $calendar_result = $api->createEvent($teacher['google_calendar_token'], $event_data);
@@ -236,12 +287,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $start_datetime = $lesson_date . 'T' . $start_time . ':00';
         $end_datetime = $lesson_date . 'T' . $end_time . ':00';
         
+        // Create classroom join URL
+        $classroom_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . 
+                        '://' . $_SERVER['HTTP_HOST'] . 
+                        dirname($_SERVER['PHP_SELF']) . 
+                        '/classroom.php?lessonId=' . $lesson_id;
+        
         $student_event_data = [
             'title' => 'Lesson with ' . htmlspecialchars($teacher['name']),
-            'description' => 'Teacher: ' . htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['email']) . ')',
+            'description' => 'Teacher: ' . htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['email']) . ')' . "\n\n" .
+                           'Join Classroom: ' . $classroom_url,
             'start_datetime' => $start_datetime,
             'end_datetime' => $end_datetime,
-            'attendees' => [['email' => $teacher['email']]]
+            'attendees' => [['email' => $teacher['email']]],
+            'location' => $classroom_url
         ];
 
         $student_calendar_result = $api->createEvent($student['google_calendar_token'], $student_event_data);
@@ -283,6 +342,7 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <!-- MODERN SHADOWS - To disable, comment out the line below -->
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/calendar.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Schedule page specific styles */
@@ -419,6 +479,27 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         <form id="booking-form" class="booking-form" style="display: none;">
                                             <div class="form-group">
                                                 <label><strong>Selected Time:</strong> <span id="selected-time-display"></span></label>
+                                                <span class="timezone-indicator" id="timezone-display"><?php echo htmlspecialchars($user_timezone); ?></span>
+                                            </div>
+                                            <div id="booking-notice-warning" class="booking-notice-warning" style="display: none;">
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                <span id="booking-notice-message"></span>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>
+                                                    <input type="checkbox" id="recurring-booking" name="recurring_booking">
+                                                    Book as recurring weekly lesson
+                                                </label>
+                                            </div>
+                                            <div id="recurring-options" style="display: none; margin-top: 15px;">
+                                                <div class="form-group">
+                                                    <label for="number-of-weeks">Number of weeks:</label>
+                                                    <input type="number" id="number-of-weeks" name="number_of_weeks" min="2" max="52" value="12" style="width: 100px;">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="end-date">End date (optional):</label>
+                                                    <input type="date" id="end-date" name="end_date" style="width: 200px;">
+                                                </div>
                                             </div>
                                             <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Confirm Booking</button>
                                             <button type="button" class="btn" onclick="cancelBooking()" style="background: #6c757d; margin-left: 10px;">Cancel</button>
@@ -431,10 +512,22 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         <?php endif; ?>
                                     </div>
 
+                                    <script src="<?php echo getAssetPath('js/timezone.js'); ?>"></script>
                                     <script>
                                     const teacherId = <?php echo $selected_teacher; ?>;
                                     const availabilitySlots = <?php echo json_encode($availability_slots); ?>;
+                                    const userTimezone = '<?php echo htmlspecialchars($user_timezone); ?>';
                                     let selectedSlot = null;
+                                    
+                                    // Show timezone indicator
+                                    if (window.userTimezone) {
+                                        document.getElementById('timezone-display').textContent = window.userTimezone;
+                                    }
+                                    
+                                    // Handle recurring booking checkbox
+                                    document.getElementById('recurring-booking').addEventListener('change', function() {
+                                        document.getElementById('recurring-options').style.display = this.checked ? 'block' : 'none';
+                                    });
 
                                     document.getElementById('lesson-date').addEventListener('change', function() {
                                         const selectedDate = this.value;
@@ -458,10 +551,32 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         document.getElementById('time-slots-container').innerHTML = html;
                                     });
 
-                                    function selectSlot(date, startTime, endTime) {
+                                    async function selectSlot(date, startTime, endTime) {
                                         selectedSlot = { date, startTime, endTime };
                                         document.getElementById('selected-time-display').textContent = `${date} from ${startTime} to ${endTime}`;
                                         document.getElementById('booking-form').style.display = 'block';
+                                        
+                                        // Check booking notice requirement
+                                        const lessonDateTime = date + ' ' + startTime + ':00';
+                                        try {
+                                            const response = await fetch('/api/calendar.php?action=validate-notice', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    teacher_id: teacherId,
+                                                    lesson_datetime: lessonDateTime
+                                                })
+                                            });
+                                            const data = await response.json();
+                                            if (!data.valid) {
+                                                document.getElementById('booking-notice-warning').style.display = 'flex';
+                                                document.getElementById('booking-notice-message').textContent = data.reason;
+                                            } else {
+                                                document.getElementById('booking-notice-warning').style.display = 'none';
+                                            }
+                                        } catch (error) {
+                                            console.error('Failed to check booking notice:', error);
+                                        }
                                         
                                         // Update time slot selection styling
                                         document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
@@ -486,28 +601,66 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                             return;
                                         }
 
-                                        const formData = new FormData();
-                                        formData.append('action', 'book_lesson');
-                                        formData.append('lesson_date', selectedSlot.date);
-                                        formData.append('start_time', selectedSlot.startTime);
-                                        formData.append('end_time', selectedSlot.endTime);
-
-                                        try {
-                                            const response = await fetch('schedule.php', {
-                                                method: 'POST',
-                                                body: formData
-                                            });
-
-                                            const data = await response.json();
+                                        const isRecurring = document.getElementById('recurring-booking').checked;
+                                        
+                                        if (isRecurring) {
+                                            // Book recurring lesson
+                                            const numberOfWeeks = parseInt(document.getElementById('number-of-weeks').value) || 12;
+                                            const endDate = document.getElementById('end-date').value || null;
+                                            const dayOfWeek = new Date(selectedSlot.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
                                             
-                                            if (response.ok) {
-                                                alert('Lesson booked successfully! Proceeding to payment.');
-                                                window.location.href = 'payment.php';
-                                            } else {
-                                                alert('Error: ' + (data.error || 'Booking failed'));
+                                            try {
+                                                const response = await fetch('/api/calendar.php?action=book-recurring', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        teacher_id: teacherId,
+                                                        day_of_week: dayOfWeek,
+                                                        start_time: selectedSlot.startTime + ':00',
+                                                        end_time: selectedSlot.endTime + ':00',
+                                                        start_date: selectedSlot.date,
+                                                        end_date: endDate,
+                                                        frequency_weeks: 1,
+                                                        number_of_weeks: numberOfWeeks
+                                                    })
+                                                });
+                                                
+                                                const data = await response.json();
+                                                
+                                                if (data.success) {
+                                                    alert(`Recurring lesson series booked successfully! ${data.lessons_created} lessons created.`);
+                                                    window.location.reload();
+                                                } else {
+                                                    alert('Error: ' + (data.error || 'Booking failed'));
+                                                }
+                                            } catch (error) {
+                                                alert('Error booking recurring lesson: ' + error);
                                             }
-                                        } catch (error) {
-                                            alert('Error booking lesson: ' + error);
+                                        } else {
+                                            // Book single lesson
+                                            const formData = new FormData();
+                                            formData.append('action', 'book_lesson');
+                                            formData.append('lesson_date', selectedSlot.date);
+                                            formData.append('start_time', selectedSlot.startTime);
+                                            formData.append('end_time', selectedSlot.endTime);
+
+                                            try {
+                                                const response = await fetch('schedule.php', {
+                                                    method: 'POST',
+                                                    body: formData
+                                                });
+
+                                                const data = await response.json();
+                                                
+                                                if (response.ok) {
+                                                    alert('Lesson booked successfully! Proceeding to payment.');
+                                                    window.location.href = 'payment.php';
+                                                } else {
+                                                    alert('Error: ' + (data.error || 'Booking failed'));
+                                                }
+                                            } catch (error) {
+                                                alert('Error booking lesson: ' + error);
+                                            }
                                         }
                                     });
                                     </script>
@@ -527,9 +680,58 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                             <div class="lessons-list">
                                 <?php foreach ($current_lessons as $lesson): ?>
                                     <div class="lesson-item">
-                                        <strong>Student:</strong> <?php echo htmlspecialchars($lesson['student_name']); ?><br>
-                                        <strong>Date:</strong> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?><br>
-                                        <strong>Time:</strong> <?php echo date('H:i', strtotime($lesson['start_time'])); ?> - <?php echo date('H:i', strtotime($lesson['end_time'])); ?>
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                            <div>
+                                                <strong>Student:</strong> <?php echo htmlspecialchars($lesson['student_name']); ?><br>
+                                                <strong>Date:</strong> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?><br>
+                                                <strong>Time:</strong> <?php echo date('H:i', strtotime($lesson['start_time'])); ?> - <?php echo date('H:i', strtotime($lesson['end_time'])); ?>
+                                            </div>
+                                            <a href="classroom.php?lessonId=<?php echo $lesson['id']; ?>" 
+                                               class="btn btn-success" 
+                                               style="margin-left: 15px; white-space: nowrap;"
+                                               title="Join Classroom">
+                                                <i class="fas fa-video"></i> Join
+                                            </a>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (($user_role === 'student' || $user_role === 'new_student') && count($student_upcoming_lessons) > 0): ?>
+                        <div class="card">
+                            <h3><i class="fas fa-calendar-check"></i> Your Upcoming Lessons</h3>
+                            <div class="lessons-list">
+                                <?php foreach ($student_upcoming_lessons as $lesson): ?>
+                                    <?php
+                                    $lessonDateTime = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
+                                    $canJoin = $lessonDateTime <= (time() + 3600); // Can join 1 hour before lesson
+                                    $isPast = $lessonDateTime < time();
+                                    ?>
+                                    <div class="lesson-item" style="<?php echo $isPast ? 'opacity: 0.6;' : ''; ?>">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                                            <div style="flex: 1; min-width: 200px;">
+                                                <strong>Teacher:</strong> <?php echo htmlspecialchars($lesson['teacher_name']); ?><br>
+                                                <strong>Date:</strong> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?><br>
+                                                <strong>Time:</strong> <?php echo date('H:i', strtotime($lesson['start_time'])); ?> - <?php echo date('H:i', strtotime($lesson['end_time'])); ?>
+                                                <?php if ($isPast): ?>
+                                                    <br><span style="color: #dc3545; font-size: 0.9rem;"><i class="fas fa-clock"></i> Past lesson</span>
+                                                <?php elseif ($canJoin): ?>
+                                                    <br><span style="color: #28a745; font-size: 0.9rem;"><i class="fas fa-circle" style="font-size: 0.6rem;"></i> Join now</span>
+                                                <?php else: ?>
+                                                    <br><span style="color: #6c757d; font-size: 0.9rem;"><i class="fas fa-clock"></i> Starts in <?php echo round(($lessonDateTime - time()) / 3600, 1); ?> hours</span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div style="display: flex; gap: 10px; align-items: center;">
+                                                <a href="classroom.php?lessonId=<?php echo $lesson['id']; ?>" 
+                                                   class="btn <?php echo $canJoin ? 'btn-success' : 'btn-outline'; ?>" 
+                                                   style="white-space: nowrap;"
+                                                   title="Join Classroom">
+                                                    <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
+                                                </a>
+                                            </div>
+                                        </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -541,6 +743,8 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
 </div>
 
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
+    <script src="<?php echo getAssetPath('js/timezone.js'); ?>" defer></script>
+    <script src="<?php echo getAssetPath('js/calendar.js'); ?>" defer></script>
 </body>
 </html>
 <?php

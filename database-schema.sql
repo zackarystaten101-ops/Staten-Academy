@@ -313,6 +313,120 @@ CREATE TABLE IF NOT EXISTS teacher_resources (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================
+-- VIDEO SESSIONS TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS video_sessions (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL UNIQUE,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    student_id INT(6) UNSIGNED NOT NULL,
+    lesson_id INT(6) UNSIGNED DEFAULT NULL,
+    session_type ENUM('live', 'test') DEFAULT 'live',
+    status ENUM('active', 'ended', 'cancelled') DEFAULT 'active',
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session (session_id),
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_student (student_id),
+    INDEX idx_lesson (lesson_id),
+    INDEX idx_session_type (session_type),
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
+-- WHITEBOARD STATES TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS whiteboard_states (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    state_data JSON NOT NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version INT UNSIGNED DEFAULT 1,
+    INDEX idx_session (session_id),
+    FOREIGN KEY (session_id) REFERENCES video_sessions(session_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
+-- VOCABULARY WORDS TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS vocabulary_words (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    word VARCHAR(255) NOT NULL,
+    definition TEXT NOT NULL,
+    example_sentence TEXT,
+    category VARCHAR(100) DEFAULT 'general',
+    audio_url VARCHAR(500) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_category (category),
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
+-- SESSION VOCABULARY TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS session_vocabulary (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    vocabulary_id INT(6) UNSIGNED NOT NULL,
+    position_x DECIMAL(10,2) NOT NULL DEFAULT 0,
+    position_y DECIMAL(10,2) NOT NULL DEFAULT 0,
+    width DECIMAL(10,2) DEFAULT 200,
+    height DECIMAL(10,2) DEFAULT 150,
+    locked_by_teacher BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session (session_id),
+    INDEX idx_vocabulary (vocabulary_id),
+    FOREIGN KEY (session_id) REFERENCES video_sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY (vocabulary_id) REFERENCES vocabulary_words(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
+-- SIGNALING QUEUE TABLE (for WebRTC polling)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS signaling_queue (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    from_user_id INT(6) UNSIGNED NOT NULL,
+    to_user_id INT(6) UNSIGNED NOT NULL,
+    message_type ENUM('webrtc-offer', 'webrtc-answer', 'webrtc-ice-candidate') NOT NULL,
+    message_data JSON NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed BOOLEAN DEFAULT FALSE,
+    INDEX idx_session (session_id),
+    INDEX idx_to_user (to_user_id),
+    INDEX idx_processed (processed),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_session_to_user (session_id, to_user_id, processed),
+    FOREIGN KEY (session_id) REFERENCES video_sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
+-- WHITEBOARD OPERATIONS TABLE (for whiteboard polling)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS whiteboard_operations (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    user_id INT(6) UNSIGNED NOT NULL,
+    operation_data JSON NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed BOOLEAN DEFAULT FALSE,
+    INDEX idx_session (session_id),
+    INDEX idx_processed (processed),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_session_processed (session_id, processed),
+    FOREIGN KEY (session_id) REFERENCES video_sessions(session_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================
 -- END OF SCHEMA
 -- =====================================================
 

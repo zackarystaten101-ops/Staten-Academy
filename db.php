@@ -289,6 +289,19 @@ $sql = "CREATE TABLE IF NOT EXISTS lessons (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 $conn->query($sql);
 
+// Add new columns to lessons table for enhanced calendar features
+$lessons_cols = $conn->query("SHOW COLUMNS FROM lessons");
+$existing_lessons_cols = [];
+if ($lessons_cols) {
+    while($row = $lessons_cols->fetch_assoc()) { $existing_lessons_cols[] = $row['Field']; }
+}
+if (!in_array('recurring_lesson_id', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN recurring_lesson_id INT(6) UNSIGNED NULL AFTER id");
+if (!in_array('lesson_type', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN lesson_type ENUM('single', 'recurring', 'series') DEFAULT 'single' AFTER status");
+if (!in_array('color_code', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN color_code VARCHAR(7) DEFAULT '#0b6cf5' AFTER lesson_type");
+if (!in_array('series_start_date', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_start_date DATE NULL AFTER color_code");
+if (!in_array('series_end_date', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_end_date DATE NULL AFTER series_start_date");
+if (!in_array('series_frequency_weeks', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_frequency_weeks INT DEFAULT 1 AFTER series_end_date");
+
 // Add foreign keys separately
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
@@ -299,10 +312,64 @@ if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE lessons ADD CONSTRAINT fk_lessons_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
 }
 
+// Create time_off table (for teacher time-off periods)
+$sql = "CREATE TABLE IF NOT EXISTS time_off (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_dates (start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key for time_off
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='time_off' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE time_off ADD CONSTRAINT fk_timeoff_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create recurring_lessons table (for recurring lesson series)
+$sql = "CREATE TABLE IF NOT EXISTS recurring_lessons (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    student_id INT(6) UNSIGNED NOT NULL,
+    day_of_week ENUM('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday') NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NULL,
+    frequency_weeks INT DEFAULT 1,
+    status ENUM('active', 'paused', 'cancelled') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_student (student_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys for recurring_lessons
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='recurring_lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE recurring_lessons ADD CONSTRAINT fk_recurring_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='recurring_lessons' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE recurring_lessons ADD CONSTRAINT fk_recurring_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
 // Add columns to users table for Google Calendar integration if they don't exist
 if (!in_array('google_calendar_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
 if (!in_array('google_calendar_token_expiry', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
 if (!in_array('google_calendar_refresh_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+
+// Add timezone support columns to users table
+if (!in_array('timezone', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN timezone VARCHAR(255) DEFAULT 'UTC' AFTER google_calendar_refresh_token");
+if (!in_array('timezone_auto_detected', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN timezone_auto_detected BOOLEAN DEFAULT FALSE AFTER timezone");
+if (!in_array('booking_notice_hours', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN booking_notice_hours INT DEFAULT 24 AFTER timezone_auto_detected");
 
 // Create reviews table (for teacher reviews by students)
 // Drop existing table if it has bad foreign keys

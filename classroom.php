@@ -62,6 +62,8 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
     <!-- MODERN SHADOWS - To disable, comment out the line below -->
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Classroom Styles -->
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/classroom.css'); ?>">
     <style>
         /* Classroom page specific styles */
         .container { max-width: 900px; margin: 0 auto; }
@@ -153,20 +155,58 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
     include __DIR__ . '/app/Views/components/dashboard-sidebar.php'; 
     ?>
 
-    <div class="main">
-        <div class="container">
-        <h1 style="color: #004080;">Learning Materials</h1>
-        <p>Access resources, assignments, and videos for your classes.</p>
+    <div class="main" style="padding: 0; overflow: hidden;">
+        <!-- React Classroom App Root -->
+        <div 
+            id="classroom-root"
+            data-user-id="<?php echo htmlspecialchars($user_id); ?>"
+            data-user-role="<?php echo htmlspecialchars($user['role'] ?? 'student'); ?>"
+            data-user-name="<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>"
+            data-session-id="<?php echo htmlspecialchars($_GET['sessionId'] ?? ''); ?>"
+            data-lesson-id="<?php echo htmlspecialchars($_GET['lessonId'] ?? ''); ?>"
+            data-teacher-id="<?php 
+                if (($user['role'] ?? 'student') === 'teacher') {
+                    echo htmlspecialchars($user_id);
+                } else {
+                    // Get teacher ID from lesson or session
+                    $lessonId = $_GET['lessonId'] ?? '';
+                    if ($lessonId) {
+                        $stmt = $conn->prepare("SELECT teacher_id FROM lessons WHERE id = ?");
+                        $stmt->bind_param("i", $lessonId);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        $lesson = $result->fetch_assoc();
+                        $stmt->close();
+                        echo htmlspecialchars($lesson['teacher_id'] ?? $user_id);
+                    } else {
+                        echo htmlspecialchars($user_id);
+                    }
+                }
+            ?>"
+            data-student-id="<?php 
+                if (($user['role'] ?? 'student') === 'student') {
+                    echo htmlspecialchars($user_id);
+                } else {
+                    // Get student ID from lesson or session
+                    $lessonId = $_GET['lessonId'] ?? '';
+                    if ($lessonId) {
+                        $stmt = $conn->prepare("SELECT student_id FROM lessons WHERE id = ?");
+                        $stmt->bind_param("i", $lessonId);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        $lesson = $result->fetch_assoc();
+                        $stmt->close();
+                        echo htmlspecialchars($lesson['student_id'] ?? $user_id);
+                    } else {
+                        echo htmlspecialchars($user_id);
+                    }
+                }
+            ?>"
+            style="width: 100%; height: 100vh;"
+        ></div>
         
-        <?php while($m = $materials->fetch_assoc()): ?>
-            <div class="material-card">
-                <span class="tag <?php echo $m['type']; ?>"><?php echo strtoupper($m['type']); ?></span>
-                <a href="<?php echo htmlspecialchars($m['link_url']); ?>" target="_blank" class="btn-open">Open <i class="fas fa-external-link-alt"></i></a>
-                <h3 style="margin: 5px 0; color: #333;"><?php echo htmlspecialchars($m['title']); ?></h3>
-                <p style="color: #666; margin: 0;">Posted on <?php echo date('F j, Y', strtotime($m['created_at'])); ?></p>
-            </div>
-        <?php endwhile; ?>
-        </div>
+        <!-- Load React Bundle -->
+        <script type="module" src="<?php echo getAssetPath('js/classroom.bundle.js'); ?>"></script>
     </div>
 </div>
 </body>

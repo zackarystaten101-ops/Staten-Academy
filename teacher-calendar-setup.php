@@ -14,6 +14,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/google-calendar-config.php';
+require_once __DIR__ . '/app/Services/TimezoneService.php';
+require_once __DIR__ . '/app/Models/TimeOff.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'teacher') {
     ob_end_clean(); // Clear output buffer before redirect
@@ -23,8 +25,13 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'teacher') {
 
 $teacher_id = $_SESSION['user_id'];
 $api = new GoogleCalendarAPI($conn);
+$tzService = new TimezoneService($conn);
+$timeOffModel = new TimeOff($conn);
 $success_msg = '';
 $error_msg = '';
+
+// Get user's timezone
+$user_timezone = $tzService->getUserTimezone($teacher_id);
 
 // Fetch teacher info
 $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
@@ -95,6 +102,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_availability']
     $stmt->close();
 }
 
+// Handle booking notice update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_booking_notice'])) {
+    $booking_notice_hours = (int)$_POST['booking_notice_hours'];
+    
+    if ($booking_notice_hours < 1 || $booking_notice_hours > 168) {
+        $error_msg = 'Booking notice must be between 1 and 168 hours';
+    } else {
+        $stmt = $conn->prepare("UPDATE users SET booking_notice_hours = ? WHERE id = ?");
+        $stmt->bind_param("ii", $booking_notice_hours, $teacher_id);
+        
+        if ($stmt->execute()) {
+            $success_msg = 'Booking notice period updated';
+            $teacher['booking_notice_hours'] = $booking_notice_hours;
+        } else {
+            $error_msg = 'Error updating booking notice';
+        }
+        $stmt->close();
+    }
+}
+
 // Fetch current availability slots
 $stmt = $conn->prepare("
     SELECT * FROM teacher_availability 
@@ -105,6 +132,36 @@ $stmt->bind_param("i", $teacher_id);
 $stmt->execute();
 $availability_slots = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+
+// Handle time-off management
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_time_off'])) {
+    $start_date = $_POST['start_date'];
+    $end_date = $_POST['end_date'];
+    $reason = $_POST['reason'] ?? null;
+    
+    if (strtotime($start_date) > strtotime($end_date)) {
+        $error_msg = 'Start date must be before end date';
+    } else {
+        $timeOffId = $timeOffModel->createTimeOff($teacher_id, $start_date, $end_date, $reason);
+        if ($timeOffId) {
+            $success_msg = 'Time-off period added successfully. Lessons during this period will be automatically cancelled.';
+        } else {
+            $error_msg = 'Error adding time-off period';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_time_off'])) {
+    $time_off_id = $_POST['time_off_id'];
+    if ($timeOffModel->deleteTimeOff($time_off_id, $teacher_id)) {
+        $success_msg = 'Time-off period removed';
+    } else {
+        $error_msg = 'Error removing time-off period';
+    }
+}
+
+// Fetch time-off periods
+$time_off_periods = $timeOffModel->getByTeacher($teacher_id);
 
 // Fetch upcoming lessons
 $stmt = $conn->prepare("
@@ -316,6 +373,81 @@ $page_title = 'Calendar Setup';
                     <?php endif; ?>
                 </div>
 
+                <!-- Time-Off Management -->
+                <div class="card">
+                    <h3><i class="fas fa-calendar-times"></i> Schedule Time Off</h3>
+                    <p style="color: #666; margin-bottom: 15px;">Mark periods when you're unavailable. Scheduled lessons during this time will be automatically cancelled, and recurring lessons will be paused.</p>
+                    
+                    <form method="POST" style="margin-bottom: 20px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Start Date</label>
+                                <input type="date" name="start_date" required min="<?php echo date('Y-m-d'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label>End Date</label>
+                                <input type="date" name="end_date" required min="<?php echo date('Y-m-d'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label>Reason (optional)</label>
+                                <input type="text" name="reason" placeholder="e.g., Holiday, Vacation">
+                            </div>
+                            <button type="submit" name="add_time_off"><i class="fas fa-plus"></i> Add Time Off</button>
+                        </div>
+                    </form>
+                    
+                    <?php if (count($time_off_periods) > 0): ?>
+                        <h4 style="margin-top: 20px;">Your Time-Off Periods</h4>
+                        <table class="slots-table">
+                            <thead>
+                                <tr>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Reason</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($time_off_periods as $timeOff): ?>
+                                    <tr>
+                                        <td><?php echo date('M d, Y', strtotime($timeOff['start_date'])); ?></td>
+                                        <td><?php echo date('M d, Y', strtotime($timeOff['end_date'])); ?></td>
+                                        <td><?php echo htmlspecialchars($timeOff['reason'] ?? 'N/A'); ?></td>
+                                        <td>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="time_off_id" value="<?php echo $timeOff['id']; ?>">
+                                                <button type="submit" name="remove_time_off" class="danger" style="padding: 5px 10px; font-size: 12px;" onclick="return confirm('Remove this time-off period?');">
+                                                    Remove
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p style="color: #999; padding: 20px; text-align: center;">No time-off periods scheduled.</p>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Booking Notice Settings -->
+                <div class="card">
+                    <h3><i class="fas fa-clock"></i> Booking Notice Period</h3>
+                    <p style="color: #666; margin-bottom: 15px;">Set the minimum advance notice required for lesson bookings.</p>
+                    
+                    <?php
+                    $booking_notice_hours = $teacher['booking_notice_hours'] ?? 24;
+                    ?>
+                    <form method="POST" id="booking-notice-form">
+                        <div class="form-group">
+                            <label>Minimum Notice (hours)</label>
+                            <input type="number" name="booking_notice_hours" value="<?php echo $booking_notice_hours; ?>" min="1" max="168" required>
+                            <small style="color: #666;">Students must book at least this many hours in advance</small>
+                        </div>
+                        <button type="submit" name="update_booking_notice"><i class="fas fa-save"></i> Save Settings</button>
+                    </form>
+                </div>
+
                 <!-- Upcoming Lessons -->
                 <div class="card">
                     <h3><i class="fas fa-book"></i> Upcoming Lessons</h3>
@@ -337,6 +469,7 @@ $page_title = 'Calendar Setup';
         </div>
     </div>
 </div>
+    <script src="<?php echo getAssetPath('js/timezone.js'); ?>"></script>
 </body>
 </html>
 <?php

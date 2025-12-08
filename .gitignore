@@ -1,51 +1,30 @@
-# Environment files
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+public/assets/js/*.bundle.js
+public/assets/js/chunks/
+public/assets/css/classroom.css
+
+# Environment
+.env
 env.php
-env.production.php
-*.env
-
-# Database
-*.sql
-*.db
-
-# Logs
-*.log
-logs/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Dependencies
-vendor/
-node_modules/
-
-# Uploads (user-generated content)
-uploads/
-public/uploads/
+# Logs
+*.log
+npm-debug.log*
 
 # Temporary files
-tmp/
-temp/
 *.tmp
-
-# Archive (optional - uncomment if you don't want to track archived files)
-# archive/
-
-# Test files
-test-*.php
-verify-*.php
-create_test_student.php
-create_test_student.sql
-
-# Backup files
-*.bak
-*.backup
-*~
+*.temp

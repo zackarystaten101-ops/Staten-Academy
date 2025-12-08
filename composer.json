@@ -1,0 +1,14 @@
+{
+  "name": "staten-academy/classroom-system",
+  "description": "Classroom system for Staten Academy",
+  "type": "project",
+  "require": {
+    "php": ">=7.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "StatenAcademy\\": "src/"
+    }
+  }
+}
+

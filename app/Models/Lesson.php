@@ -33,7 +33,14 @@ class Lesson extends Model {
     /**
      * Create lesson
      */
-    public function createLesson($teacherId, $studentId, $lessonDate, $startTime, $endTime, $googleEventId = null) {
+    public function createLesson($teacherId, $studentId, $lessonDate, $startTime, $endTime, $googleEventId = null, $lessonType = 'single', $recurringLessonId = null) {
+        $colorMap = [
+            'scheduled' => '#0b6cf5',
+            'completed' => '#28a745',
+            'cancelled' => '#dc3545',
+            'pending' => '#ffc107'
+        ];
+        
         $data = [
             'teacher_id' => $teacherId,
             'student_id' => $studentId,
@@ -41,7 +48,10 @@ class Lesson extends Model {
             'start_time' => $startTime,
             'end_time' => $endTime,
             'status' => 'scheduled',
-            'google_calendar_event_id' => $googleEventId
+            'google_calendar_event_id' => $googleEventId,
+            'lesson_type' => $lessonType,
+            'color_code' => $colorMap['scheduled'],
+            'recurring_lesson_id' => $recurringLessonId
         ];
         return $this->create($data);
     }

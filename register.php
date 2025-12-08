@@ -71,14 +71,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("sss", $name, $email, $hashed_password);
 
         if ($stmt->execute()) {
-            $_SESSION['user_id'] = $stmt->insert_id;
+            $newUserId = $stmt->insert_id;
+            $_SESSION['user_id'] = $newUserId;
             $_SESSION['user_name'] = $name;
             $_SESSION['user_role'] = 'new_student'; // New users start as new_student, become student after purchase
             $_SESSION['profile_pic'] = getAssetPath('images/placeholder-teacher.svg');
             $stmt->close();
             // Clear output buffer before redirect
             ob_end_clean();
-            header("Location: schedule.php");
+            header("Location: student-dashboard.php");
             exit();
         } else {
             $register_error = "Error creating account. Please try again or contact support.";

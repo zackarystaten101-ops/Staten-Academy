@@ -366,6 +366,24 @@ if ($res_result) {
 // Fetch Classroom Materials
 $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
 
+// Fetch Upcoming Lessons for teacher
+$upcoming_lessons = [];
+$stmt = $conn->prepare("
+    SELECT l.*, u.name as student_name, u.profile_pic as student_pic
+    FROM lessons l
+    JOIN users u ON l.student_id = u.id
+    WHERE l.teacher_id = ? AND l.lesson_date >= CURDATE() AND l.status = 'scheduled'
+    ORDER BY l.lesson_date ASC, l.start_time ASC
+    LIMIT 10
+");
+$stmt->bind_param("i", $teacher_id);
+$stmt->execute();
+$lessons_result = $stmt->get_result();
+while ($row = $lessons_result->fetch_assoc()) {
+    $upcoming_lessons[] = $row;
+}
+$stmt->close();
+
 $active_tab = 'overview';
 ?>
 <!DOCTYPE html>
@@ -486,6 +504,43 @@ $active_tab = 'overview';
                     </div>
                     <?php endif; ?>
                 <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if (count($upcoming_lessons) > 0): ?>
+            <div class="card">
+                <h2><i class="fas fa-calendar-check"></i> Upcoming Lessons</h2>
+                <?php foreach (array_slice($upcoming_lessons, 0, 5) as $lesson): ?>
+                    <?php
+                    $lessonDateTime = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
+                    $canJoin = $lessonDateTime <= (time() + 3600); // Can join 1 hour before lesson
+                    $isPast = $lessonDateTime < time();
+                    ?>
+                    <div class="lesson-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 10px; <?php echo $isPast ? 'opacity: 0.6;' : ''; ?>">
+                        <div style="display: flex; align-items: center; flex: 1;">
+                            <img src="<?php echo h($lesson['student_pic']); ?>" alt="" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; margin-right: 15px;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                            <div style="flex: 1;">
+                                <strong><?php echo h($lesson['student_name']); ?></strong>
+                                <div style="font-size: 0.85rem; color: var(--gray); margin-top: 5px;">
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?>
+                                    <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($lesson['start_time'])); ?> - <?php echo date('H:i', strtotime($lesson['end_time'])); ?>
+                                    <?php if ($canJoin && !$isPast): ?>
+                                        <span style="color: #28a745; margin-left: 15px;"><i class="fas fa-circle" style="font-size: 0.6rem;"></i> Join now</span>
+                                    <?php elseif (!$isPast): ?>
+                                        <span style="color: #6c757d; margin-left: 15px;">Starts in <?php echo round(($lessonDateTime - time()) / 3600, 1); ?> hours</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="classroom.php?lessonId=<?php echo $lesson['id']; ?>" 
+                           class="btn <?php echo $canJoin ? 'btn-primary' : 'btn-outline'; ?>" 
+                           style="margin-left: 15px; white-space: nowrap;"
+                           title="Join Classroom">
+                            <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
+                        </a>
+                    </div>
+                <?php endforeach; ?>
+                <a href="schedule.php" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all lessons →</a>
             </div>
             <?php endif; ?>
 
