@@ -407,4 +407,366 @@
     color: #adb5bd;
 }
 
+/* Teacher Calendar Styles (Preply-style) */
+.teacher-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.calendar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.calendar-controls h2 {
+    margin: 0;
+    color: #004080;
+    font-size: 1.3rem;
+    min-width: 250px;
+}
+
+.calendar-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: #0b6cf5;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #004080;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.teacher-calendar-grid {
+    display: flex;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+    min-height: 600px;
+}
+
+.calendar-time-column {
+    min-width: 80px;
+    border-right: 2px solid #dee2e6;
+    background: #f8f9fa;
+    position: sticky;
+    left: 0;
+    z-index: 10;
+}
+
+.time-header {
+    height: 60px;
+    border-bottom: 2px solid #dee2e6;
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.time-slot-header {
+    height: 60px;
+    padding: 5px 10px;
+    border-bottom: 1px solid #e9ecef;
+    font-size: 0.85rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.calendar-days-container {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+}
+
+.calendar-day-column {
+    flex: 1;
+    min-width: 150px;
+    border-right: 1px solid #dee2e6;
+    position: relative;
+}
+
+.day-header {
+    padding: 15px;
+    text-align: center;
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    position: sticky;
+    top: 0;
+    z-index: 15;
+}
+
+.day-name {
+    font-weight: bold;
+    color: #495057;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    margin-bottom: 5px;
+}
+
+.day-number {
+    font-size: 1.5rem;
+    color: #004080;
+    font-weight: bold;
+}
+
+.day-time-slots {
+    position: relative;
+    min-height: 1440px; /* 24 hours * 60px per hour */
+}
+
+.time-slot-cell {
+    height: 60px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: crosshair;
+    position: relative;
+    transition: background 0.1s;
+}
+
+.time-slot-cell:hover {
+    background: #f0f7ff;
+}
+
+.time-slot-cell.dragging {
+    background: #e7f3ff;
+}
+
+.availability-slot {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    background: #d4edda;
+    border: 2px solid #28a745;
+    border-radius: 4px;
+    cursor: move;
+    z-index: 5;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.availability-slot:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 6;
+}
+
+.availability-slot.unavailable {
+    background: #f8d7da;
+    border-color: #dc3545;
+    opacity: 0.7;
+}
+
+.availability-slot.selected {
+    border-color: #0b6cf5;
+    box-shadow: 0 0 0 3px rgba(11, 108, 245, 0.3);
+    z-index: 7;
+}
+
+.slot-content {
+    padding: 5px 8px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+
+.slot-time {
+    font-weight: bold;
+    color: #155724;
+    margin-bottom: 2px;
+}
+
+.availability-slot.unavailable .slot-time {
+    color: #721c24;
+}
+
+.slot-type {
+    font-size: 0.7rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.slot-actions {
+    display: flex;
+    gap: 5px;
+    margin-top: auto;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.availability-slot:hover .slot-actions {
+    opacity: 1;
+}
+
+.slot-edit-btn, .slot-delete-btn {
+    padding: 3px 6px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    background: rgba(255,255,255,0.9);
+    color: #495057;
+}
+
+.slot-edit-btn:hover {
+    background: #0b6cf5;
+    color: white;
+}
+
+.slot-delete-btn:hover {
+    background: #dc3545;
+    color: white;
+}
+
+.lesson-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    background: #0b6cf5;
+    color: white;
+    border-radius: 4px;
+    z-index: 4;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.lesson-content {
+    padding: 5px 8px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
+.lesson-student {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.lesson-time {
+    font-size: 0.7rem;
+    opacity: 0.9;
+}
+
+/* Slot Modal */
+.slot-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.slot-modal {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.slot-modal h3 {
+    margin-top: 0;
+    color: #004080;
+    border-bottom: 2px solid #0b6cf5;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.slot-modal .form-group {
+    margin-bottom: 15px;
+}
+
+.slot-modal label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.slot-modal input,
+.slot-modal select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.slot-modal .form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .teacher-calendar-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .calendar-controls {
+        flex-wrap: wrap;
+    }
+    
+    .calendar-actions {
+        flex-direction: column;
+    }
+    
+    .calendar-day-column {
+        min-width: 120px;
+    }
+    
+    .time-slot-cell {
+        height: 50px;
+    }
+    
+    .day-time-slots {
+        min-height: 1200px;
+    }
+}
+
 

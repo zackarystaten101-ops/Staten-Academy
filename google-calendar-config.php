@@ -245,7 +245,12 @@ class GoogleCalendarAPI {
     public function getTeacherLessons($teacher_id, $date_from = null, $date_to = null) {
         if ($date_from && $date_to) {
             $stmt = $this->conn->prepare("
-                SELECT l.*, u.name as student_name, u.email as student_email 
+                SELECT l.*, 
+                       CASE 
+                           WHEN LOWER(u.email) = 'student@statenacademy.com' THEN 'Test Class'
+                           ELSE u.name 
+                       END as student_name, 
+                       u.email as student_email 
                 FROM lessons l 
                 JOIN users u ON l.student_id = u.id 
                 WHERE l.teacher_id = ? AND l.lesson_date BETWEEN ? AND ? AND l.status = 'scheduled'
@@ -254,7 +259,12 @@ class GoogleCalendarAPI {
             $stmt->bind_param("iss", $teacher_id, $date_from, $date_to);
         } else {
             $stmt = $this->conn->prepare("
-                SELECT l.*, u.name as student_name, u.email as student_email 
+                SELECT l.*, 
+                       CASE 
+                           WHEN LOWER(u.email) = 'student@statenacademy.com' THEN 'Test Class'
+                           ELSE u.name 
+                       END as student_name, 
+                       u.email as student_email 
                 FROM lessons l 
                 JOIN users u ON l.student_id = u.id 
                 WHERE l.teacher_id = ? AND l.status = 'scheduled'

@@ -211,6 +211,7 @@ $page_title = 'Calendar Setup';
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <!-- MODERN SHADOWS - To disable, comment out the line below -->
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/calendar.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Calendar page specific styles */
@@ -297,31 +298,27 @@ $page_title = 'Calendar Setup';
                     <?php endif; ?>
                 </div>
 
-                <!-- Add Availability -->
-                <div class="card">
-                    <h3><i class="fas fa-plus-circle"></i> Add Available Time Slot</h3>
-                    <form method="POST">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Day of Week</label>
-                                <select name="day_of_week" required>
-                                    <option value="">Select day...</option>
-                                    <?php foreach ($days as $day): ?>
-                                        <option value="<?php echo $day; ?>"><?php echo $day; ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Start Time</label>
-                                <input type="time" name="start_time" required>
-                            </div>
-                            <div class="form-group">
-                                <label>End Time</label>
-                                <input type="time" name="end_time" required>
-                            </div>
-                            <button type="submit" name="add_availability"><i class="fas fa-save"></i> Add</button>
+                <!-- Preply-Style Calendar -->
+                <div class="card" style="padding: 0; overflow: hidden;">
+                    <div style="padding: 20px; border-bottom: 2px solid #dee2e6;">
+                        <h3 style="margin: 0;"><i class="fas fa-calendar-alt"></i> Manage Your Availability</h3>
+                        <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 15px; border-left: 4px solid #0b6cf5;">
+                            <p style="margin: 0 0 10px 0; color: #004080; font-weight: bold;"><i class="fas fa-lightbulb"></i> Quick Tips:</p>
+                            <ul style="margin: 0; padding-left: 20px; color: #666;">
+                                <li>Click and drag on the calendar to create time slots</li>
+                                <li>Use "Add Weekly Slot" for recurring availability (same time every week)</li>
+                                <li>Use "Add One-Time Slot" for specific dates</li>
+                                <li>Hover over slots to edit or delete them</li>
+                                <li>Blue blocks show your scheduled lessons</li>
+                            </ul>
                         </div>
-                    </form>
+                    </div>
+                    <div id="teacher-calendar" style="padding: 20px; position: relative;">
+                        <div id="calendar-loading" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
+                            <p style="margin-top: 10px; color: #666;">Loading calendar...</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Current Availability Slots -->
@@ -469,7 +466,31 @@ $page_title = 'Calendar Setup';
         </div>
     </div>
 </div>
-    <script src="<?php echo getAssetPath('js/timezone.js'); ?>"></script>
+    <script src="<?php echo getAssetPath('js/teacher-calendar.js'); ?>"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof TeacherCalendar !== 'undefined') {
+            const teacherId = <?php echo json_encode($teacher_id); ?>;
+            const userTimezone = '<?php echo htmlspecialchars($user_timezone); ?>';
+            
+            const calendar = new TeacherCalendar('teacher-calendar', {
+                teacherId: teacherId,
+                timezone: userTimezone || window.userTimezone || 'UTC',
+                slotDuration: 30,
+                onSlotCreated: function(slot) {
+                    // Reload page to show success message
+                    window.location.reload();
+                },
+                onSlotUpdated: function(slot) {
+                    window.location.reload();
+                },
+                onSlotDeleted: function(slotId) {
+                    window.location.reload();
+                }
+            });
+        }
+    });
+    </script>
 </body>
 </html>
 <?php

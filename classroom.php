@@ -38,11 +38,50 @@ $materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at
 
 // Fetch user data for header
 $user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['user_role'] ?? 'student';
 $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+
+// Check classroom join restrictions for students
+$canJoinClassroom = true;
+$joinRestrictionMessage = '';
+$lessonId = $_GET['lessonId'] ?? '';
+
+if ($user_role === 'student' && $lessonId) {
+    // Get lesson details
+    $stmt = $conn->prepare("SELECT lesson_date, start_time FROM lessons WHERE id = ? AND student_id = ?");
+    $stmt->bind_param("ii", $lessonId, $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $lesson = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($lesson) {
+        $lessonDateTime = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
+        $currentTime = time();
+        $minutesUntilLesson = ($lessonDateTime - $currentTime) / 60;
+        
+        // Students can only join 4 minutes before lesson starts
+        if ($minutesUntilLesson > 4) {
+            $canJoinClassroom = false;
+            $hoursUntil = floor($minutesUntilLesson / 60);
+            $minsUntil = round($minutesUntilLesson % 60);
+            if ($hoursUntil > 0) {
+                $joinRestrictionMessage = "You can join this classroom 4 minutes before the lesson starts. The lesson starts in {$hoursUntil} hour" . ($hoursUntil > 1 ? 's' : '') . " and {$minsUntil} minute" . ($minsUntil != 1 ? 's' : '') . ".";
+            } else {
+                $joinRestrictionMessage = "You can join this classroom 4 minutes before the lesson starts. The lesson starts in " . round($minutesUntilLesson) . " minute" . (round($minutesUntilLesson) != 1 ? 's' : '') . ".";
+            }
+        }
+    }
+}
+
+// Teachers can always join (for practice/testing)
+if ($user_role === 'teacher') {
+    $canJoinClassroom = true;
+}
 
 // Set page title for header
 $page_title = 'My Classroom';
@@ -156,6 +195,21 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
     ?>
 
     <div class="main" style="padding: 0; overflow: hidden;">
+        <?php if (!$canJoinClassroom): ?>
+            <!-- Join Restriction Message for Students -->
+            <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8f9fa;">
+                <div style="background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 500px; text-align: center;">
+                    <i class="fas fa-clock" style="font-size: 4rem; color: #0b6cf5; margin-bottom: 20px;"></i>
+                    <h2 style="color: #004080; margin-bottom: 15px;">Classroom Not Available Yet</h2>
+                    <p style="color: #666; font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px;">
+                        <?php echo htmlspecialchars($joinRestrictionMessage); ?>
+                    </p>
+                    <a href="schedule.php" style="display: inline-block; background: #0b6cf5; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; transition: background 0.2s;">
+                        <i class="fas fa-arrow-left"></i> Back to Schedule
+                    </a>
+                </div>
+            </div>
+        <?php else: ?>
         <!-- React Classroom App Root -->
         <div 
             id="classroom-root"
@@ -207,6 +261,7 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
         
         <!-- Load React Bundle -->
         <script type="module" src="<?php echo getAssetPath('js/classroom.bundle.js'); ?>"></script>
+        <?php endif; ?>
     </div>
 </div>
 </body>

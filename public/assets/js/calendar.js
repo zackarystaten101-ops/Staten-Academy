@@ -59,11 +59,11 @@
             
             let html = `
                 <div class="calendar-header">
-                    <button class="calendar-nav-btn" onclick="calendar.prevMonth()">
+                    <button class="calendar-nav-btn" data-action="prev-month">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     <h2>${this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
-                    <button class="calendar-nav-btn" onclick="calendar.nextMonth()">
+                    <button class="calendar-nav-btn" data-action="next-month">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -120,11 +120,11 @@
             const startOfWeek = this.getStartOfWeek(this.currentDate);
             let html = `
                 <div class="calendar-header">
-                    <button class="calendar-nav-btn" onclick="calendar.prevWeek()">
+                    <button class="calendar-nav-btn" data-action="prev-week">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     <h2>Week of ${startOfWeek.toLocaleDateString()}</h2>
-                    <button class="calendar-nav-btn" onclick="calendar.nextWeek()">
+                    <button class="calendar-nav-btn" data-action="next-week">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -162,11 +162,11 @@
             const dateStr = this.formatDate(this.currentDate);
             let html = `
                 <div class="calendar-header">
-                    <button class="calendar-nav-btn" onclick="calendar.prevDay()">
+                    <button class="calendar-nav-btn" data-action="prev-day">
                         <i class="fas fa-chevron-left"></i>
                     </button>
                     <h2>${this.currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>
-                    <button class="calendar-nav-btn" onclick="calendar.nextDay()">
+                    <button class="calendar-nav-btn" data-action="next-day">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -315,6 +315,33 @@
         }
         
         attachEventListeners() {
+            // Navigation button handlers
+            this.container.querySelectorAll('.calendar-nav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const action = e.currentTarget.dataset.action;
+                    switch(action) {
+                        case 'prev-month':
+                            this.prevMonth();
+                            break;
+                        case 'next-month':
+                            this.nextMonth();
+                            break;
+                        case 'prev-week':
+                            this.prevWeek();
+                            break;
+                        case 'next-week':
+                            this.nextWeek();
+                            break;
+                        case 'prev-day':
+                            this.prevDay();
+                            break;
+                        case 'next-day':
+                            this.nextDay();
+                            break;
+                    }
+                });
+            });
+            
             // Lesson click handlers
             this.container.querySelectorAll('.lesson-indicator, .lesson-block').forEach(el => {
                 el.addEventListener('click', (e) => {
@@ -348,9 +375,13 @@
             const role = this.options.teacherId ? 'teacher' : 'student';
             const userId = this.options.teacherId || this.options.studentId;
             
+            // Get base path for API calls (works with subdirectories on cPanel)
+            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const apiPath = basePath + '/api/calendar.php';
+            
             try {
                 const response = await fetch(
-                    `/api/calendar/lessons?user_id=${userId}&timezone=${this.options.timezone}&date_from=${dateFrom}&date_to=${dateTo}&role=${role}`
+                    `${apiPath}?action=lessons&user_id=${userId}&timezone=${encodeURIComponent(this.options.timezone)}&date_from=${dateFrom}&date_to=${dateTo}&role=${role}`
                 );
                 const data = await response.json();
                 if (data.success && data.lessons) {
@@ -368,9 +399,13 @@
             const dateFrom = this.getDateRange().start;
             const dateTo = this.getDateRange().end;
             
+            // Get base path for API calls (works with subdirectories on cPanel)
+            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const apiPath = basePath + '/api/calendar.php';
+            
             try {
                 const response = await fetch(
-                    `/api/calendar/availability?teacher_id=${this.options.teacherId}&timezone=${this.options.timezone}&date_from=${dateFrom}&date_to=${dateTo}`
+                    `${apiPath}?action=availability&teacher_id=${this.options.teacherId}&timezone=${encodeURIComponent(this.options.timezone)}&date=${dateFrom}`
                 );
                 const data = await response.json();
                 if (data.success && data.slots) {

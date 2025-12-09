@@ -373,7 +373,12 @@ class CalendarService {
         if ($dateFrom && $dateTo) {
             if ($role === 'teacher') {
                 $stmt = $this->conn->prepare("
-                    SELECT l.*, u.name as student_name, u.email as student_email
+                    SELECT l.*, 
+                           CASE 
+                               WHEN LOWER(u.email) = 'student@statenacademy.com' THEN 'Test Class'
+                               ELSE u.name 
+                           END as student_name, 
+                           u.email as student_email
                     FROM lessons l
                     JOIN users u ON l.student_id = u.id
                     WHERE l.teacher_id = ? AND l.lesson_date BETWEEN ? AND ?
@@ -393,7 +398,12 @@ class CalendarService {
         } else {
             if ($role === 'teacher') {
                 $stmt = $this->conn->prepare("
-                    SELECT l.*, u.name as student_name, u.email as student_email
+                    SELECT l.*, 
+                           CASE 
+                               WHEN LOWER(u.email) = 'student@statenacademy.com' THEN 'Test Class'
+                               ELSE u.name 
+                           END as student_name, 
+                           u.email as student_email
                     FROM lessons l
                     JOIN users u ON l.student_id = u.id
                     WHERE l.teacher_id = ?

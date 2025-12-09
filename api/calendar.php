@@ -75,6 +75,55 @@ function handleGet($action, $userId, $userRole, $tzService, $calendarService) {
             echo json_encode(['success' => true, 'slots' => $slots]);
             break;
             
+        case 'get-availability':
+            if ($userRole !== 'teacher') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only teachers can view their availability']);
+                return;
+            }
+            
+            $teacherId = $_GET['teacher_id'] ?? $userId;
+            $dateFrom = $_GET['date_from'] ?? null;
+            $dateTo = $_GET['date_to'] ?? null;
+            
+            // Check if specific_date column exists
+            $columnCheck = $conn->query("SHOW COLUMNS FROM teacher_availability LIKE 'specific_date'");
+            $hasSpecificDate = $columnCheck && $columnCheck->num_rows > 0;
+            
+            // Get all availability slots for the teacher
+            if ($hasSpecificDate && $dateFrom && $dateTo) {
+                // Get weekly slots and one-time slots in date range
+                $stmt = $conn->prepare("
+                    SELECT * FROM teacher_availability 
+                    WHERE teacher_id = ? 
+                    AND (
+                        (specific_date IS NULL AND day_of_week IS NOT NULL)
+                        OR (specific_date IS NOT NULL AND specific_date BETWEEN ? AND ?)
+                    )
+                    ORDER BY COALESCE(specific_date, '1900-01-01'), day_of_week, start_time
+                ");
+                $stmt->bind_param("iss", $teacherId, $dateFrom, $dateTo);
+            } else {
+                // Get all weekly slots (no one-time support yet)
+                $stmt = $conn->prepare("
+                    SELECT * FROM teacher_availability 
+                    WHERE teacher_id = ? 
+                    ORDER BY FIELD(day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), start_time
+                ");
+                $stmt->bind_param("i", $teacherId);
+            }
+            
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $slots = [];
+            while ($row = $result->fetch_assoc()) {
+                $slots[] = $row;
+            }
+            $stmt->close();
+            
+            echo json_encode(['success' => true, 'slots' => $slots]);
+            break;
+            
         case 'lessons':
             $targetUserId = $_GET['user_id'] ?? $userId;
             $timezone = $_GET['timezone'] ?? $tzService->getUserTimezone($userId);
@@ -248,6 +297,88 @@ function handlePost($action, $userId, $userRole, $tzService, $calendarService) {
             }
             break;
             
+        case 'create-availability':
+            if ($userRole !== 'teacher') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only teachers can create availability']);
+                return;
+            }
+            
+            $dayOfWeek = $input['day_of_week'] ?? null;
+            $specificDate = $input['specific_date'] ?? null;
+            $startTime = $input['start_time'] ?? null;
+            $endTime = $input['end_time'] ?? null;
+            $isRecurring = $input['is_recurring'] ?? true;
+            
+            if (!$startTime || !$endTime) {
+                http_response_code(400);
+                echo json_encode(['error' => 'start_time and end_time required']);
+                return;
+            }
+            
+            if ($isRecurring && !$dayOfWeek) {
+                http_response_code(400);
+                echo json_encode(['error' => 'day_of_week required for recurring slots']);
+                return;
+            }
+            
+            if (!$isRecurring && !$specificDate) {
+                http_response_code(400);
+                echo json_encode(['error' => 'specific_date required for one-time slots']);
+                return;
+            }
+            
+            // Validate times
+            if (strtotime($startTime) >= strtotime($endTime)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'End time must be after start time']);
+                return;
+            }
+            
+            // Check if specific_date column exists
+            $columnCheck = $conn->query("SHOW COLUMNS FROM teacher_availability LIKE 'specific_date'");
+            $hasSpecificDate = $columnCheck && $columnCheck->num_rows > 0;
+            
+            if ($hasSpecificDate) {
+                $stmt = $conn->prepare("
+                    INSERT INTO teacher_availability (teacher_id, day_of_week, specific_date, start_time, end_time, is_available) 
+                    VALUES (?, ?, ?, ?, ?, 1)
+                ");
+                $stmt->bind_param("issss", $userId, $dayOfWeek, $specificDate, $startTime, $endTime);
+            } else {
+                // Fallback: only support weekly slots if column doesn't exist
+                if (!$isRecurring) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'One-time slots require database migration. Please run migrate-add-specific-date.sql']);
+                    return;
+                }
+                $stmt = $conn->prepare("
+                    INSERT INTO teacher_availability (teacher_id, day_of_week, start_time, end_time, is_available) 
+                    VALUES (?, ?, ?, ?, 1)
+                ");
+                $stmt->bind_param("isss", $userId, $dayOfWeek, $startTime, $endTime);
+            }
+            
+            if ($stmt->execute()) {
+                $slotId = $stmt->insert_id;
+                $stmt->close();
+                
+                // Fetch the created slot
+                $stmt = $conn->prepare("SELECT * FROM teacher_availability WHERE id = ?");
+                $stmt->bind_param("i", $slotId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $slot = $result->fetch_assoc();
+                $stmt->close();
+                
+                echo json_encode(['success' => true, 'slot' => $slot]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to create availability slot: ' . $stmt->error]);
+                $stmt->close();
+            }
+            break;
+            
         default:
             http_response_code(400);
             echo json_encode(['error' => 'Invalid action']);
@@ -283,6 +414,32 @@ function handleDelete($action, $userId, $userRole, $tzService, $calendarService)
                 http_response_code(500);
                 echo json_encode(['error' => 'Failed to delete time-off']);
             }
+            break;
+            
+        case 'delete-availability':
+            if ($userRole !== 'teacher') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only teachers can delete availability']);
+                return;
+            }
+            
+            $slotId = $_GET['id'] ?? null;
+            if (!$slotId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'id required']);
+                return;
+            }
+            
+            $stmt = $conn->prepare("DELETE FROM teacher_availability WHERE id = ? AND teacher_id = ?");
+            $stmt->bind_param("ii", $slotId, $userId);
+            
+            if ($stmt->execute()) {
+                echo json_encode(['success' => true]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to delete availability slot']);
+            }
+            $stmt->close();
             break;
             
         default:

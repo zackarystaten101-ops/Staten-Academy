@@ -55,6 +55,10 @@ if (!isset($_SESSION['user_id'])) {
 $api = new GoogleCalendarAPI($conn);
 $tzService = new TimezoneService($conn);
 $calendarService = new CalendarService($conn);
+
+// Get user ID from session (needed early for timezone and other operations)
+$user_id = $_SESSION['user_id'];
+
 $selected_teacher = null;
 $teacher_data = null;
 $availability_slots = [];
@@ -197,6 +201,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $student = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
+    // Check if this is a test class (student@statenacademy.com)
+    $isTestClass = (strtolower($student['email'] ?? '') === 'student@statenacademy.com');
+    $studentDisplayName = $isTestClass ? 'Test Class' : ($student['name'] ?? 'Student');
+    
+    // Verify unlimited classes for test student (student@statenacademy.com should have has_unlimited_classes = TRUE)
+    // Note: The booking system doesn't enforce class limits, so unlimited classes are automatically available
+    // This is verified in the database setup scripts (setup-test-account.sql)
+
     // Create lesson record
     $google_event_id = null;
     $stmt = $conn->prepare("
@@ -248,8 +260,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         '/classroom.php?lessonId=' . $lesson_id;
         
         $event_data = [
-            'title' => 'Lesson: ' . htmlspecialchars($student['name']),
-            'description' => 'Student: ' . htmlspecialchars($student['name']) . ' (' . htmlspecialchars($student['email']) . ')' . "\n\n" .
+            'title' => 'Lesson: ' . htmlspecialchars($studentDisplayName),
+            'description' => 'Student: ' . htmlspecialchars($studentDisplayName) . ($isTestClass ? ' (Test Class)' : ' (' . htmlspecialchars($student['email']) . ')') . "\n\n" .
                            'Join Classroom: ' . $classroom_url,
             'start_datetime' => $start_datetime,
             'end_datetime' => $end_datetime,
@@ -295,7 +307,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         $student_event_data = [
             'title' => 'Lesson with ' . htmlspecialchars($teacher['name']),
-            'description' => 'Teacher: ' . htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['email']) . ')' . "\n\n" .
+            'description' => 'Teacher: ' . htmlspecialchars($teacher['name']) . ' (' . htmlspecialchars($teacher['email']) . ')' . 
+                           ($isTestClass ? "\n\nNote: This is a test class." : '') . "\n\n" .
                            'Join Classroom: ' . $classroom_url,
             'start_datetime' => $start_datetime,
             'end_datetime' => $end_datetime,
@@ -318,7 +331,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Fetch user data for header
-$user_id = $_SESSION['user_id'];
 $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
@@ -463,6 +475,13 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         <strong><i class="fas fa-lock"></i> Purchase Required:</strong> You need to <a href="payment.php" style="color: #004080; font-weight: bold;">purchase a lesson plan</a> before you can book lessons. View our plans <a href="payment.php" style="color: #004080; font-weight: bold;">here</a>.
                                     </div>
                                 <?php endif; ?>
+                                
+                                <!-- Calendar View -->
+                                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #0b6cf5;">
+                                    <p style="margin: 0; color: #004080;"><i class="fas fa-info-circle"></i> <strong>Tip:</strong> Times shown are in your timezone (<?php echo htmlspecialchars($user_timezone); ?>). The calendar below shows your upcoming lessons.</p>
+                                </div>
+                                <div id="calendar-container" class="calendar-container" style="margin-top: 20px; margin-bottom: 30px;"></div>
+                                
                                 <h4>Available Time Slots</h4>
                                 <?php if (count($availability_slots) > 0): ?>
                                     <div class="availability-section">
@@ -518,10 +537,38 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                     const availabilitySlots = <?php echo json_encode($availability_slots); ?>;
                                     const userTimezone = '<?php echo htmlspecialchars($user_timezone); ?>';
                                     let selectedSlot = null;
+                                    let calendar = null;
+                                    
+                                    // Initialize calendar when DOM is ready
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        // Initialize teacher calendar (for booking)
+                                        if (typeof Calendar !== 'undefined' && document.getElementById('calendar-container')) {
+                                            calendar = new Calendar('calendar-container', {
+                                                view: 'month',
+                                                timezone: userTimezone || window.userTimezone || 'UTC',
+                                                teacherId: teacherId,
+                                                onSlotSelect: function(slot) {
+                                                    // Handle slot selection from calendar
+                                                    const dateInput = document.getElementById('lesson-date');
+                                                    if (dateInput) {
+                                                        dateInput.value = slot.date;
+                                                        dateInput.dispatchEvent(new Event('change'));
+                                                    }
+                                                },
+                                                onLessonClick: function(lesson) {
+                                                    // Handle lesson click - could show lesson details
+                                                    console.log('Lesson clicked:', lesson);
+                                                }
+                                            });
+                                        }
+                                    });
                                     
                                     // Show timezone indicator
                                     if (window.userTimezone) {
-                                        document.getElementById('timezone-display').textContent = window.userTimezone;
+                                        const tzDisplay = document.getElementById('timezone-display');
+                                        if (tzDisplay) {
+                                            tzDisplay.textContent = window.userTimezone;
+                                        }
                                     }
                                     
                                     // Handle recurring booking checkbox
@@ -559,7 +606,10 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         // Check booking notice requirement
                                         const lessonDateTime = date + ' ' + startTime + ':00';
                                         try {
-                                            const response = await fetch('/api/calendar.php?action=validate-notice', {
+                                            // Get base path for API calls (works with subdirectories on cPanel)
+                                            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+                                            const apiPath = basePath + '/api/calendar.php';
+                                            const response = await fetch(apiPath + '?action=validate-notice', {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({
@@ -610,7 +660,10 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                             const dayOfWeek = new Date(selectedSlot.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
                                             
                                             try {
-                                                const response = await fetch('/api/calendar.php?action=book-recurring', {
+                                                // Get base path for API calls (works with subdirectories on cPanel)
+                                                const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+                                                const apiPath = basePath + '/api/calendar.php';
+                                                const response = await fetch(apiPath + '?action=book-recurring', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({
@@ -682,7 +735,12 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                     <div class="lesson-item">
                                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                             <div>
-                                                <strong>Student:</strong> <?php echo htmlspecialchars($lesson['student_name']); ?><br>
+                                                <strong>Student:</strong> <?php 
+                                                    $displayName = (strtolower($lesson['student_email'] ?? '') === 'student@statenacademy.com') 
+                                                        ? 'Test Class' 
+                                                        : htmlspecialchars($lesson['student_name'] ?? 'Student');
+                                                    echo $displayName;
+                                                ?><br>
                                                 <strong>Date:</strong> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?><br>
                                                 <strong>Time:</strong> <?php echo date('H:i', strtotime($lesson['start_time'])); ?> - <?php echo date('H:i', strtotime($lesson['end_time'])); ?>
                                             </div>
@@ -699,6 +757,14 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                         </div>
                     <?php endif; ?>
                     
+                    <!-- Student Calendar View -->
+                    <?php if (($user_role === 'student' || $user_role === 'new_student')): ?>
+                        <div class="card" style="margin-top: 20px;">
+                            <h3><i class="fas fa-calendar"></i> Your Lesson Calendar</h3>
+                            <div id="student-calendar-container" class="calendar-container"></div>
+                        </div>
+                    <?php endif; ?>
+                    
                     <?php if (($user_role === 'student' || $user_role === 'new_student') && count($student_upcoming_lessons) > 0): ?>
                         <div class="card">
                             <h3><i class="fas fa-calendar-check"></i> Your Upcoming Lessons</h3>
@@ -706,7 +772,10 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                 <?php foreach ($student_upcoming_lessons as $lesson): ?>
                                     <?php
                                     $lessonDateTime = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
-                                    $canJoin = $lessonDateTime <= (time() + 3600); // Can join 1 hour before lesson
+                                    $currentTime = time();
+                                    $minutesUntilLesson = ($lessonDateTime - $currentTime) / 60;
+                                    // Students can only join 4 minutes before lesson starts
+                                    $canJoin = ($minutesUntilLesson <= 4 && $minutesUntilLesson >= -60); // Can join 4 min before, up to 1 hour after
                                     $isPast = $lessonDateTime < time();
                                     ?>
                                     <div class="lesson-item" style="<?php echo $isPast ? 'opacity: 0.6;' : ''; ?>">
@@ -744,7 +813,28 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
 
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
     <script src="<?php echo getAssetPath('js/timezone.js'); ?>" defer></script>
-    <script src="<?php echo getAssetPath('js/calendar.js'); ?>" defer></script>
+    <script src="<?php echo getAssetPath('js/calendar.js'); ?>"></script>
+    <script>
+    // Initialize student calendar if on schedule page (outside teacher booking section)
+    document.addEventListener('DOMContentLoaded', function() {
+        const studentCalendarContainer = document.getElementById('student-calendar-container');
+        if (typeof Calendar !== 'undefined' && studentCalendarContainer) {
+            const studentId = <?php echo json_encode($user_id); ?>;
+            const userTimezone = '<?php echo htmlspecialchars($user_timezone); ?>';
+            const studentCalendar = new Calendar('student-calendar-container', {
+                view: 'month',
+                timezone: userTimezone || window.userTimezone || 'UTC',
+                studentId: studentId,
+                onLessonClick: function(lesson) {
+                    // Navigate to classroom if lesson is available
+                    if (lesson.id) {
+                        window.location.href = 'classroom.php?lessonId=' + lesson.id;
+                    }
+                }
+            });
+        }
+    });
+    </script>
 </body>
 </html>
 <?php
