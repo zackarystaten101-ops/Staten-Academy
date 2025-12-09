@@ -63,10 +63,14 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             font-size: 3rem;
             margin-bottom: 10px;
             font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.5);
         }
         .page-header p {
             font-size: 1.2rem;
-            opacity: 0.95;
+            color: #ffffff;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            opacity: 1;
         }
         .plans-container {
             max-width: 1200px;
@@ -127,7 +131,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         }
         .plan-price span {
             font-size: 1.2rem;
-            color: #999;
+            color: #666666; /* Improved contrast: #999 -> #666666 (WCAG AA compliant) */
             font-weight: normal;
         }
         .plan-features {
@@ -138,11 +142,15 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         }
         .plan-features li {
             padding: 12px 0;
-            color: #555;
+            color: #2d2d2d; /* Improved contrast: #555 -> #2d2d2d (WCAG AA compliant) */
             display: flex;
             align-items: center;
             gap: 10px;
             font-size: 1rem;
+        }
+        .plan-features li strong {
+            color: #1a1a1a; /* Darker for numbers */
+            font-weight: 700;
         }
         .plan-features li i {
             color: #ff6b9d;
@@ -169,15 +177,18 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         }
         .back-link {
             display: inline-block;
-            color: white;
+            color: #ffffff;
             text-decoration: none;
             margin-top: 20px;
             font-size: 1.1rem;
-            opacity: 0.9;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            font-weight: 600;
+            opacity: 1;
         }
         .back-link:hover {
             opacity: 1;
             text-decoration: underline;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.4);
         }
         @media (max-width: 768px) {
             .plans-grid {
@@ -200,7 +211,40 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             </div>
         </div>
         <?php include 'header-user.php'; ?>
+        <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
+            <span class="hamburger" aria-hidden="true"></span>
+        </button>
+        <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
+            <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
+            <a class="nav-btn" href="index.php">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <span class="nav-label">Home</span>
+            </a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
+                    <a class="nav-btn" href="teacher-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">Dashboard</span>
+                    </a>
+                <?php elseif ($user_role === 'student' || $user_role === 'new_student'): ?>
+                    <a class="nav-btn" href="student-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">My Dashboard</span>
+                    </a>
+                <?php elseif ($user_role === 'visitor'): ?>
+                    <a class="nav-btn" href="visitor-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">My Dashboard</span>
+                    </a>
+                <?php endif; ?>
+                <a class="nav-btn" href="logout.php" style="background-color: #dc3545; color: white; border: none;">
+                    <span class="nav-label">Logout</span>
+                </a>
+            <?php else: ?>
+                <a class="nav-btn login-btn" href="login.php" style="background-color: #0b6cf5; color: white; border: none;">
+                    <span class="nav-label">Login / Sign Up</span>
+                </a>
+            <?php endif; ?>
+        </div>
     </header>
+    <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
 
     <div class="page-header">
         <h1><i class="fas fa-child"></i> Kids Classes</h1>
@@ -211,8 +255,8 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <!-- Video Introduction Section -->
     <section class="video-intro-section" style="background: linear-gradient(135deg, #ff6b9d 0%, #ffa500 100%); color: white; padding: 60px 20px; text-align: center; margin-top: -40px; position: relative; z-index: 5;">
         <div style="max-width: 1200px; margin: 0 auto;">
-            <h2 style="font-size: 2rem; margin-bottom: 20px; font-weight: 700;">Our Kids Teaching Approach</h2>
-            <p style="font-size: 1.1rem; margin-bottom: 40px; opacity: 0.95; max-width: 700px; margin-left: auto; margin-right: auto;">
+            <h2 style="font-size: 2rem; margin-bottom: 20px; font-weight: 700; color: #ffffff; text-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6);">Our Kids Teaching Approach</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 40px; color: #ffffff; text-shadow: 0 1px 4px rgba(0,0,0,0.4); opacity: 1; max-width: 700px; margin-left: auto; margin-right: auto; font-weight: 500;">
                 Learn about our fun and engaging teaching style for kids, and hear from parents and students about their experience.
             </p>
             <div style="max-width: 900px; margin: 0 auto; position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
@@ -225,7 +269,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     allowfullscreen>
                 </iframe>
             </div>
-            <p style="margin-top: 30px; font-size: 0.95rem; opacity: 0.8;">
+            <p style="margin-top: 30px; font-size: 0.95rem; color: #ffffff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); opacity: 1; font-weight: 500;">
                 <i class="fas fa-info-circle"></i> Replace "YOUR_KIDS_VIDEO_ID_HERE" with your YouTube video ID
             </p>
         </div>
@@ -241,8 +285,14 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <span>/month</span>
                 </div>
                 <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i> <?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
-                    <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
+                    <?php 
+                    $group_classes = $plan['group_classes_per_month'] ?? 0;
+                    if ($group_classes > 0): ?>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per month</li>
+                    <?php elseif (($plan['group_classes_included'] ?? false)): ?>
+                        <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    <?php endif; ?>
                     <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
                     <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
                     <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
@@ -260,6 +310,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <footer>
         <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
     </footer>
+    <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>
 

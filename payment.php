@@ -1,6 +1,16 @@
 <?php
 session_start();
+require_once 'db.php';
 $user_role = $_SESSION['user_role'] ?? null;
+
+// Get track and plan_id from URL parameters
+$track = isset($_GET['track']) ? $_GET['track'] : null;
+$plan_id = isset($_GET['plan_id']) ? (int)$_GET['plan_id'] : null;
+
+// Validate track
+if ($track && !in_array($track, ['kids', 'adults', 'coding'])) {
+    $track = null;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -152,7 +162,9 @@ $user_role = $_SESSION['user_role'] ?? null;
         <div class="plan">
             <form action="create_checkout_session.php" method="POST" class="plan-form">
                 <input type="hidden" name="price_id" value="price_1SXvP8Fg7Fwmuz0x0bCZPbp2">
-                <input type="hidden" name="mode" value="subscription"> 
+                <input type="hidden" name="mode" value="subscription">
+                <?php if ($plan_id): ?><input type="hidden" name="plan_id" value="<?php echo $plan_id; ?>"><?php endif; ?>
+                <?php if ($track): ?><input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>"><?php endif; ?>
                 <button type="submit" class="plan-button">
                     <div class="plan-body">
                         <h3>Economy Plan</h3>
@@ -168,6 +180,8 @@ $user_role = $_SESSION['user_role'] ?? null;
             <form action="create_checkout_session.php" method="POST" class="plan-form">
                 <input type="hidden" name="price_id" value="price_BASIC_PLACEHOLDER">
                 <input type="hidden" name="mode" value="subscription">
+                <?php if ($plan_id): ?><input type="hidden" name="plan_id" value="<?php echo $plan_id; ?>"><?php endif; ?>
+                <?php if ($track): ?><input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>"><?php endif; ?>
                 <button type="submit" class="plan-button">
                     <div class="plan-body">
                         <h3>Basic Plan</h3>
@@ -182,6 +196,8 @@ $user_role = $_SESSION['user_role'] ?? null;
             <form action="create_checkout_session.php" method="POST" class="plan-form">
                 <input type="hidden" name="price_id" value="price_STANDARD_PLACEHOLDER">
                 <input type="hidden" name="mode" value="subscription">
+                <?php if ($plan_id): ?><input type="hidden" name="plan_id" value="<?php echo $plan_id; ?>"><?php endif; ?>
+                <?php if ($track): ?><input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>"><?php endif; ?>
                 <button type="submit" class="plan-button">
                     <div class="plan-body">
                         <h3>Standard Plan</h3>
@@ -196,6 +212,8 @@ $user_role = $_SESSION['user_role'] ?? null;
             <form action="create_checkout_session.php" method="POST" class="plan-form">
                 <input type="hidden" name="price_id" value="price_PREMIUM_PLACEHOLDER">
                 <input type="hidden" name="mode" value="subscription">
+                <?php if ($plan_id): ?><input type="hidden" name="plan_id" value="<?php echo $plan_id; ?>"><?php endif; ?>
+                <?php if ($track): ?><input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>"><?php endif; ?>
                 <button type="submit" class="plan-button">
                     <div class="plan-body">
                         <h3>Premium Plan</h3>

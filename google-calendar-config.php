@@ -277,14 +277,14 @@ class GoogleCalendarAPI {
     }
 
     /**
-     * Check if a time slot is available for booking
+     * Check if a time slot is available for booking (with buffer time enforcement)
      */
     public function isSlotAvailable($teacher_id, $lesson_date, $start_time, $end_time) {
         // Check if teacher is available on this day
         $day_of_week = date('l', strtotime($lesson_date));
         
         $stmt = $this->conn->prepare("
-            SELECT id FROM teacher_availability 
+            SELECT id, buffer_time_minutes FROM teacher_availability 
             WHERE teacher_id = ? AND day_of_week = ? AND is_available = 1
             AND start_time <= ? AND end_time >= ?
         ");
@@ -295,25 +295,53 @@ class GoogleCalendarAPI {
         if ($availability_check->num_rows === 0) {
             return ['available' => false, 'reason' => 'Teacher not available at this time'];
         }
+        
+        $availability_row = $availability_check->fetch_assoc();
+        $buffer_minutes = $availability_row['buffer_time_minutes'] ?? 15;
+        $stmt->close();
 
-        // Check if slot is already booked
+        // Check if slot is already booked (including buffer time)
+        // Get teacher's default buffer or use slot-specific buffer
+        $teacher_stmt = $this->conn->prepare("SELECT default_buffer_minutes FROM users WHERE id = ?");
+        $teacher_stmt->bind_param("i", $teacher_id);
+        $teacher_stmt->execute();
+        $teacher_result = $teacher_stmt->get_result();
+        $teacher_data = $teacher_result->fetch_assoc();
+        $teacher_stmt->close();
+        
+        $default_buffer = $teacher_data['default_buffer_minutes'] ?? 15;
+        $buffer_to_use = $buffer_minutes > 0 ? $buffer_minutes : $default_buffer;
+        
+        // Check for conflicts: new lesson overlaps with existing lessons (including buffers)
         $stmt = $this->conn->prepare("
-            SELECT id FROM lessons 
-            WHERE teacher_id = ? AND lesson_date = ? 
-            AND status = 'scheduled'
-            AND (
-                (start_time <= ? AND end_time > ?) OR
-                (start_time < ? AND end_time >= ?) OR
-                (start_time >= ? AND end_time <= ?)
-            )
+            SELECT id, start_time, end_time, buffer_time_minutes 
+            FROM lessons 
+            WHERE teacher_id = ? AND lesson_date = ? AND status = 'scheduled'
         ");
-        $stmt->bind_param("isssssss", $teacher_id, $lesson_date, $start_time, $start_time, $end_time, $end_time, $start_time, $end_time);
+        $stmt->bind_param("is", $teacher_id, $lesson_date);
         $stmt->execute();
-        $booking_check = $stmt->get_result();
-
-        if ($booking_check->num_rows > 0) {
-            return ['available' => false, 'reason' => 'Time slot already booked'];
+        $existing_lessons = $stmt->get_result();
+        
+        $new_start_ts = strtotime($lesson_date . ' ' . $start_time);
+        $new_end_ts = strtotime($lesson_date . ' ' . $end_time);
+        
+        while ($existing = $existing_lessons->fetch_assoc()) {
+            $existing_buffer = $existing['buffer_time_minutes'] ?? $default_buffer;
+            $existing_start_ts = strtotime($lesson_date . ' ' . $existing['start_time']);
+            $existing_end_ts = strtotime($lesson_date . ' ' . $existing['end_time']);
+            
+            // Add buffer to existing lesson
+            $existing_start_with_buffer = $existing_start_ts - ($existing_buffer * 60);
+            $existing_end_with_buffer = $existing_end_ts + ($existing_buffer * 60);
+            
+            // Check if new lesson overlaps (including buffers)
+            if (($new_start_ts < $existing_end_with_buffer && $new_end_ts > $existing_start_with_buffer) ||
+                ($new_start_ts >= $existing_start_with_buffer && $new_end_ts <= $existing_end_with_buffer)) {
+                $stmt->close();
+                return ['available' => false, 'reason' => 'Time slot conflicts with existing lesson (buffer time enforced)'];
+            }
         }
+        $stmt->close();
 
         return ['available' => true];
     }

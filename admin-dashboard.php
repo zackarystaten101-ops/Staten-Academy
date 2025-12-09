@@ -783,6 +783,159 @@ $active_tab = 'dashboard';
             <?php endif; ?>
         </div>
 
+        <!-- Slot Requests Tab -->
+        <div id="slot-requests" class="tab-content">
+            <h1>Slot & Group Class Requests</h1>
+            
+            <?php
+            // Fetch slot requests
+            $slot_requests = $conn->query("
+                SELECT sr.*, 
+                       a.name as admin_name, 
+                       t.name as teacher_name, 
+                       t.email as teacher_email
+                FROM admin_slot_requests sr
+                JOIN users a ON sr.admin_id = a.id
+                JOIN users t ON sr.teacher_id = t.id
+                ORDER BY sr.created_at DESC
+            ");
+            ?>
+            
+            <div class="card" style="margin-bottom: 20px;">
+                <h2><i class="fas fa-plus-circle"></i> Request New Slot or Group Class</h2>
+                <form action="admin-actions.php" method="POST" id="slotRequestForm">
+                    <input type="hidden" name="action" value="create_slot_request">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <label>Request Type *</label>
+                            <select name="request_type" id="requestType" required onchange="toggleRequestFields()">
+                                <option value="time_slot">Time Slot</option>
+                                <option value="group_class">Group Class</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Teacher *</label>
+                            <select name="teacher_id" required>
+                                <option value="">Select Teacher</option>
+                                <?php
+                                $teacher_list = $conn->query("SELECT id, name FROM users WHERE role = 'teacher' ORDER BY name");
+                                while ($t = $teacher_list->fetch_assoc()): ?>
+                                    <option value="<?php echo $t['id']; ?>"><?php echo h($t['name']); ?></option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="timeSlotFields">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label>Date *</label>
+                                <input type="date" name="requested_date" required>
+                            </div>
+                            <div>
+                                <label>Time *</label>
+                                <input type="time" name="requested_time" required>
+                            </div>
+                            <div>
+                                <label>Duration (minutes) *</label>
+                                <input type="number" name="duration_minutes" value="60" min="15" step="15" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="groupClassFields" style="display: none;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label>Track *</label>
+                                <select name="group_class_track" required>
+                                    <option value="">Select Track</option>
+                                    <option value="kids">Kids</option>
+                                    <option value="adults">Adults</option>
+                                    <option value="coding">Coding</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Date *</label>
+                                <input type="date" name="group_class_date" required>
+                            </div>
+                            <div>
+                                <label>Time *</label>
+                                <input type="time" name="group_class_time" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label>Message (optional)</label>
+                        <textarea name="message" rows="3" placeholder="Add any notes or instructions for the teacher..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;">
+                        <i class="fas fa-paper-plane"></i> Send Request
+                    </button>
+                </form>
+            </div>
+            
+            <h2 style="margin-top: 30px;">Pending & Recent Requests</h2>
+            <?php if ($slot_requests && $slot_requests->num_rows > 0): ?>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Teacher</th>
+                        <th>Date/Time</th>
+                        <th>Status</th>
+                        <th>Requested</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php while($sr = $slot_requests->fetch_assoc()): ?>
+                    <tr>
+                        <td>
+                            <span class="tag <?php echo $sr['request_type'] === 'group_class' ? 'warning' : 'info'; ?>">
+                                <?php echo ucfirst(str_replace('_', ' ', $sr['request_type'])); ?>
+                            </span>
+                        </td>
+                        <td><?php echo h($sr['teacher_name']); ?></td>
+                        <td>
+                            <?php if ($sr['request_type'] === 'time_slot'): ?>
+                                <?php echo date('M d, Y', strtotime($sr['requested_date'])); ?> at <?php echo date('g:i A', strtotime($sr['requested_time'])); ?>
+                                (<?php echo $sr['duration_minutes']; ?> min)
+                            <?php else: ?>
+                                <?php echo date('M d, Y', strtotime($sr['group_class_date'])); ?> at <?php echo date('g:i A', strtotime($sr['group_class_time'])); ?>
+                                (<?php echo ucfirst($sr['group_class_track']); ?>)
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <span class="tag <?php 
+                                echo $sr['status'] === 'pending' ? 'pending' : 
+                                    ($sr['status'] === 'accepted' ? 'active' : 
+                                    ($sr['status'] === 'rejected' ? 'danger' : 'success')); 
+                            ?>">
+                                <?php echo ucfirst($sr['status']); ?>
+                            </span>
+                        </td>
+                        <td><?php echo date('M d, Y g:i A', strtotime($sr['created_at'])); ?></td>
+                        <td>
+                            <?php if ($sr['status'] === 'pending'): ?>
+                                <button onclick="viewSlotRequest(<?php echo $sr['id']; ?>)" class="btn-outline btn-sm">View</button>
+                            <?php else: ?>
+                                <button onclick="viewSlotRequest(<?php echo $sr['id']; ?>)" class="btn-outline btn-sm">Details</button>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
+            <?php else: ?>
+            <div class="card">
+                <p>No slot requests yet.</p>
+            </div>
+            <?php endif; ?>
+        </div>
+
         <!-- Reports Tab -->
         <div id="reports" class="tab-content">
             <h1>Reports</h1>
@@ -978,6 +1131,41 @@ $active_tab = 'dashboard';
 </div>
 
 <script>
+function toggleRequestFields() {
+    const requestType = document.getElementById('requestType').value;
+    const timeSlotFields = document.getElementById('timeSlotFields');
+    const groupClassFields = document.getElementById('groupClassFields');
+    
+    if (requestType === 'time_slot') {
+        timeSlotFields.style.display = 'block';
+        groupClassFields.style.display = 'none';
+        // Make time slot fields required
+        document.querySelector('[name="requested_date"]').required = true;
+        document.querySelector('[name="requested_time"]').required = true;
+        document.querySelector('[name="duration_minutes"]').required = true;
+        // Make group class fields not required
+        document.querySelector('[name="group_class_track"]').required = false;
+        document.querySelector('[name="group_class_date"]').required = false;
+        document.querySelector('[name="group_class_time"]').required = false;
+    } else {
+        timeSlotFields.style.display = 'none';
+        groupClassFields.style.display = 'block';
+        // Make group class fields required
+        document.querySelector('[name="group_class_track"]').required = true;
+        document.querySelector('[name="group_class_date"]').required = true;
+        document.querySelector('[name="group_class_time"]').required = true;
+        // Make time slot fields not required
+        document.querySelector('[name="requested_date"]').required = false;
+        document.querySelector('[name="requested_time"]').required = false;
+        document.querySelector('[name="duration_minutes"]').required = false;
+    }
+}
+
+function viewSlotRequest(id) {
+    // TODO: Implement modal or detail view
+    alert('Slot request details view - ID: ' + id);
+}
+
 function switchTab(id) {
     if (event) event.preventDefault();
     

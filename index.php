@@ -284,8 +284,12 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <a class="nav-btn" href="teacher-dashboard.php" style="background-color: #28a745; color: white; border: none;">
                         <span class="nav-label">Dashboard</span>
                     </a>
-                <?php elseif ($user_role === 'student'): ?>
+                <?php elseif ($user_role === 'student' || $user_role === 'new_student'): ?>
                     <a class="nav-btn" href="student-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">My Dashboard</span>
+                    </a>
+                <?php elseif ($user_role === 'visitor'): ?>
+                    <a class="nav-btn" href="visitor-dashboard.php" style="background-color: #28a745; color: white; border: none;">
                         <span class="nav-label">My Dashboard</span>
                     </a>
                 <?php endif; ?>

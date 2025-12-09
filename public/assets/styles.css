@@ -10,7 +10,7 @@ body {
   font-family: Arial, sans-serif;
   line-height: 1.6;
   background-color: #f4f4f9;
-  color: #333;
+  color: #1a1a1a; /* Improved contrast: #333 -> #1a1a1a (WCAG AA compliant) */
   padding: 20px;
   margin: 0;
 }
@@ -73,7 +73,7 @@ body {
 
 .profile-card .profile-info p {
   font-size: 1rem;
-  color: #666;
+  color: #404040; /* Improved contrast: #666 -> #404040 (WCAG AA compliant) */
   margin-bottom: 10px;
 }
 
@@ -187,7 +187,7 @@ body
 
 .plan-body .desc {
   margin: 0 0 12px 0;
-  color: #405770;
+  color: #2d3d52; /* Improved contrast: #405770 -> #2d3d52 (WCAG AA compliant) */
   font-size: 0.95rem;
   line-height: 1.35;
 }
@@ -321,7 +321,7 @@ header.site-header {
 .header-center .branding h1,
 .header-center .branding p {
   color: #ffffff; /* high contrast on header background */
-  text-shadow: 0 3px 10px rgba(0,0,0,0.55); /* readability over gradients/images */
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.5); /* Enhanced readability over gradients/images */
 }
 
 /* Responsive: tablet and mobile improvements */
@@ -575,7 +575,7 @@ header.site-header {
 }
 .teacher-info p {
   margin: 0;
-  color: #465a6b;
+  color: #2d3a47; /* Improved contrast: #465a6b -> #2d3a47 (WCAG AA compliant) */
   font-size: 0.95rem;
 }
 

@@ -138,11 +138,15 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         }
         .plan-features li {
             padding: 12px 0;
-            color: #555;
+            color: #2d2d2d; /* Improved contrast: #555 -> #2d2d2d (WCAG AA compliant) */
             display: flex;
             align-items: center;
             gap: 10px;
             font-size: 1rem;
+        }
+        .plan-features li strong {
+            color: #1a1a1a; /* Darker for numbers */
+            font-weight: 700;
         }
         .plan-features li i {
             color: #0b6cf5;
@@ -200,7 +204,40 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             </div>
         </div>
         <?php include 'header-user.php'; ?>
+        <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
+            <span class="hamburger" aria-hidden="true"></span>
+        </button>
+        <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
+            <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
+            <a class="nav-btn" href="index.php">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <span class="nav-label">Home</span>
+            </a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
+                    <a class="nav-btn" href="teacher-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">Dashboard</span>
+                    </a>
+                <?php elseif ($user_role === 'student' || $user_role === 'new_student'): ?>
+                    <a class="nav-btn" href="student-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">My Dashboard</span>
+                    </a>
+                <?php elseif ($user_role === 'visitor'): ?>
+                    <a class="nav-btn" href="visitor-dashboard.php" style="background-color: #28a745; color: white; border: none;">
+                        <span class="nav-label">My Dashboard</span>
+                    </a>
+                <?php endif; ?>
+                <a class="nav-btn" href="logout.php" style="background-color: #dc3545; color: white; border: none;">
+                    <span class="nav-label">Logout</span>
+                </a>
+            <?php else: ?>
+                <a class="nav-btn login-btn" href="login.php" style="background-color: #0b6cf5; color: white; border: none;">
+                    <span class="nav-label">Login / Sign Up</span>
+                </a>
+            <?php endif; ?>
+        </div>
     </header>
+    <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
 
     <div class="page-header">
         <h1><i class="fas fa-user-graduate"></i> Adult Classes</h1>
@@ -241,8 +278,14 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <span>/month</span>
                 </div>
                 <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i> <?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
-                    <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
+                    <?php 
+                    $group_classes = $plan['group_classes_per_month'] ?? 0;
+                    if ($group_classes > 0): ?>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per month</li>
+                    <?php elseif (($plan['group_classes_included'] ?? false)): ?>
+                        <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    <?php endif; ?>
                     <li><i class="fas fa-check-circle"></i> Career & business English</li>
                     <li><i class="fas fa-check-circle"></i> Travel & conversation focus</li>
                     <li><i class="fas fa-check-circle"></i> Flexible scheduling</li>
@@ -260,6 +303,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <footer>
         <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
     </footer>
+    <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>
 

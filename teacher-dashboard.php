@@ -609,8 +609,8 @@ $active_tab = 'overview';
                         <?php endif; ?>
                     </a>
                     <a href="profile.php?id=<?php echo $teacher_id; ?>" class="quick-action-btn">
-                        <i class="fas fa-eye"></i>
-                        <span>View Profile</span>
+                        <i class="fas fa-user"></i>
+                        <span>My Profile</span>
                     </a>
                 </div>
             </div>

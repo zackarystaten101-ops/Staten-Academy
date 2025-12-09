@@ -50,14 +50,31 @@ $canJoinClassroom = true;
 $joinRestrictionMessage = '';
 $lessonId = $_GET['lessonId'] ?? '';
 
-if ($user_role === 'student' && $lessonId) {
-    // Get lesson details
-    $stmt = $conn->prepare("SELECT lesson_date, start_time FROM lessons WHERE id = ? AND student_id = ?");
-    $stmt->bind_param("ii", $lessonId, $user_id);
+$lesson_data = null;
+if ($lessonId) {
+    // Get full lesson details including meeting link
+    if ($user_role === 'student') {
+        $stmt = $conn->prepare("SELECT l.*, u.name as teacher_name, u.email as teacher_email 
+                                FROM lessons l 
+                                JOIN users u ON l.teacher_id = u.id 
+                                WHERE l.id = ? AND l.student_id = ?");
+        $stmt->bind_param("ii", $lessonId, $user_id);
+    } else {
+        $stmt = $conn->prepare("SELECT l.*, u.name as student_name, u.email as student_email 
+                                FROM lessons l 
+                                JOIN users u ON l.student_id = u.id 
+                                WHERE l.id = ? AND l.teacher_id = ?");
+        $stmt->bind_param("ii", $lessonId, $user_id);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
-    $lesson = $result->fetch_assoc();
+    $lesson_data = $result->fetch_assoc();
     $stmt->close();
+}
+
+if ($user_role === 'student' && $lessonId && $lesson_data) {
+    // Get lesson details for join restriction check
+    $lesson = $lesson_data;
     
     if ($lesson) {
         $lessonDateTime = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
@@ -218,6 +235,8 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
             data-user-name="<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>"
             data-session-id="<?php echo htmlspecialchars($_GET['sessionId'] ?? ''); ?>"
             data-lesson-id="<?php echo htmlspecialchars($_GET['lessonId'] ?? ''); ?>"
+            data-meeting-link="<?php echo htmlspecialchars($lesson_data['meeting_link'] ?? ''); ?>"
+            data-meeting-type="<?php echo htmlspecialchars($lesson_data['meeting_type'] ?? 'zoom'); ?>"
             data-teacher-id="<?php 
                 if (($user['role'] ?? 'student') === 'teacher') {
                     echo htmlspecialchars($user_id);

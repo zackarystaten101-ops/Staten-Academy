@@ -355,6 +355,9 @@ if (isset($admin_stats_for_sidebar)) {
                     <span class="sidebar-badge alert"><?php echo $open_support; ?></span>
                 <?php endif; ?>
             </a>
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('slot-requests'); } return false;" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
+                <i class="fas fa-calendar-plus"></i> Slot Requests
+            </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reports'); } return false;" class="<?php echo $active_tab === 'reports' ? 'active' : ''; ?>">
                 <i class="fas fa-file-alt"></i> Reports
             </a>
@@ -409,6 +412,9 @@ if (isset($admin_stats_for_sidebar)) {
                 if ($open_support > 0): ?>
                     <span class="sidebar-badge alert"><?php echo $open_support; ?></span>
                 <?php endif; ?>
+            </a>
+            <a href="admin-dashboard.php#slot-requests" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
+                <i class="fas fa-calendar-plus"></i> Slot Requests
             </a>
             <a href="admin-dashboard.php#reports" class="<?php echo $active_tab === 'reports' ? 'active' : ''; ?>">
                 <i class="fas fa-file-alt"></i> Reports

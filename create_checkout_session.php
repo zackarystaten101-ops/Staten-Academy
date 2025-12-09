@@ -1,5 +1,78 @@
 <?php
+session_start();
 require_once 'config.php';
+require_once 'db.php';
+
+// TEST STUDENT BYPASS: Check if user is the test student
+$test_student_email = 'student@statenacademy.com';
+$is_test_student = false;
+
+if (isset($_SESSION['user_id'])) {
+    $stmt = $conn->prepare("SELECT email FROM users WHERE id = ?");
+    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        if ($user['email'] === $test_student_email) {
+            $is_test_student = true;
+        }
+    }
+    $stmt->close();
+}
+
+// If test student, bypass payment and redirect to success
+if ($is_test_student) {
+    // Get plan_id if provided (from POST or GET)
+    $plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : (isset($_GET['plan_id']) ? (int)$_GET['plan_id'] : null);
+    $track = isset($_POST['track']) ? $_POST['track'] : (isset($_GET['track']) ? $_GET['track'] : null);
+    
+    // Update user role if needed
+    $user_id = $_SESSION['user_id'];
+    $stmt = $conn->prepare("SELECT role, has_purchased_class FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($user && ($user['role'] === 'visitor' || $user['role'] === 'new_student' || !$user['has_purchased_class'])) {
+        // Upgrade to student
+        $now = date('Y-m-d H:i:s');
+        $update_stmt = $conn->prepare("UPDATE users SET role = 'student', has_purchased_class = TRUE, first_purchase_date = ? WHERE id = ?");
+        $update_stmt->bind_param("si", $now, $user_id);
+        $update_stmt->execute();
+        $update_stmt->close();
+        
+        // Update session
+        $_SESSION['user_role'] = 'student';
+    }
+    
+    // Update plan_id if provided
+    if ($plan_id) {
+        $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
+        $plan_stmt->bind_param("ii", $plan_id, $user_id);
+        $plan_stmt->execute();
+        $plan_stmt->close();
+    }
+    
+    // Update track if provided
+    if ($track && in_array($track, ['kids', 'adults', 'coding'])) {
+        $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
+        $track_stmt->bind_param("si", $track, $user_id);
+        $track_stmt->execute();
+        $track_stmt->close();
+    }
+    
+    // Redirect to success page
+    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+    $domain = $protocol . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
+    if (strpos($domain, ' ') !== false) {
+        $domain = str_replace(' ', '%20', $domain);
+    }
+    header("Location: " . $domain . "/success.php?test_student=1");
+    exit;
+}
 
 // Check if Stripe API key is configured
 if (!defined('STRIPE_SECRET_KEY') || empty(STRIPE_SECRET_KEY) || strpos(STRIPE_SECRET_KEY, 'YOUR_') === 0 || (strpos(STRIPE_SECRET_KEY, 'sk_test_') !== 0 && strpos(STRIPE_SECRET_KEY, 'sk_live_') !== 0)) {

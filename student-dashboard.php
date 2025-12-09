@@ -148,12 +148,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
     $rating = (int)$_POST['rating'];
     $review_text = trim($_POST['review_text']);
     
-    $stmt = $conn->prepare("INSERT INTO reviews (teacher_id, student_id, rating, review_text) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE rating = VALUES(rating), review_text = VALUES(review_text)");
-    if ($stmt) {
-        $stmt->bind_param("iiis", $teacher_id, $student_id, $rating, $review_text);
-        $stmt->execute();
-        $stmt->close();
+    // REQUIREMENT: Only allow reviews after a booking exists
+    // Check if student has a booking with this teacher
+    $booking_check = $conn->prepare("SELECT id FROM bookings WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+    $booking_check->bind_param("ii", $student_id, $teacher_id);
+    $booking_check->execute();
+    $has_booking = $booking_check->get_result()->num_rows > 0;
+    $booking_check->close();
+    
+    if (!$has_booking) {
+        $_SESSION['error_message'] = 'You can only review teachers after booking a class with them.';
+        header("Location: student-dashboard.php#reviews");
+        exit();
     }
+    
+    // Check if already reviewed
+    $review_check = $conn->prepare("SELECT id FROM reviews WHERE teacher_id = ? AND student_id = ? LIMIT 1");
+    $review_check->bind_param("ii", $teacher_id, $student_id);
+    $review_check->execute();
+    $has_reviewed = $review_check->get_result()->num_rows > 0;
+    $review_check->close();
+    
+    if ($has_reviewed) {
+        // Update existing review
+        $stmt = $conn->prepare("UPDATE reviews SET rating = ?, review_text = ?, updated_at = NOW() WHERE teacher_id = ? AND student_id = ?");
+        if ($stmt) {
+            $stmt->bind_param("isii", $rating, $review_text, $teacher_id, $student_id);
+            $stmt->execute();
+            $stmt->close();
+        }
+    } else {
+        // Insert new review
+        $stmt = $conn->prepare("INSERT INTO reviews (teacher_id, student_id, rating, review_text) VALUES (?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("iiis", $teacher_id, $student_id, $rating, $review_text);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+    
+    // Update teacher rating cache
+    $rating_update = $conn->prepare("
+        UPDATE users SET 
+            avg_rating = (SELECT AVG(rating) FROM reviews WHERE teacher_id = ?),
+            review_count = (SELECT COUNT(*) FROM reviews WHERE teacher_id = ?)
+        WHERE id = ?
+    ");
+    $rating_update->bind_param("iii", $teacher_id, $teacher_id, $teacher_id);
+    $rating_update->execute();
+    $rating_update->close();
+    
+    // Notify teacher
+    createNotification($conn, $teacher_id, 'review', 'New Review', 
+        $_SESSION['user_name'] . " left you a $rating-star review!", 'teacher-dashboard.php#reviews');
+    
     header("Location: student-dashboard.php#reviews");
     exit();
 }
@@ -692,7 +740,13 @@ $active_tab = 'overview';
                                 onclick="toggleFavorite(<?php echo $teacher['id']; ?>, this)" title="Add to favorites">
                             <i class="fas fa-heart"></i>
                         </button>
-                        <a href="profile.php?id=<?php echo $teacher['id']; ?>" class="btn-outline btn-sm">View Profile</a>
+                        <?php 
+                        // Only show profile link if teacher is assigned to student
+                        $is_assigned = ($assigned_teacher && $assigned_teacher['id'] == $teacher['id']) || 
+                                      ($user['assigned_teacher_id'] == $teacher['id']);
+                        if ($is_assigned): ?>
+                            <a href="profile.php?id=<?php echo $teacher['id']; ?>" class="btn-outline btn-sm">View Profile</a>
+                        <?php endif; ?>
                         <a href="message_threads.php?to=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Message</a>
                     </div>
                 </div>
@@ -758,7 +812,13 @@ $active_tab = 'overview';
                                    title="Join Classroom">
                                     <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
                                 </a>
-                                <a href="profile.php?id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">View Teacher</a>
+                                <?php 
+                                // Only show profile link if teacher is assigned to student
+                                $is_assigned_lesson = ($assigned_teacher && $assigned_teacher['id'] == $lesson['teacher_id']) || 
+                                                      ($user['assigned_teacher_id'] == $lesson['teacher_id']);
+                                if ($is_assigned_lesson): ?>
+                                    <a href="profile.php?id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">View Teacher</a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>

@@ -24,6 +24,92 @@ if (!$teacher || ($teacher['role'] !== 'teacher' && $teacher['role'] !== 'admin'
 $user_role = isset($_SESSION['user_role']) ? $_SESSION['user_role'] : 'guest';
 $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
 
+// ACCESS CONTROL: Restrict teacher profiles
+// Allow access only if:
+// 1. User is viewing their own profile (teacher/admin)
+// 2. User is an admin
+// 3. User is a student assigned to this teacher
+$has_access = false;
+
+if ($user_id) {
+    // Teachers/admins viewing their own profile
+    if (($user_role === 'teacher' || $user_role === 'admin') && $user_id == $teacher_id) {
+        $has_access = true;
+    }
+    // Admins viewing any teacher profile
+    elseif ($user_role === 'admin') {
+        $has_access = true;
+    }
+    // Students assigned to this teacher
+    elseif ($user_role === 'student' || $user_role === 'new_student') {
+        // Check if student is assigned to this teacher
+        require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+        $assignmentModel = new TeacherAssignment($conn);
+        $assignment = $assignmentModel->getStudentTeacher($user_id);
+        
+        if ($assignment && $assignment['teacher_id'] == $teacher_id) {
+            $has_access = true;
+        }
+        // Also check if student has this teacher in assigned_teacher_id field
+        $stmt = $conn->prepare("SELECT assigned_teacher_id FROM users WHERE id = ?");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            if ($row['assigned_teacher_id'] == $teacher_id) {
+                $has_access = true;
+            }
+        }
+        $stmt->close();
+    }
+}
+
+// Deny access if not authorized
+if (!$has_access) {
+    http_response_code(403);
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Access Denied - Staten Academy</title>
+        <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+        <link rel="stylesheet" href="<?php echo getAssetPath('css/auth.css'); ?>">
+        <style>
+            .access-denied {
+                max-width: 600px;
+                margin: 100px auto;
+                padding: 40px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                text-align: center;
+            }
+            .access-denied h1 {
+                color: #dc3545;
+                margin-bottom: 20px;
+            }
+            .access-denied p {
+                color: #404040;
+                margin-bottom: 30px;
+                line-height: 1.6;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="access-denied">
+            <h1><i class="fas fa-lock"></i> Access Denied</h1>
+            <p>Teacher profiles are only accessible to assigned students, the teacher themselves, or administrators.</p>
+            <p>If you believe you should have access to this profile, please contact support.</p>
+            <a href="index.php" class="btn-submit" style="display: inline-block; text-decoration: none; margin-top: 20px;">Return to Home</a>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit();
+}
+
 // Get rating data
 $rating_data = getTeacherRating($conn, $teacher_id);
 

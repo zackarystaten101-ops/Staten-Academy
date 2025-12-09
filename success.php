@@ -85,8 +85,14 @@ if (isset($_SESSION['user_id'])) {
     <div class="message-box">
         <div class="success-icon">✓</div>
         <h1>Payment Successful!</h1>
-        <p>Thank you for your purchase. We have received your payment.</p>
-        <p>We will contact you shortly to schedule your lesson.</p>
+        <?php if (isset($_GET['test_student'])): ?>
+            <p style="background: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                <strong>Test Account:</strong> Your plan has been activated without payment.
+            </p>
+        <?php else: ?>
+            <p>Thank you for your purchase. We have received your payment.</p>
+            <p>We will contact you shortly to schedule your lesson.</p>
+        <?php endif; ?>
         <?php if (isset($_SESSION['user_id'])): ?>
             <a href="student-dashboard.php" class="btn">Go to Dashboard</a>
         <?php else: ?>

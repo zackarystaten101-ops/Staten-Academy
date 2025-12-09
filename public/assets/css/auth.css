@@ -21,7 +21,7 @@
 }
 
 .auth-container p {
-    color: #666;
+    color: #404040; /* Improved contrast: #666 -> #404040 (WCAG AA compliant) */
     margin-bottom: 20px;
 }
 
@@ -36,8 +36,8 @@
 .form-group label {
     display: block;
     margin-bottom: 5px;
-    color: #666;
-    font-weight: 500;
+    color: #2d2d2d; /* Improved contrast: #666 -> #2d2d2d (WCAG AA compliant) */
+    font-weight: 600; /* Increased weight for better visibility */
 }
 
 .form-group input {

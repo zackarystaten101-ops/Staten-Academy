@@ -16,8 +16,8 @@
     --danger: #dc3545;
     --warning: #ffc107;
     --info: #17a2b8;
-    --dark: #2c3e50;
-    --gray: #6c757d;
+    --dark: #1a1a1a; /* Improved contrast: #2c3e50 -> #1a1a1a */
+    --gray: #4a4a4a; /* Improved contrast: #6c757d -> #4a4a4a (WCAG AA compliant) */
     --light-gray: #f8f9fa;
     --border: #dee2e6;
     --shadow: 0 4px 15px rgba(0,0,0,0.08);
@@ -312,7 +312,7 @@ body.dashboard-layout {
 
 .notification-time {
     font-size: 0.75rem;
-    color: var(--gray);
+    color: #4a4a4a; /* Improved contrast: var(--gray) -> #4a4a4a (WCAG AA compliant) */
 }
 
 .notification-empty,
@@ -737,7 +737,7 @@ body.dashboard-layout {
 
 .stat-info p {
     margin: 4px 0 0;
-    color: var(--gray);
+    color: #404040; /* Improved contrast: var(--gray) -> #404040 (WCAG AA compliant) */
     font-size: 0.9rem;
 }
 
@@ -1341,7 +1341,7 @@ body.dashboard-layout {
 }
 
 .review-text {
-    color: #555;
+    color: #2d2d2d; /* Improved contrast: #555 -> #2d2d2d (WCAG AA compliant) */
     line-height: 1.6;
 }
 

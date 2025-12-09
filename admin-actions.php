@@ -94,6 +94,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
          // Delete from pending
          $stmt = $conn->prepare("DELETE FROM pending_updates WHERE id = ?");
          $stmt->bind_param("i", $update_id);
+     } elseif ($action === 'create_slot_request') {
+         $admin_id = $_SESSION['user_id'];
+         $teacher_id = intval($_POST['teacher_id']);
+         $request_type = $_POST['request_type'];
+         $message = trim($_POST['message'] ?? '');
+         
+         if ($request_type === 'time_slot') {
+             $requested_date = $_POST['requested_date'];
+             $requested_time = $_POST['requested_time'];
+             $duration_minutes = intval($_POST['duration_minutes']);
+             $stmt = $conn->prepare("INSERT INTO admin_slot_requests (admin_id, teacher_id, request_type, requested_date, requested_time, duration_minutes, message) VALUES (?, ?, ?, ?, ?, ?, ?)");
+             $stmt->bind_param("iisssis", $admin_id, $teacher_id, $request_type, $requested_date, $requested_time, $duration_minutes, $message);
+         } else {
+             $group_class_track = $_POST['group_class_track'];
+             $group_class_date = $_POST['group_class_date'];
+             $group_class_time = $_POST['group_class_time'];
+             $stmt = $conn->prepare("INSERT INTO admin_slot_requests (admin_id, teacher_id, request_type, group_class_track, group_class_date, group_class_time, message) VALUES (?, ?, ?, ?, ?, ?, ?)");
+             $stmt->bind_param("iisssss", $admin_id, $teacher_id, $request_type, $group_class_track, $group_class_date, $group_class_time, $message);
+         }
+         
+         $stmt->execute();
+         $stmt->close();
+         
+        // Notify teacher
+        require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+        if (function_exists('createNotification')) {
+            $request_desc = $request_type === 'time_slot' 
+                ? "time slot on " . date('M d, Y', strtotime($requested_date)) . " at " . date('g:i A', strtotime($requested_time))
+                : "group class for " . ucfirst($group_class_track) . " track on " . date('M d, Y', strtotime($group_class_date)) . " at " . date('g:i A', strtotime($group_class_time));
+            createNotification($conn, $teacher_id, 'slot_request', 'New Slot Request', 
+                "Admin has requested you to open a " . $request_desc, 
+                'teacher-dashboard.php');
+        }
+         
+        ob_end_clean();
+        header("Location: admin-dashboard.php#slot-requests");
+        exit();
      } elseif ($action === 'mark_support_read') {
          $support_id = intval($_POST['support_id']);
          $stmt = $conn->prepare("UPDATE support_messages SET status = 'read' WHERE id = ?");

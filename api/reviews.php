@@ -70,6 +70,19 @@ function submitReview($conn, $student_id) {
         return;
     }
     
+    // REQUIREMENT: Only allow reviews after a booking exists
+    // Check if student has a booking with this teacher
+    $booking_check = $conn->prepare("SELECT id FROM bookings WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+    $booking_check->bind_param("ii", $student_id, $teacher_id);
+    $booking_check->execute();
+    $has_booking = $booking_check->get_result()->num_rows > 0;
+    $booking_check->close();
+    
+    if (!$has_booking) {
+        echo json_encode(['error' => 'You can only review teachers after booking a class with them.']);
+        return;
+    }
+    
     // Check if already reviewed this teacher (without booking)
     if (!$booking_id) {
         $check = $conn->prepare("SELECT id FROM reviews WHERE teacher_id = ? AND student_id = ? AND booking_id IS NULL");

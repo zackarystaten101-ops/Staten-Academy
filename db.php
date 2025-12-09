@@ -97,6 +97,11 @@ if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD 
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 if (!in_array('learning_track', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN learning_track ENUM('kids', 'adults', 'coding') NULL AFTER hourly_rate");
 if (!in_array('assigned_teacher_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN assigned_teacher_id INT(6) UNSIGNED NULL AFTER learning_track");
+// Preply-style calendar features (check if already added later in file)
+if (!in_array('default_buffer_minutes', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN default_buffer_minutes INT DEFAULT 15 AFTER assigned_teacher_id");
+if (!in_array('preferred_meeting_type', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN preferred_meeting_type ENUM('zoom', 'google_meet', 'other') DEFAULT 'zoom' AFTER default_buffer_minutes");
+if (!in_array('zoom_link', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN zoom_link VARCHAR(500) NULL AFTER preferred_meeting_type");
+if (!in_array('google_meet_link', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_meet_link VARCHAR(500) NULL AFTER zoom_link");
 // Add plan_id column if it doesn't exist
 if (!in_array('plan_id', $existing_cols) && !in_array('subscription_plan_id', $existing_cols)) {
     $add_col_result = $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
@@ -278,6 +283,15 @@ $sql = "CREATE TABLE IF NOT EXISTS teacher_availability (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 $conn->query($sql);
 
+// Add Preply-style columns to teacher_availability
+$avail_cols = $conn->query("SHOW COLUMNS FROM teacher_availability");
+$existing_avail_cols = [];
+if ($avail_cols) {
+    while($row = $avail_cols->fetch_assoc()) { $existing_avail_cols[] = $row['Field']; }
+}
+if (!in_array('buffer_time_minutes', $existing_avail_cols)) $conn->query("ALTER TABLE teacher_availability ADD COLUMN buffer_time_minutes INT DEFAULT 15 AFTER is_available");
+if (!in_array('specific_date', $existing_avail_cols)) $conn->query("ALTER TABLE teacher_availability ADD COLUMN specific_date DATE NULL AFTER day_of_week");
+
 // Add foreign key separately
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_availability' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
@@ -309,8 +323,17 @@ if (!in_array('recurring_lesson_id', $existing_lessons_cols)) $conn->query("ALTE
 if (!in_array('lesson_type', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN lesson_type ENUM('single', 'recurring', 'series') DEFAULT 'single' AFTER status");
 if (!in_array('color_code', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN color_code VARCHAR(7) DEFAULT '#0b6cf5' AFTER lesson_type");
 if (!in_array('series_start_date', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_start_date DATE NULL AFTER color_code");
-if (!in_array('series_end_date', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_end_date DATE NULL AFTER series_start_date");
+if (!in_array('series_end_date', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_end_date DATE NULL AFTER series_end_date");
 if (!in_array('series_frequency_weeks', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN series_frequency_weeks INT DEFAULT 1 AFTER series_end_date");
+// Preply-style features
+if (!in_array('meeting_link', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN meeting_link VARCHAR(500) NULL AFTER google_calendar_event_id");
+if (!in_array('meeting_type', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN meeting_type ENUM('zoom', 'google_meet', 'other') DEFAULT 'zoom' AFTER meeting_link");
+if (!in_array('buffer_time_minutes', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN buffer_time_minutes INT DEFAULT 15 AFTER meeting_type");
+if (!in_array('reschedule_policy_hours', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN reschedule_policy_hours INT DEFAULT 24 AFTER buffer_time_minutes");
+if (!in_array('cancel_policy_hours', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN cancel_policy_hours INT DEFAULT 24 AFTER reschedule_policy_hours");
+if (!in_array('reminder_sent', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN reminder_sent BOOLEAN DEFAULT FALSE AFTER cancel_policy_hours");
+if (!in_array('rescheduled_from', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN rescheduled_from INT(6) UNSIGNED NULL AFTER reminder_sent");
+if (!in_array('cancellation_reason', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN cancellation_reason TEXT NULL AFTER rescheduled_from");
 
 // Add foreign keys separately
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
@@ -669,7 +692,8 @@ if ($plan_cols) {
 if (!in_array('track', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track ENUM('kids', 'adults', 'coding') NULL AFTER display_order");
 if (!in_array('one_on_one_classes_per_week', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN one_on_one_classes_per_week INT DEFAULT 0 AFTER track");
 if (!in_array('group_classes_included', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN group_classes_included BOOLEAN DEFAULT FALSE AFTER one_on_one_classes_per_week");
-if (!in_array('track_specific_features', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track_specific_features JSON NULL AFTER group_classes_included");
+if (!in_array('group_classes_per_month', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN group_classes_per_month INT DEFAULT 0 AFTER group_classes_included");
+if (!in_array('track_specific_features', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track_specific_features JSON NULL AFTER group_classes_per_month");
 
 // Create user_selected_courses table
 $sql = "CREATE TABLE IF NOT EXISTS user_selected_courses (
@@ -890,6 +914,93 @@ if ($col_check && $col_check->num_rows > 0) {
             if ($plans_id_check && $plans_id_check->num_rows > 0) {
                 $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL");
             }
+        }
+    }
+}
+
+// Create notifications table (if not exists)
+$sql = "CREATE TABLE IF NOT EXISTS notifications (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT(6) UNSIGNED NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT,
+    link VARCHAR(255) DEFAULT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_unread (user_id, is_read),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key for notifications
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='notifications' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE notifications ADD CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create admin slot requests table
+$sql = "CREATE TABLE IF NOT EXISTS admin_slot_requests (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT(6) UNSIGNED NOT NULL,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    request_type ENUM('time_slot', 'group_class') DEFAULT 'time_slot',
+    requested_date DATE,
+    requested_time TIME,
+    duration_minutes INT DEFAULT 60,
+    group_class_track ENUM('kids', 'adults', 'coding') NULL,
+    group_class_date DATE NULL,
+    group_class_time TIME NULL,
+    status ENUM('pending', 'accepted', 'rejected', 'completed') DEFAULT 'pending',
+    message TEXT,
+    response_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_slot_requests' AND COLUMN_NAME='admin_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE admin_slot_requests ADD CONSTRAINT fk_slot_request_admin FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_slot_requests' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE admin_slot_requests ADD CONSTRAINT fk_slot_request_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Ensure admin account exists with correct credentials
+$admin_email = 'statenenglishacademy@gmail.com';
+$admin_password = '123456789';
+$admin_name = 'Admin';
+$admin_check = $conn->prepare("SELECT id, role, password FROM users WHERE email = ?");
+if ($admin_check) {
+    $admin_check->bind_param("s", $admin_email);
+    $admin_check->execute();
+    $admin_result = $admin_check->get_result();
+    $admin_exists = $admin_result->fetch_assoc();
+    $admin_check->close();
+    
+    if ($admin_exists) {
+        // Update admin password and role if needed
+        $hashed_password = password_hash($admin_password, PASSWORD_DEFAULT);
+        $update_admin = $conn->prepare("UPDATE users SET password = ?, role = 'admin', name = ? WHERE email = ?");
+        if ($update_admin) {
+            $update_admin->bind_param("sss", $hashed_password, $admin_name, $admin_email);
+            $update_admin->execute();
+            $update_admin->close();
+        }
+    } else {
+        // Create admin account
+        $hashed_password = password_hash($admin_password, PASSWORD_DEFAULT);
+        $create_admin = $conn->prepare("INSERT INTO users (email, password, name, role, application_status) VALUES (?, ?, ?, 'admin', 'approved')");
+        if ($create_admin) {
+            $create_admin->bind_param("sss", $admin_email, $hashed_password, $admin_name);
+            $create_admin->execute();
+            $create_admin->close();
         }
     }
 }

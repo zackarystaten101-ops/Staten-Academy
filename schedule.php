@@ -242,13 +242,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Note: The booking system doesn't enforce class limits, so unlimited classes are automatically available
     // This is verified in the database setup scripts (setup-test-account.sql)
 
-    // Create lesson record
+    // Get teacher's meeting preferences and buffer time
+    $teacher_buffer = $teacher['default_buffer_minutes'] ?? 15;
+    $meeting_type = $teacher['preferred_meeting_type'] ?? 'zoom';
+    $meeting_link = null;
+    
+    // Generate meeting link based on teacher preference
+    if ($meeting_type === 'zoom' && !empty($teacher['zoom_link'])) {
+        $meeting_link = $teacher['zoom_link'];
+    } elseif ($meeting_type === 'google_meet' && !empty($teacher['google_meet_link'])) {
+        $meeting_link = $teacher['google_meet_link'];
+    } else {
+        // Generate default classroom link
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
+        $domain = $protocol . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
+        $meeting_link = $domain . '/classroom.php?lessonId=';
+    }
+    
+    // Get reschedule and cancel policy hours (default 24 hours)
+    // Note: These are stored per lesson, not per teacher, so we use defaults here
+    $reschedule_policy = 24; // Default 24 hours advance notice
+    $cancel_policy = 24; // Default 24 hours advance notice
+    
+    // Create lesson record with Preply-style features
     $google_event_id = null;
     $stmt = $conn->prepare("
-        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, lesson_type, color_code)
-        VALUES (?, ?, ?, ?, ?, 'scheduled', 'single', '#0b6cf5')
+        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, lesson_type, color_code, 
+                            meeting_link, meeting_type, buffer_time_minutes, reschedule_policy_hours, cancel_policy_hours)
+        VALUES (?, ?, ?, ?, ?, 'scheduled', 'single', '#0b6cf5', ?, ?, ?, ?, ?)
     ");
-    $stmt->bind_param("iisss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time);
+    $stmt->bind_param("iisssssiii", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, 
+                     $meeting_link, $meeting_type, $teacher_buffer, $reschedule_policy, $cancel_policy);
 
     if (!$stmt->execute()) {
         http_response_code(500);
@@ -259,6 +283,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     $lesson_id = $stmt->insert_id;
     $stmt->close();
+    
+    // Update meeting link with lesson ID if it's a classroom link
+    if (strpos($meeting_link, 'classroom.php?lessonId=') !== false) {
+        $meeting_link = $meeting_link . $lesson_id;
+        $update_link = $conn->prepare("UPDATE lessons SET meeting_link = ? WHERE id = ?");
+        $update_link->bind_param("si", $meeting_link, $lesson_id);
+        $update_link->execute();
+        $update_link->close();
+    }
 
     // Also create a booking record for compatibility
     $booking_stmt = $conn->prepare("INSERT IGNORE INTO bookings (student_id, teacher_id, booking_date) VALUES (?, ?, ?)");
@@ -295,10 +328,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $event_data = [
             'title' => 'Lesson: ' . htmlspecialchars($studentDisplayName),
             'description' => 'Student: ' . htmlspecialchars($studentDisplayName) . ($isTestClass ? ' (Test Class)' : ' (' . htmlspecialchars($student['email']) . ')') . "\n\n" .
-                           'Join Classroom: ' . $classroom_url,
+                           'Join Lesson: ' . $meeting_link . "\n" .
+                           'Classroom: ' . $classroom_url,
             'start_datetime' => $start_datetime,
             'end_datetime' => $end_datetime,
-            'location' => $classroom_url
+            'location' => $meeting_link
         ];
 
         $calendar_result = $api->createEvent($teacher['google_calendar_token'], $event_data);
