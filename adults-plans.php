@@ -155,7 +155,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         .plan-cta {
             display: block;
             background: linear-gradient(135deg, #0b6cf5, #004080);
-            color: white;
+            color: white !important;
             padding: 15px 30px;
             border-radius: 8px;
             font-weight: 600;
@@ -163,13 +163,19 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             text-decoration: none;
             margin-top: 25px;
             transition: transform 0.2s, box-shadow 0.2s;
-            border: none;
+            border: none !important;
             cursor: pointer;
             width: 100%;
+            text-align: center;
+            box-sizing: border-box;
         }
         .plan-cta:hover {
             transform: scale(1.05);
             box-shadow: 0 8px 25px rgba(11, 108, 245, 0.4);
+            color: white !important;
+        }
+        button.plan-cta {
+            font-family: inherit;
         }
         .back-link {
             display: inline-block;
@@ -290,16 +296,21 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <li><i class="fas fa-check-circle"></i> Travel & conversation focus</li>
                     <li><i class="fas fa-check-circle"></i> Flexible scheduling</li>
                 </ul>
+                <?php 
+                $plan_id = $plan['id'] ?? null;
+                ?>
                 <?php if (isset($_SESSION['user_id']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student' || $_SESSION['user_role'] === 'visitor')): ?>
-                    <form action="create_checkout_session.php" method="POST" style="display: inline;">
-                        <input type="hidden" name="plan_id" value="<?php echo $plan['id']; ?>">
+                    <form action="create_checkout_session.php" method="POST" style="margin: 0; width: 100%;">
+                        <?php if ($plan_id): ?>
+                            <input type="hidden" name="plan_id" value="<?php echo (int)$plan_id; ?>">
+                        <?php endif; ?>
                         <input type="hidden" name="track" value="adults">
                         <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? 'price_PLACEHOLDER'); ?>">
                         <input type="hidden" name="mode" value="subscription">
-                        <button type="submit" class="plan-cta" style="border: none; background: none; cursor: pointer; width: 100%; padding: 0; font: inherit; color: inherit; text-decoration: none;">Choose This Plan</button>
+                        <button type="submit" class="plan-cta">Choose This Plan</button>
                     </form>
                 <?php else: ?>
-                    <a href="register.php?track=adults&plan_id=<?php echo $plan['id']; ?>" class="plan-cta">Get Started</a>
+                    <a href="register.php?track=adults<?php echo $plan_id ? '&plan_id=' . (int)$plan_id : ''; ?>" class="plan-cta">Get Started</a>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
