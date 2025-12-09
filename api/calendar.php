@@ -158,9 +158,39 @@ function handleGet($action, $userId, $userRole, $tzService, $calendarService) {
                 return;
             }
             
+            $dateFrom = $_GET['date_from'] ?? null;
+            $dateTo = $_GET['date_to'] ?? null;
+            
             $timeOffModel = new TimeOff($conn);
-            $timeOffs = $timeOffModel->getByTeacher($userId);
+            $timeOffs = $timeOffModel->getByTeacher($userId, $dateFrom, $dateTo);
             echo json_encode(['success' => true, 'time_off' => $timeOffs]);
+            break;
+            
+        case 'get-students':
+            if ($userRole !== 'teacher') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only teachers can view their students']);
+                return;
+            }
+            
+            // Get all students who have booked lessons with this teacher
+            $stmt = $conn->prepare("
+                SELECT DISTINCT u.id, u.name, u.email, u.profile_pic
+                FROM users u
+                INNER JOIN lessons l ON u.id = l.student_id
+                WHERE l.teacher_id = ? AND u.role = 'student'
+                ORDER BY u.name
+            ");
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $students = [];
+            while ($row = $result->fetch_assoc()) {
+                $students[] = $row;
+            }
+            $stmt->close();
+            
+            echo json_encode(['success' => true, 'students' => $students]);
             break;
             
         case 'validate-notice':
@@ -256,13 +286,16 @@ function handlePost($action, $userId, $userRole, $tzService, $calendarService) {
             break;
             
         case 'book-recurring':
-            if ($userRole !== 'student') {
+            // Allow both students and teachers to book recurring lessons
+            // Teachers can book for their students
+            if ($userRole !== 'student' && $userRole !== 'teacher') {
                 http_response_code(403);
-                echo json_encode(['error' => 'Only students can book lessons']);
+                echo json_encode(['error' => 'Only students and teachers can book lessons']);
                 return;
             }
             
             $teacherId = $input['teacher_id'] ?? null;
+            $studentId = $input['student_id'] ?? ($userRole === 'student' ? $userId : null);
             $dayOfWeek = $input['day_of_week'] ?? null;
             $startTime = $input['start_time'] ?? null;
             $endTime = $input['end_time'] ?? null;
@@ -270,6 +303,20 @@ function handlePost($action, $userId, $userRole, $tzService, $calendarService) {
             $endDate = $input['end_date'] ?? null;
             $frequencyWeeks = $input['frequency_weeks'] ?? 1;
             $numberOfWeeks = $input['number_of_weeks'] ?? 12;
+            
+            // For teachers, require student_id; for students, use their own ID
+            if ($userRole === 'teacher' && !$studentId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'student_id required when booking as teacher']);
+                return;
+            }
+            
+            // For teachers, verify they own the teacher_id
+            if ($userRole === 'teacher' && $teacherId != $userId) {
+                http_response_code(403);
+                echo json_encode(['error' => 'You can only book lessons for your own schedule']);
+                return;
+            }
             
             if (!$teacherId || !$dayOfWeek || !$startTime || !$endTime || !$startDate) {
                 http_response_code(400);
@@ -287,13 +334,90 @@ function handlePost($action, $userId, $userRole, $tzService, $calendarService) {
                 'number_of_weeks' => $numberOfWeeks
             ];
             
-            $result = $calendarService->createRecurringLesson($teacherId, $userId, $seriesData);
+            $result = $calendarService->createRecurringLesson($teacherId, $studentId, $seriesData);
             
             if (isset($result['error'])) {
                 http_response_code(400);
                 echo json_encode($result);
             } else {
                 echo json_encode($result);
+            }
+            break;
+            
+        case 'book-lesson':
+            // Allow both students and teachers to book single lessons
+            // Teachers can book for their students
+            if ($userRole !== 'student' && $userRole !== 'teacher') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only students and teachers can book lessons']);
+                return;
+            }
+            
+            $teacherId = $input['teacher_id'] ?? null;
+            $studentId = $input['student_id'] ?? ($userRole === 'student' ? $userId : null);
+            $lessonDate = $input['lesson_date'] ?? null;
+            $startTime = $input['start_time'] ?? null;
+            $endTime = $input['end_time'] ?? null;
+            
+            // For teachers, require student_id; for students, use their own ID
+            if ($userRole === 'teacher' && !$studentId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'student_id required when booking as teacher']);
+                return;
+            }
+            
+            // For teachers, verify they own the teacher_id
+            if ($userRole === 'teacher' && $teacherId != $userId) {
+                http_response_code(403);
+                echo json_encode(['error' => 'You can only book lessons for your own schedule']);
+                return;
+            }
+            
+            if (!$teacherId || !$studentId || !$lessonDate || !$startTime || !$endTime) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing required fields']);
+                return;
+            }
+            
+            // Check if slot is available
+            $availabilityCheck = $calendarService->isSlotAvailable($teacherId, $lessonDate, $startTime, $endTime);
+            if (!$availabilityCheck['available']) {
+                http_response_code(400);
+                echo json_encode(['error' => $availabilityCheck['reason']]);
+                return;
+            }
+            
+            // Create the lesson
+            $stmt = $conn->prepare("
+                INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'scheduled', NOW())
+            ");
+            $stmt->bind_param("iisss", $teacherId, $studentId, $lessonDate, $startTime, $endTime);
+            
+            if ($stmt->execute()) {
+                $lessonId = $stmt->insert_id;
+                $stmt->close();
+                
+                // Create Google Calendar event if teacher has calendar connected
+                require_once __DIR__ . '/../google-calendar-config.php';
+                $googleCalendar = new GoogleCalendarAPI($conn);
+                $teacher = $conn->query("SELECT google_calendar_token FROM users WHERE id = $teacherId")->fetch_assoc();
+                
+                if ($teacher && !empty($teacher['google_calendar_token'])) {
+                    $startDateTime = $lessonDate . ' ' . $startTime;
+                    $endDateTime = $lessonDate . ' ' . $endTime;
+                    $student = $conn->query("SELECT name, email FROM users WHERE id = $studentId")->fetch_assoc();
+                    $isTestClass = (strtolower($student['email']) === 'student@statenacademy.com');
+                    $eventTitle = $isTestClass ? 'Test Class' : ('Lesson: ' . $student['name']);
+                    
+                    $googleCalendar->createEvent($teacherId, $eventTitle, $startDateTime, $endDateTime);
+                }
+                
+                echo json_encode(['success' => true, 'lesson_id' => $lessonId]);
+            } else {
+                $stmt->close();
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to create lesson']);
             }
             break;
             

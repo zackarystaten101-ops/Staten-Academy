@@ -226,8 +226,6 @@
 }
 
 .lesson-block {
-    background: #0b6cf5;
-    color: white;
     padding: 5px 8px;
     border-radius: 3px;
     font-size: 0.85rem;
@@ -237,6 +235,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
+}
+
+/* One-time lessons - Blue */
+.lesson-block.lesson-onetime {
+    background: #4169e1; /* Blue */
+    color: white;
+}
+
+/* Weekly/recurring lessons - Light pink */
+.lesson-block.lesson-weekly {
+    background: #ffb6c1; /* Light pink */
+    color: #333;
+}
+
+/* First lessons - Light green */
+.lesson-block.lesson-first {
+    background: #90ee90; /* Light green */
+    color: #333;
 }
 
 .lesson-block:hover {
@@ -305,16 +322,20 @@
     font-size: 1.2rem;
 }
 
-/* Time-off Period */
+/* Time-off Period - Dark grey */
 .time-off-period {
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
-    padding: 5px;
-    border-radius: 3px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: #696969; /* Dark grey */
+    border: 1px solid #555555;
+    color: white;
+    border-radius: 2px;
     font-size: 0.85rem;
     text-align: center;
-    opacity: 0.7;
+    opacity: 0.85;
+    z-index: 1;
+    pointer-events: none;
 }
 
 /* Responsive Design */
@@ -604,35 +625,40 @@
     position: relative;
     min-height: 1440px; /* 24 hours * 60px per hour */
     width: 100%;
-    background: #ffffff;
-    /* Unavailable slots default to slightly darker */
+    background: #d3d3d3; /* Light grey - default calendar background */
+    /* Visual grid lines will be provided by time-slot-cell borders */
 }
 
-/* Available time slots appear lighter/whiter like Preply */
-.day-time-slots .time-slot-cell.available {
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-}
-
-/* Make available slots more distinct - they should be noticeably lighter */
-.day-time-slots .time-slot-cell:not(.available) {
-    background: #ffffff;
-}
-
+/* Default time slots - light grey */
 .time-slot-cell {
     height: 60px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid #999999; /* Visible line marking 30-minute intervals */
     cursor: crosshair;
     position: relative;
     transition: background 0.1s;
-    background: #ffffff;
-    /* Default: unavailable/closed slots are slightly darker */
+    background: #d3d3d3; /* Light grey - default */
+    box-sizing: border-box;
 }
 
-/* Available slots (when teacher has set availability) - lighter/whiter like Preply */
+/* Ensure last cell also has a border */
+.time-slot-cell:last-child {
+    border-bottom: 1px solid #999999;
+}
+
+/* Hour markers - slightly thicker line every hour (when minute is 0) */
+.time-slot-cell[data-minute="0"] {
+    border-bottom: 2px solid #666666 !important; /* Thicker, darker line for hour markers */
+}
+
+/* Available slots (when teacher opens time) - pure white */
 .time-slot-cell.available {
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background: #ffffff; /* Pure white */
+    border-bottom: 1px solid #cccccc; /* Visible line on white background */
+}
+
+/* Hour markers on available slots */
+.time-slot-cell.available[data-minute="0"] {
+    border-bottom: 2px solid #999999 !important; /* Thicker line for hour markers on white */
 }
 
 .time-slot-cell:hover {
@@ -648,14 +674,13 @@
     position: absolute;
     left: 0;
     right: 0;
-    background: rgba(255, 255, 255, 0.5); /* Very light/white like Preply */
+    background: #ffffff; /* Pure white for available slots */
     border-left: 3px solid #0b6cf5;
     border-radius: 0;
     cursor: move;
     z-index: 5;
     overflow: hidden;
     transition: all 0.2s;
-    /* Subtle styling like Preply - almost invisible but shows availability */
     pointer-events: auto;
 }
 
@@ -747,14 +772,33 @@
     position: absolute;
     left: 0;
     right: 0;
-    background: #0b6cf5;
-    color: white;
     border-radius: 2px;
     z-index: 4;
     overflow: hidden;
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    border-left: 3px solid #004080;
+    font-weight: 500;
+}
+
+/* One-time lessons - Blue */
+.lesson-block.lesson-onetime {
+    background: #4169e1; /* Blue */
+    color: white;
+    border-left: 3px solid #1e3a8a;
+}
+
+/* Weekly/recurring lessons - Light pink */
+.lesson-block.lesson-weekly {
+    background: #ffb6c1; /* Light pink */
+    color: #333;
+    border-left: 3px solid #ff69b4;
+}
+
+/* First lessons - Light green */
+.lesson-block.lesson-first {
+    background: #90ee90; /* Light green */
+    color: #333;
+    border-left: 3px solid #32cd32;
 }
 
 .lesson-block:hover {
@@ -838,6 +882,205 @@
     gap: 10px;
     margin-top: 20px;
     justify-content: flex-end;
+}
+
+/* Action Selection Modal */
+.action-selection-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+}
+
+.action-selection-modal {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #004080;
+    font-size: 1.5rem;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+    background: #f8f9fa;
+    color: #dc3545;
+}
+
+.modal-time-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border-left: 4px solid #0b6cf5;
+}
+
+.modal-time-info p {
+    margin: 5px 0;
+    color: #495057;
+}
+
+.modal-time-info strong {
+    color: #004080;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: left;
+}
+
+.action-btn:hover {
+    border-color: #0b6cf5;
+    background: #f0f7ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(11, 108, 245, 0.15);
+}
+
+.action-btn i {
+    font-size: 2rem;
+    color: #0b6cf5;
+    min-width: 40px;
+}
+
+.action-btn span {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #004080;
+    display: block;
+}
+
+.action-btn small {
+    display: block;
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+.action-open-slot i {
+    color: #28a745;
+}
+
+.action-book-lesson i {
+    color: #0b6cf5;
+}
+
+.action-time-off i {
+    color: #dc3545;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #0b6cf5;
+    box-shadow: 0 0 0 3px rgba(11, 108, 245, 0.1);
+}
+
+.btn-primary {
+    background: #0b6cf5;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: #004080;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(11, 108, 245, 0.3);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
 }
 
 /* Responsive */
