@@ -237,20 +237,20 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             <div class="plan-card <?php echo $index === 1 ? 'featured' : ''; ?>">
                 <h3 class="plan-name"><?php echo htmlspecialchars($plan['name']); ?></h3>
                 <div class="plan-price">
-                    $<?php echo number_format($plan['price'], 2); ?>
+                    $<?php echo number_format($plan['price'] ?? 0, 2); ?>
                     <span>/month</span>
                 </div>
                 <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i> <?php echo $plan['one_on_one_classes_per_week']; ?> one-on-one class<?php echo $plan['one_on_one_classes_per_week'] > 1 ? 'es' : ''; ?> per week</li>
+                    <li><i class="fas fa-check-circle"></i> <?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
                     <li><i class="fas fa-check-circle"></i> Group classes included</li>
                     <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
                     <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
                     <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
                 </ul>
                 <?php if (isset($_SESSION['user_id'])): ?>
-                    <a href="payment.php?track=kids&plan_id=<?php echo $plan['id']; ?>" class="plan-cta">Choose This Plan</a>
+                    <a href="payment.php?track=kids<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Choose This Plan</a>
                 <?php else: ?>
-                    <a href="register.php?track=kids&plan_id=<?php echo $plan['id']; ?>" class="plan-cta">Get Started</a>
+                    <a href="register.php?track=kids<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Get Started</a>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>

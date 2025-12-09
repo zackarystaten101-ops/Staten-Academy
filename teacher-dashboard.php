@@ -319,6 +319,8 @@ $pending_assignments = getPendingAssignmentsCount($conn, $teacher_id);
 // Use assigned students instead of students from lessons
 $students = [];
 foreach ($assigned_students as $assignment) {
+    if (!isset($assignment['student_id'])) continue;
+    
     $student_id = $assignment['student_id'];
     $stmt = $conn->prepare("
         SELECT u.id, u.name, u.email, u.profile_pic, u.learning_track,
@@ -331,8 +333,8 @@ foreach ($assigned_students as $assignment) {
     $stmt->execute();
     $result = $stmt->get_result();
     if ($row = $result->fetch_assoc()) {
-        $row['track'] = $assignment['track'];
-        $row['assigned_at'] = $assignment['assigned_at'];
+        $row['track'] = $assignment['track'] ?? $row['learning_track'] ?? null;
+        $row['assigned_at'] = $assignment['assigned_at'] ?? null;
         $students[] = $row;
     }
     $stmt->close();

@@ -48,8 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get all students
-$students = $trackModel->getTrackStudents(null); // Get all students
+// Get all students from all tracks
 $all_students = [];
 foreach (['kids', 'adults', 'coding'] as $track) {
     $track_students = $trackModel->getTrackStudents($track);
@@ -58,6 +57,16 @@ foreach (['kids', 'adults', 'coding'] as $track) {
         $all_students[] = $student;
     }
 }
+
+// Also get students without a track assigned
+$stmt = $conn->prepare("SELECT * FROM users WHERE (learning_track IS NULL OR learning_track = '') AND role IN ('student', 'new_student') ORDER BY name ASC");
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $row['track'] = null;
+    $all_students[] = $row;
+}
+$stmt->close();
 
 // Get all teachers
 $all_teachers = [];

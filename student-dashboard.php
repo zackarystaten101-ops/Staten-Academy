@@ -23,7 +23,7 @@ $assigned_teacher = null;
 $student_track = $user['learning_track'] ?? null;
 
 // Get assigned teacher
-if ($user['assigned_teacher_id']) {
+if (!empty($user['assigned_teacher_id'])) {
     $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
     $stmt->bind_param("i", $user['assigned_teacher_id']);
     $stmt->execute();
@@ -560,18 +560,24 @@ $active_tab = 'overview';
                                     </p>
                                 <?php endif; ?>
                                 <div style="font-size: 0.85rem; color: #666;">
-                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
-                                    <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
-                                    <i class="fas fa-user" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment']; ?>/<?php echo $class['max_students']; ?> students
+                                    <?php if (!empty($class['scheduled_date'])): ?>
+                                        <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
+                                    <?php endif; ?>
+                                    <?php if (!empty($class['scheduled_time'])): ?>
+                                        <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
+                                    <?php endif; ?>
+                                    <i class="fas fa-user" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment'] ?? 0; ?>/<?php echo $class['max_students'] ?? 10; ?> students
                                 </div>
                             </div>
-                            <button onclick="enrollInGroupClass(<?php echo $class['id']; ?>)" 
-                                    class="btn-primary" 
-                                    style="white-space: nowrap;"
-                                    <?php echo $class['current_enrollment'] >= $class['max_students'] ? 'disabled' : ''; ?>>
-                                <i class="fas fa-user-plus"></i> 
-                                <?php echo $class['current_enrollment'] >= $class['max_students'] ? 'Full' : 'Enroll'; ?>
-                            </button>
+                            <?php if (isset($class['id'])): ?>
+                                <button onclick="enrollInGroupClass(<?php echo $class['id']; ?>)" 
+                                        class="btn-primary" 
+                                        style="white-space: nowrap;"
+                                        <?php echo ($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10) ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-user-plus"></i> 
+                                    <?php echo ($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10) ? 'Full' : 'Enroll'; ?>
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

@@ -97,8 +97,13 @@ if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD 
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 if (!in_array('learning_track', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN learning_track ENUM('kids', 'adults', 'coding') NULL AFTER hourly_rate");
 if (!in_array('assigned_teacher_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN assigned_teacher_id INT(6) UNSIGNED NULL AFTER learning_track");
+// Add plan_id column if it doesn't exist
 if (!in_array('plan_id', $existing_cols) && !in_array('subscription_plan_id', $existing_cols)) {
-    $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
+    $add_col_result = $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
+    if ($add_col_result) {
+        // Refresh the existing_cols array to include the new column
+        $existing_cols[] = 'plan_id';
+    }
 }
 
 // Phase 1: Visitor role and subscription fields
@@ -873,8 +878,18 @@ if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_assigned_teacher FOREIGN KEY (assigned_teacher_id) REFERENCES users(id) ON DELETE SET NULL");
 }
 
-// Add foreign key for plan_id in users table
-$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='users' AND COLUMN_NAME='plan_id' AND REFERENCED_TABLE_NAME='subscription_plans'");
-if (!$fk_check || $fk_check->num_rows == 0) {
-    $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL");
+// Add foreign key for plan_id in users table (only if column exists)
+$col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+if ($col_check && $col_check->num_rows > 0) {
+    $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='users' AND COLUMN_NAME='plan_id' AND REFERENCED_TABLE_NAME='subscription_plans'");
+    if (!$fk_check || $fk_check->num_rows == 0) {
+        // Check if subscription_plans table exists and has id column
+        $plans_table_check = $conn->query("SHOW TABLES LIKE 'subscription_plans'");
+        if ($plans_table_check && $plans_table_check->num_rows > 0) {
+            $plans_id_check = $conn->query("SHOW COLUMNS FROM subscription_plans LIKE 'id'");
+            if ($plans_id_check && $plans_id_check->num_rows > 0) {
+                $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL");
+            }
+        }
+    }
 }

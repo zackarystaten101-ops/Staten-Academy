@@ -239,12 +239,16 @@ usort($all_classes, function($a, $b) {
                                 <div style="font-size: 0.85rem; color: #666;">
                                     <div><i class="fas fa-chalkboard-teacher"></i> Teacher: <?php echo htmlspecialchars($teacher['name'] ?? 'Unknown'); ?></div>
                                     <div style="margin-top: 5px;">
-                                        <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
-                                        <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
+                                        <?php if (!empty($class['scheduled_date'])): ?>
+                                            <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
+                                        <?php endif; ?>
+                                        <?php if (!empty($class['scheduled_time'])): ?>
+                                            <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
+                                        <?php endif; ?>
                                     </div>
                                     <div style="margin-top: 5px;">
-                                        <i class="fas fa-hourglass-half"></i> <?php echo $class['duration']; ?> min
-                                        <i class="fas fa-users" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment']; ?>/<?php echo $class['max_students']; ?> students
+                                        <i class="fas fa-hourglass-half"></i> <?php echo $class['duration'] ?? 60; ?> min
+                                        <i class="fas fa-users" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment'] ?? 0; ?>/<?php echo $class['max_students'] ?? 10; ?> students
                                     </div>
                                 </div>
                             </div>
@@ -264,35 +268,37 @@ usort($all_classes, function($a, $b) {
                             </div>
                         <?php endif; ?>
                         
-                        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-                            <?php if ($class['status'] === 'scheduled'): ?>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="action" value="update_status">
-                                    <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
-                                    <input type="hidden" name="status" value="in_progress">
-                                    <button type="submit" class="btn-success btn-sm">
-                                        <i class="fas fa-play"></i> Start Class
-                                    </button>
-                                </form>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="action" value="update_status">
-                                    <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
-                                    <input type="hidden" name="status" value="cancelled">
-                                    <button type="submit" class="btn-danger btn-sm" onclick="return confirm('Are you sure you want to cancel this class?');">
-                                        <i class="fas fa-times"></i> Cancel
-                                    </button>
-                                </form>
-                            <?php elseif ($class['status'] === 'in_progress'): ?>
-                                <form method="POST" style="display: inline;">
-                                    <input type="hidden" name="action" value="update_status">
-                                    <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
-                                    <input type="hidden" name="status" value="completed">
-                                    <button type="submit" class="btn-primary btn-sm">
-                                        <i class="fas fa-check"></i> Mark Complete
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-                        </div>
+                        <?php if (isset($class['id'])): ?>
+                            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                                <?php if (($class['status'] ?? 'scheduled') === 'scheduled'): ?>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="action" value="update_status">
+                                        <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
+                                        <input type="hidden" name="status" value="in_progress">
+                                        <button type="submit" class="btn-success btn-sm">
+                                            <i class="fas fa-play"></i> Start Class
+                                        </button>
+                                    </form>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="action" value="update_status">
+                                        <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
+                                        <input type="hidden" name="status" value="cancelled">
+                                        <button type="submit" class="btn-danger btn-sm" onclick="return confirm('Are you sure you want to cancel this class?');">
+                                            <i class="fas fa-times"></i> Cancel
+                                        </button>
+                                    </form>
+                                <?php elseif (($class['status'] ?? '') === 'in_progress'): ?>
+                                    <form method="POST" style="display: inline;">
+                                        <input type="hidden" name="action" value="update_status">
+                                        <input type="hidden" name="class_id" value="<?php echo $class['id']; ?>">
+                                        <input type="hidden" name="status" value="completed">
+                                        <button type="submit" class="btn-primary btn-sm">
+                                            <i class="fas fa-check"></i> Mark Complete
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
