@@ -300,7 +300,7 @@ $page_title = 'Calendar Setup';
                 </div>
 
                 <!-- Preply-Style Calendar -->
-                <div class="card" style="padding: 0; overflow-x: auto; overflow-y: visible;">
+                <div class="card" style="padding: 0; overflow-x: auto; overflow-y: visible; width: 100%;">
                     <div style="padding: 20px; border-bottom: 2px solid #dee2e6;">
                         <h3 style="margin: 0;"><i class="fas fa-calendar-alt"></i> Manage Your Availability</h3>
                         <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 15px; border-left: 4px solid #0b6cf5;">

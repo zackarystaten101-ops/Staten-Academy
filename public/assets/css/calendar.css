@@ -487,6 +487,8 @@
 
 .teacher-calendar-grid {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -541,17 +543,19 @@
 
 .calendar-days-container {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     flex: 1;
     overflow-x: visible;
     overflow-y: hidden;
     min-width: 0;
     width: 100%;
-    /* Force all 7 days to be visible */
+    /* Force all 7 days to be visible side by side */
     flex-shrink: 0;
 }
 
 .calendar-day-column {
-    flex: 0 0 calc((100% - 70px) / 7); /* Subtract time column width, divide by 7 */
+    flex: 0 0 auto;
     width: calc((100% - 70px) / 7);
     min-width: 140px;
     max-width: none;
@@ -559,6 +563,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
     box-sizing: border-box;
 }
 
@@ -836,14 +841,13 @@
 }
 
 /* Responsive */
-/* Responsive */
 @media (max-width: 1200px) {
     .teacher-calendar-grid {
         min-width: calc(70px + 120px * 7);
     }
     
     .calendar-day-column {
-        flex: 0 0 calc((100% - 70px) / 7);
+        flex: 0 0 auto;
         width: calc((100% - 70px) / 7);
         min-width: 120px;
     }
@@ -879,7 +883,7 @@
     }
     
     .calendar-day-column {
-        flex: 0 0 calc((100% - 60px) / 7);
+        flex: 0 0 auto;
         width: calc((100% - 60px) / 7);
         min-width: 100px;
     }
