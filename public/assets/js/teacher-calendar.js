@@ -428,6 +428,9 @@
                         hour: parseInt(cell.dataset.hour),
                         minute: parseInt(cell.dataset.minute)
                     };
+                    // Initialize endCell so a simple click (no move) still works
+                    endCell = cell;
+                    this.dragEnd = { ...this.dragStart };
                     
                     // Add dragging class to cell
                     cell.classList.add('dragging');
@@ -471,6 +474,12 @@
                     // Remove dragging class from all cells
                     column.querySelectorAll('.time-slot-cell').forEach(c => c.classList.remove('dragging'));
                     
+                    // If user clicked without moving, ensure endCell is set
+                    if (!endCell && startCell) {
+                        endCell = startCell;
+                        this.dragEnd = { ...this.dragStart };
+                    }
+
                     if (isDragging && startCell && endCell) {
                         this.handleSlotCreation();
                     }
