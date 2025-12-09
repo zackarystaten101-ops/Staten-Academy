@@ -27,10 +27,10 @@ $plans = $planModel->getPlansByTrack('coding');
 // If no plans exist, create placeholder plans
 if (empty($plans)) {
     $placeholderPlans = [
-        ['name' => 'Coding Plan 1', 'one_on_one_classes_per_week' => 1, 'price' => 149.00, 'display_order' => 1],
-        ['name' => 'Coding Plan 2', 'one_on_one_classes_per_week' => 2, 'price' => 269.00, 'display_order' => 2],
-        ['name' => 'Coding Plan 3', 'one_on_one_classes_per_week' => 3, 'price' => 379.00, 'display_order' => 3],
-        ['name' => 'Coding Plan 4', 'one_on_one_classes_per_week' => 4, 'price' => 479.00, 'display_order' => 4],
+        ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'video_courses' => 0, 'price' => 149.00, 'display_order' => 1],
+        ['name' => 'Basic', 'one_on_one_classes_per_week' => 2, 'video_courses' => 0, 'price' => 269.00, 'display_order' => 2],
+        ['name' => 'Pro', 'one_on_one_classes_per_week' => 3, 'video_courses' => 1, 'price' => 379.00, 'display_order' => 3],
+        ['name' => 'Mega', 'one_on_one_classes_per_week' => 4, 'video_courses' => 1, 'price' => 479.00, 'display_order' => 4],
     ];
     $plans = $placeholderPlans;
 }
@@ -312,11 +312,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <ul class="plan-features">
                     <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
                     <?php 
-                    $group_classes = $plan['group_classes_per_month'] ?? 0;
-                    if ($group_classes > 0): ?>
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per month</li>
-                    <?php elseif (($plan['group_classes_included'] ?? false)): ?>
-                        <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    $video_courses = $plan['video_courses'] ?? 0;
+                    if ($video_courses > 0): ?>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $video_courses; ?></strong> video course<?php echo $video_courses > 1 ? 's' : ''; ?></li>
                     <?php endif; ?>
                     <li><i class="fas fa-check-circle"></i> Technical vocabulary focus</li>
                     <li><i class="fas fa-check-circle"></i> Interview preparation</li>

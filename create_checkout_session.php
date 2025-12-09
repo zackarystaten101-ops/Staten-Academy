@@ -48,12 +48,15 @@ if ($is_test_student) {
         $_SESSION['user_role'] = 'student';
     }
     
-    // Update plan_id if provided
+    // Update plan_id if provided and column exists
     if ($plan_id) {
-        $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
-        $plan_stmt->bind_param("ii", $plan_id, $user_id);
-        $plan_stmt->execute();
-        $plan_stmt->close();
+        $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+        if ($col_check && $col_check->num_rows > 0) {
+            $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
+            $plan_stmt->bind_param("ii", $plan_id, $user_id);
+            $plan_stmt->execute();
+            $plan_stmt->close();
+        }
     }
     
     // Update track if provided

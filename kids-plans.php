@@ -27,10 +27,10 @@ $plans = $planModel->getPlansByTrack('kids');
 // If no plans exist, create placeholder plans
 if (empty($plans)) {
     $placeholderPlans = [
-        ['name' => 'Kids Plan 1', 'one_on_one_classes_per_week' => 1, 'price' => 99.00, 'display_order' => 1],
-        ['name' => 'Kids Plan 2', 'one_on_one_classes_per_week' => 2, 'price' => 179.00, 'display_order' => 2],
-        ['name' => 'Kids Plan 3', 'one_on_one_classes_per_week' => 3, 'price' => 249.00, 'display_order' => 3],
-        ['name' => 'Kids Plan 4', 'one_on_one_classes_per_week' => 4, 'price' => 319.00, 'display_order' => 4],
+        ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'group_classes_per_week' => 1, 'price' => 99.00, 'display_order' => 1],
+        ['name' => 'Basic', 'one_on_one_classes_per_week' => 2, 'group_classes_per_week' => 2, 'price' => 179.00, 'display_order' => 2],
+        ['name' => 'Pro', 'one_on_one_classes_per_week' => 3, 'group_classes_per_week' => 3, 'price' => 249.00, 'display_order' => 3],
+        ['name' => 'Mega', 'one_on_one_classes_per_week' => 4, 'group_classes_per_week' => 3, 'price' => 319.00, 'display_order' => 4],
     ];
     $plans = $placeholderPlans;
 }
@@ -293,11 +293,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <ul class="plan-features">
                     <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
                     <?php 
-                    $group_classes = $plan['group_classes_per_month'] ?? 0;
+                    $group_classes = $plan['group_classes_per_week'] ?? 0;
                     if ($group_classes > 0): ?>
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per month</li>
-                    <?php elseif (($plan['group_classes_included'] ?? false)): ?>
-                        <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per week</li>
                     <?php endif; ?>
                     <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
                     <li><i class="fas fa-check-circle"></i> Parent progress reports</li>

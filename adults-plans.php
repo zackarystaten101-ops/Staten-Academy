@@ -27,10 +27,10 @@ $plans = $planModel->getPlansByTrack('adults');
 // If no plans exist, create placeholder plans
 if (empty($plans)) {
     $placeholderPlans = [
-        ['name' => 'Adult Plan 1', 'one_on_one_classes_per_week' => 1, 'price' => 129.00, 'display_order' => 1],
-        ['name' => 'Adult Plan 2', 'one_on_one_classes_per_week' => 2, 'price' => 229.00, 'display_order' => 2],
-        ['name' => 'Adult Plan 3', 'one_on_one_classes_per_week' => 3, 'price' => 319.00, 'display_order' => 3],
-        ['name' => 'Adult Plan 4', 'one_on_one_classes_per_week' => 4, 'price' => 399.00, 'display_order' => 4],
+        ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'group_practice_sessions_per_week' => 1, 'price' => 129.00, 'display_order' => 1],
+        ['name' => 'Basic', 'one_on_one_classes_per_week' => 2, 'group_practice_sessions_per_week' => 2, 'price' => 229.00, 'display_order' => 2],
+        ['name' => 'Pro', 'one_on_one_classes_per_week' => 3, 'group_practice_sessions_per_week' => 3, 'price' => 319.00, 'display_order' => 3],
+        ['name' => 'Mega', 'one_on_one_classes_per_week' => 4, 'group_practice_sessions_per_week' => 3, 'price' => 399.00, 'display_order' => 4],
     ];
     $plans = $placeholderPlans;
 }
@@ -286,11 +286,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <ul class="plan-features">
                     <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
                     <?php 
-                    $group_classes = $plan['group_classes_per_month'] ?? 0;
-                    if ($group_classes > 0): ?>
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per month</li>
-                    <?php elseif (($plan['group_classes_included'] ?? false)): ?>
-                        <li><i class="fas fa-check-circle"></i> Group classes included</li>
+                    $group_sessions = $plan['group_practice_sessions_per_week'] ?? 0;
+                    if ($group_sessions > 0): ?>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_sessions; ?></strong> group practice session<?php echo $group_sessions > 1 ? 's' : ''; ?> per week</li>
                     <?php endif; ?>
                     <li><i class="fas fa-check-circle"></i> Career & business English</li>
                     <li><i class="fas fa-check-circle"></i> Travel & conversation focus</li>

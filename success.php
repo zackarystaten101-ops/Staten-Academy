@@ -32,10 +32,13 @@ if (isset($_SESSION['user_id'])) {
     
     // Update user's plan_id and track if provided
     if ($plan_id) {
-        $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
-        $plan_stmt->bind_param("ii", $plan_id, $user_id);
-        $plan_stmt->execute();
-        $plan_stmt->close();
+        $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+        if ($col_check && $col_check->num_rows > 0) {
+            $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
+            $plan_stmt->bind_param("ii", $plan_id, $user_id);
+            $plan_stmt->execute();
+            $plan_stmt->close();
+        }
     }
     
     if ($track && in_array($track, ['kids', 'adults', 'coding'])) {

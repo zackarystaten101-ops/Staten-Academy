@@ -97,6 +97,7 @@ if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD 
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 if (!in_array('learning_track', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN learning_track ENUM('kids', 'adults', 'coding') NULL AFTER hourly_rate");
 if (!in_array('assigned_teacher_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN assigned_teacher_id INT(6) UNSIGNED NULL AFTER learning_track");
+if (!in_array('last_active', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN last_active TIMESTAMP NULL AFTER reg_date");
 // Preply-style calendar features (check if already added later in file)
 if (!in_array('default_buffer_minutes', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN default_buffer_minutes INT DEFAULT 15 AFTER assigned_teacher_id");
 if (!in_array('preferred_meeting_type', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN preferred_meeting_type ENUM('zoom', 'google_meet', 'other') DEFAULT 'zoom' AFTER default_buffer_minutes");
@@ -107,6 +108,12 @@ if (!in_array('plan_id', $existing_cols) && !in_array('subscription_plan_id', $e
     $add_col_result = $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
     if ($add_col_result) {
         // Refresh the existing_cols array to include the new column
+        $existing_cols[] = 'plan_id';
+    }
+} elseif (!in_array('plan_id', $existing_cols) && in_array('subscription_plan_id', $existing_cols)) {
+    // If subscription_plan_id exists but plan_id doesn't, add plan_id as an alias column
+    $add_col_result = $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
+    if ($add_col_result) {
         $existing_cols[] = 'plan_id';
     }
 }

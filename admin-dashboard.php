@@ -185,13 +185,26 @@ if (!$recent_bookings) {
 }
 
 // Engagement metrics
-$inactive_students = $conn->query("
+// Check if last_active column exists
+$last_active_exists = false;
+$col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'last_active'");
+if ($col_check && $col_check->num_rows > 0) {
+    $last_active_exists = true;
+}
+
+$inactive_students_query = "
     SELECT u.* FROM users u 
     WHERE u.role = 'student' 
     AND u.id NOT IN (SELECT student_id FROM bookings WHERE booking_date > DATE_SUB(NOW(), INTERVAL 30 DAY))
-    ORDER BY u.last_active ASC
-    LIMIT 10
-");
+";
+if ($last_active_exists) {
+    $inactive_students_query .= " ORDER BY u.last_active ASC";
+} else {
+    $inactive_students_query .= " ORDER BY u.reg_date ASC";
+}
+$inactive_students_query .= " LIMIT 10";
+
+$inactive_students = $conn->query($inactive_students_query);
 if (!$inactive_students) {
     error_log("Error fetching inactive students: " . $conn->error);
     $inactive_students = new mysqli_result($conn);

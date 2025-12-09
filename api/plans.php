@@ -127,9 +127,18 @@ function handlePost($action, $planModel) {
                 return;
             }
             
+            // Check if plan_id column exists
+            $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+            $plan_id_exists = $col_check && $col_check->num_rows > 0;
+            
             // Update user's plan and track
-            $stmt = $conn->prepare("UPDATE users SET plan_id = ?, learning_track = ?, subscription_status = 'active', subscription_start_date = NOW() WHERE id = ?");
-            $stmt->bind_param("isi", $planId, $track, $userId);
+            if ($plan_id_exists) {
+                $stmt = $conn->prepare("UPDATE users SET plan_id = ?, learning_track = ?, subscription_status = 'active', subscription_start_date = NOW() WHERE id = ?");
+                $stmt->bind_param("isi", $planId, $track, $userId);
+            } else {
+                $stmt = $conn->prepare("UPDATE users SET learning_track = ?, subscription_status = 'active', subscription_start_date = NOW() WHERE id = ?");
+                $stmt->bind_param("si", $track, $userId);
+            }
             
             if ($stmt->execute()) {
                 // Update role if new_student

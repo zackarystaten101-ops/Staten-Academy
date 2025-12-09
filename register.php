@@ -85,10 +85,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $plan_id = null;
         }
         
-        // Insert user with new_student role, track, and plan_id
-        $sql = "INSERT INTO users (name, email, password, role, learning_track, plan_id) VALUES (?, ?, ?, 'new_student', ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssi", $name, $email, $hashed_password, $track, $plan_id);
+        // Check if plan_id column exists
+        $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+        $plan_id_exists = $col_check && $col_check->num_rows > 0;
+        
+        // Insert user with new_student role, track, and plan_id (if column exists)
+        if ($plan_id_exists && $plan_id) {
+            $sql = "INSERT INTO users (name, email, password, role, learning_track, plan_id) VALUES (?, ?, ?, 'new_student', ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssssi", $name, $email, $hashed_password, $track, $plan_id);
+        } elseif ($plan_id_exists) {
+            $sql = "INSERT INTO users (name, email, password, role, learning_track, plan_id) VALUES (?, ?, ?, 'new_student', ?, NULL)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssss", $name, $email, $hashed_password, $track);
+        } else {
+            // plan_id column doesn't exist yet, insert without it
+            $sql = "INSERT INTO users (name, email, password, role, learning_track) VALUES (?, ?, ?, 'new_student', ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssss", $name, $email, $hashed_password, $track);
+        }
 
         if ($stmt->execute()) {
             $newUserId = $stmt->insert_id;
