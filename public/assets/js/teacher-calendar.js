@@ -102,11 +102,8 @@
                             <i class="fas fa-chevron-left"></i>
                         </button>
                         <h2>
-                            ${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
+                            ${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – 
                             ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            <span style="font-size: 0.9rem; font-weight: normal; color: #666; margin-left: 10px;">
-                                (${weekDays.length} days)
-                            </span>
                         </h2>
                         <button class="calendar-nav-btn" data-action="next-week">
                             <i class="fas fa-chevron-right"></i>
@@ -167,6 +164,54 @@
             this.container.innerHTML = html;
             this.renderSlots();
             this.attachEventListeners();
+            
+            // Ensure available cells are marked after rendering
+            this.markAvailableCells();
+        }
+        
+        markAvailableCells() {
+            const weekDays = this.getWeekDays();
+            
+            weekDays.forEach(day => {
+                const dayColumn = this.container.querySelector(`[data-date="${this.formatDate(day)}"]`);
+                const slotsContainer = dayColumn?.querySelector('.day-time-slots');
+                if (!slotsContainer) return;
+                
+                const dayOfWeek = day.toLocaleDateString('en-US', { weekday: 'long' });
+                const dateStr = this.formatDate(day);
+                const timeSlotCells = slotsContainer.querySelectorAll('.time-slot-cell');
+                
+                // Reset all cells first
+                timeSlotCells.forEach(cell => {
+                    cell.classList.remove('available');
+                });
+                
+                // Mark cells within availability slots as available
+                this.availabilitySlots.forEach(slot => {
+                    if (slot.is_available && (slot.day_of_week === dayOfWeek || (slot.specific_date && slot.specific_date === dateStr))) {
+                        const startTime = slot.start_time.split(':');
+                        const endTime = slot.end_time.split(':');
+                        const startHour = parseInt(startTime[0]);
+                        const startMinute = parseInt(startTime[1]);
+                        const endHour = parseInt(endTime[0]);
+                        const endMinute = parseInt(endTime[1]);
+                        
+                        const startMinutes = startHour * 60 + startMinute;
+                        const endMinutes = endHour * 60 + endMinute;
+                        
+                        // Mark all time slot cells within this availability range as available
+                        timeSlotCells.forEach(cell => {
+                            const cellHour = parseInt(cell.dataset.hour);
+                            const cellMinute = parseInt(cell.dataset.minute);
+                            const cellMinutes = cellHour * 60 + cellMinute;
+                            
+                            if (cellMinutes >= startMinutes && cellMinutes < endMinutes) {
+                                cell.classList.add('available');
+                            }
+                        });
+                    }
+                });
+            });
         }
         
         renderSlots() {
@@ -183,7 +228,8 @@
                 const dayOfWeek = day.toLocaleDateString('en-US', { weekday: 'long' });
                 const dateStr = this.formatDate(day);
                 
-                // Render availability slots
+                // Render availability slot blocks (for editing/deleting)
+                // Note: Available cells are marked in markAvailableCells() function
                 this.availabilitySlots.forEach(slot => {
                     if (slot.day_of_week === dayOfWeek || (slot.specific_date && slot.specific_date === dateStr)) {
                         const startTime = slot.start_time.split(':');
@@ -338,6 +384,9 @@
                         minute: parseInt(cell.dataset.minute)
                     };
                     
+                    // Add dragging class to cell
+                    cell.classList.add('dragging');
+                    
                     e.preventDefault();
                 });
                 
@@ -345,17 +394,38 @@
                     if (!isDragging) return;
                     
                     const cell = e.target.closest('.time-slot-cell');
-                    if (cell && cell !== startCell) {
-                        endCell = cell;
-                        this.dragEnd = {
-                            date: cell.dataset.date,
-                            hour: parseInt(cell.dataset.hour),
-                            minute: parseInt(cell.dataset.minute)
-                        };
+                    if (cell) {
+                        // Remove dragging from all cells
+                        column.querySelectorAll('.time-slot-cell').forEach(c => c.classList.remove('dragging'));
+                        
+                        // Mark cells in range as dragging
+                        const startMinutes = this.dragStart.hour * 60 + this.dragStart.minute;
+                        const cellMinutes = parseInt(cell.dataset.hour) * 60 + parseInt(cell.dataset.minute);
+                        const minMinutes = Math.min(startMinutes, cellMinutes);
+                        const maxMinutes = Math.max(startMinutes, cellMinutes);
+                        
+                        column.querySelectorAll('.time-slot-cell').forEach(c => {
+                            const cMinutes = parseInt(c.dataset.hour) * 60 + parseInt(c.dataset.minute);
+                            if (cMinutes >= minMinutes && cMinutes <= maxMinutes) {
+                                c.classList.add('dragging');
+                            }
+                        });
+                        
+                        if (cell !== startCell) {
+                            endCell = cell;
+                            this.dragEnd = {
+                                date: cell.dataset.date,
+                                hour: parseInt(cell.dataset.hour),
+                                minute: parseInt(cell.dataset.minute)
+                            };
+                        }
                     }
                 });
                 
                 column.addEventListener('mouseup', (e) => {
+                    // Remove dragging class from all cells
+                    column.querySelectorAll('.time-slot-cell').forEach(c => c.classList.remove('dragging'));
+                    
                     if (isDragging && startCell && endCell) {
                         this.handleSlotCreation();
                     }
@@ -363,6 +433,13 @@
                     this.dragging = false;
                     startCell = null;
                     endCell = null;
+                });
+                
+                // Also handle mouseleave to clean up
+                column.addEventListener('mouseleave', () => {
+                    if (isDragging) {
+                        column.querySelectorAll('.time-slot-cell').forEach(c => c.classList.remove('dragging'));
+                    }
                 });
             });
         }
@@ -587,6 +664,8 @@
                 const data = await response.json();
                 if (data.success && data.slots) {
                     this.availabilitySlots = data.slots;
+                    // Re-mark available cells after loading
+                    this.markAvailableCells();
                 }
             } catch (error) {
                 console.error('Failed to load availability:', error);

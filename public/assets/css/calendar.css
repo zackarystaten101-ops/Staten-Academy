@@ -28,18 +28,28 @@
 }
 
 .calendar-nav-btn {
-    background: #0b6cf5;
-    color: white;
-    border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
+    background: #ffffff;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    padding: 8px 12px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 1rem;
-    transition: background 0.2s;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
 }
 
 .calendar-nav-btn:hover {
-    background: #004080;
+    background: #f8f9fa;
+    border-color: #0b6cf5;
+    color: #0b6cf5;
+}
+
+.calendar-nav-btn i {
+    font-size: 0.85rem;
 }
 
 /* Month View */
@@ -413,12 +423,13 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
-    padding: 15px;
+    padding: 20px;
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     flex-wrap: wrap;
     gap: 15px;
+    border: 1px solid #e9ecef;
 }
 
 .calendar-controls {
@@ -429,9 +440,11 @@
 
 .calendar-controls h2 {
     margin: 0;
-    color: #004080;
-    font-size: 1.3rem;
+    color: #212529;
+    font-size: 1.2rem;
+    font-weight: 600;
     min-width: 250px;
+    padding: 0 15px;
 }
 
 .calendar-actions {
@@ -454,10 +467,13 @@
 .btn-primary {
     background: #0b6cf5;
     color: white;
+    border: none;
 }
 
 .btn-primary:hover {
-    background: #004080;
+    background: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(11, 108, 245, 0.3);
 }
 
 .btn-secondary {
@@ -473,11 +489,12 @@
     display: flex;
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     overflow: hidden;
     min-height: 600px;
     position: relative;
     width: 100%;
+    border: 1px solid #dee2e6;
 }
 
 .calendar-time-column {
@@ -485,7 +502,7 @@
     min-width: 70px;
     max-width: 70px;
     border-right: 2px solid #dee2e6;
-    background: #f8f9fa;
+    background: #ffffff;
     position: sticky;
     left: 0;
     z-index: 10;
@@ -495,7 +512,7 @@
 .time-header {
     height: 60px;
     border-bottom: 2px solid #dee2e6;
-    background: #f8f9fa;
+    background: #ffffff;
     position: sticky;
     top: 0;
     z-index: 20;
@@ -547,7 +564,7 @@
 .day-header {
     padding: 12px 8px;
     text-align: center;
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 2px solid #dee2e6;
     position: sticky;
     top: 0;
@@ -556,6 +573,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    border-right: 1px solid #e9ecef;
 }
 
 .day-name {
@@ -576,14 +594,35 @@
     position: relative;
     min-height: 1440px; /* 24 hours * 60px per hour */
     width: 100%;
+    background: #ffffff;
+    /* Unavailable slots default to slightly darker */
+}
+
+/* Available time slots appear lighter/whiter like Preply */
+.day-time-slots .time-slot-cell.available {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Make available slots more distinct - they should be noticeably lighter */
+.day-time-slots .time-slot-cell:not(.available) {
+    background: #ffffff;
 }
 
 .time-slot-cell {
     height: 60px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #e9ecef;
     cursor: crosshair;
     position: relative;
     transition: background 0.1s;
+    background: #ffffff;
+    /* Default: unavailable/closed slots are slightly darker */
+}
+
+/* Available slots (when teacher has set availability) - lighter/whiter like Preply */
+.time-slot-cell.available {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
 }
 
 .time-slot-cell:hover {
@@ -592,30 +631,40 @@
 
 .time-slot-cell.dragging {
     background: #e7f3ff;
+    border: 2px dashed #0b6cf5;
 }
 
 .availability-slot {
     position: absolute;
-    left: 2px;
-    right: 2px;
-    background: #d4edda;
-    border: 2px solid #28a745;
-    border-radius: 4px;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.5); /* Very light/white like Preply */
+    border-left: 3px solid #0b6cf5;
+    border-radius: 0;
     cursor: move;
     z-index: 5;
     overflow: hidden;
     transition: all 0.2s;
+    /* Subtle styling like Preply - almost invisible but shows availability */
+    pointer-events: auto;
 }
 
 .availability-slot:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    background: rgba(240, 247, 255, 0.9);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     z-index: 6;
+    border-left-width: 4px;
+}
+
+/* Make availability slot content visible on hover */
+.availability-slot:hover .slot-content {
+    opacity: 1;
 }
 
 .availability-slot.unavailable {
-    background: #f8d7da;
-    border-color: #dc3545;
-    opacity: 0.7;
+    background: rgba(248, 215, 218, 0.4);
+    border-left-color: #dc3545;
+    opacity: 0.6;
 }
 
 .availability-slot.selected {
@@ -625,18 +674,20 @@
 }
 
 .slot-content {
-    padding: 5px 8px;
+    padding: 4px 6px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    font-size: 0.75rem;
+    justify-content: flex-start;
+    font-size: 0.7rem;
+    opacity: 0.8;
 }
 
 .slot-time {
-    font-weight: bold;
-    color: #155724;
+    font-weight: 600;
+    color: #495057;
     margin-bottom: 2px;
+    font-size: 0.7rem;
 }
 
 .availability-slot.unavailable .slot-time {
@@ -644,9 +695,10 @@
 }
 
 .slot-type {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: #6c757d;
     font-style: italic;
+    margin-top: 2px;
 }
 
 .slot-actions {
@@ -683,18 +735,25 @@
 
 .lesson-block {
     position: absolute;
-    left: 2px;
-    right: 2px;
+    left: 0;
+    right: 0;
     background: #0b6cf5;
     color: white;
-    border-radius: 4px;
+    border-radius: 2px;
     z-index: 4;
     overflow: hidden;
     cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    border-left: 3px solid #004080;
+}
+
+.lesson-block:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    z-index: 5;
 }
 
 .lesson-content {
-    padding: 5px 8px;
+    padding: 6px 8px;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -703,13 +762,14 @@
 }
 
 .lesson-student {
-    font-weight: bold;
+    font-weight: 600;
     margin-bottom: 2px;
+    font-size: 0.8rem;
 }
 
 .lesson-time {
     font-size: 0.7rem;
-    opacity: 0.9;
+    opacity: 0.95;
 }
 
 /* Slot Modal */
