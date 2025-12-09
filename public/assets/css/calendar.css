@@ -476,15 +476,20 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     overflow: hidden;
     min-height: 600px;
+    position: relative;
+    width: 100%;
 }
 
 .calendar-time-column {
-    min-width: 80px;
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
     border-right: 2px solid #dee2e6;
     background: #f8f9fa;
     position: sticky;
     left: 0;
     z-index: 10;
+    flex-shrink: 0;
 }
 
 .time-header {
@@ -494,40 +499,63 @@
     position: sticky;
     top: 0;
     z-index: 20;
+    /* Match day-header height */
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .time-slot-header {
     height: 60px;
-    padding: 5px 10px;
+    padding: 5px;
     border-bottom: 1px solid #e9ecef;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: #6c757d;
     display: flex;
     align-items: center;
+    justify-content: center;
     position: relative;
+    text-align: center;
 }
 
 .calendar-days-container {
     display: flex;
     flex: 1;
     overflow-x: auto;
+    min-width: 0;
+    width: 100%;
+    /* Ensure all 7 days are visible */
+    min-width: calc(140px * 7);
 }
 
 .calendar-day-column {
-    flex: 1;
-    min-width: 150px;
+    flex: 1 1 0;
+    min-width: 140px;
+    width: calc((100% - 70px) / 7); /* Subtract time column width, divide by 7 */
     border-right: 1px solid #dee2e6;
     position: relative;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-day-column:last-child {
+    border-right: none;
 }
 
 .day-header {
-    padding: 15px;
+    padding: 12px 8px;
     text-align: center;
     background: #f8f9fa;
     border-bottom: 2px solid #dee2e6;
     position: sticky;
     top: 0;
     z-index: 15;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .day-name {
@@ -547,6 +575,7 @@
 .day-time-slots {
     position: relative;
     min-height: 1440px; /* 24 hours * 60px per hour */
+    width: 100%;
 }
 
 .time-slot-cell {
@@ -742,6 +771,17 @@
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+    .calendar-days-container {
+        min-width: calc(120px * 7);
+    }
+    
+    .calendar-day-column {
+        min-width: 120px;
+        width: calc((100% - 70px) / 7);
+    }
+}
+
 @media (max-width: 768px) {
     .teacher-calendar-header {
         flex-direction: column;
@@ -756,8 +796,24 @@
         flex-direction: column;
     }
     
+    .calendar-time-column {
+        width: 60px;
+        min-width: 60px;
+        max-width: 60px;
+    }
+    
+    .time-slot-header {
+        font-size: 0.7rem;
+        padding: 3px;
+    }
+    
+    .calendar-days-container {
+        min-width: calc(100px * 7);
+    }
+    
     .calendar-day-column {
-        min-width: 120px;
+        min-width: 100px;
+        width: calc((100% - 60px) / 7);
     }
     
     .time-slot-cell {
@@ -766,6 +822,18 @@
     
     .day-time-slots {
         min-height: 1200px;
+    }
+    
+    .day-header {
+        padding: 8px 5px;
+    }
+    
+    .day-name {
+        font-size: 0.75rem;
+    }
+    
+    .day-number {
+        font-size: 1.2rem;
     }
 }
 

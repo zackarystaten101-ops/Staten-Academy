@@ -46,8 +46,13 @@
         getStartOfWeek(date) {
             const d = new Date(date);
             const day = d.getDay();
-            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as first day
-            return new Date(d.setDate(diff));
+            // Get Monday of the week (day 1)
+            // If Sunday (day 0), go back 6 days; otherwise go back (day - 1) days
+            const diff = day === 0 ? -6 : 1 - day;
+            d.setDate(d.getDate() + diff);
+            // Set to start of day
+            d.setHours(0, 0, 0, 0);
+            return d;
         }
         
         getWeekDays() {
@@ -99,6 +104,9 @@
                         <h2>
                             ${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - 
                             ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            <span style="font-size: 0.9rem; font-weight: normal; color: #666; margin-left: 10px;">
+                                (${weekDays.length} days)
+                            </span>
                         </h2>
                         <button class="calendar-nav-btn" data-action="next-week">
                             <i class="fas fa-chevron-right"></i>
@@ -118,7 +126,9 @@
                 </div>
                 <div class="teacher-calendar-grid">
                     <div class="calendar-time-column">
-                        <div class="time-header"></div>
+                        <div class="time-header">
+                            <span style="font-size: 0.7rem; color: #999;">TIME</span>
+                        </div>
                         ${timeSlots.map(slot => `
                             <div class="time-slot-header" data-hour="${slot.hour}" data-minute="${slot.minute}">
                                 ${slot.display}
@@ -126,11 +136,16 @@
                         `).join('')}
                     </div>
                     <div class="calendar-days-container">
-                        ${weekDays.map((day, dayIndex) => `
+                        ${weekDays.map((day, dayIndex) => {
+                            const dayName = day.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+                            const dayNumber = day.getDate();
+                            const monthName = day.toLocaleDateString('en-US', { month: 'short' });
+                            return `
                             <div class="calendar-day-column" data-date="${this.formatDate(day)}" data-day-index="${dayIndex}">
                                 <div class="day-header">
-                                    <div class="day-name">${day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                                    <div class="day-number">${day.getDate()}</div>
+                                    <div class="day-name">${dayName}</div>
+                                    <div class="day-number">${dayNumber}</div>
+                                    <div class="day-month" style="font-size: 0.7rem; color: #999; margin-top: 2px;">${monthName}</div>
                                 </div>
                                 <div class="day-time-slots" data-date="${this.formatDate(day)}">
                                     ${timeSlots.map(slot => `
@@ -143,7 +158,8 @@
                                     `).join('')}
                                 </div>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             `;
