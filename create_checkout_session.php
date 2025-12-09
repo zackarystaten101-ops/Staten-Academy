@@ -64,13 +64,21 @@ if ($is_test_student) {
         $track_stmt->close();
     }
     
+    // Store plan_id and track in session for success page
+    if ($plan_id) {
+        $_SESSION['selected_plan_id'] = $plan_id;
+    }
+    if ($track) {
+        $_SESSION['selected_track'] = $track;
+    }
+    
     // Redirect to success page
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
     $domain = $protocol . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
     if (strpos($domain, ' ') !== false) {
         $domain = str_replace(' ', '%20', $domain);
     }
-    header("Location: " . $domain . "/success.php?test_student=1");
+    header("Location: " . $domain . "/success.php?test_student=1" . ($plan_id ? "&plan_id=" . $plan_id : "") . ($track ? "&track=" . urlencode($track) : ""));
     exit;
 }
 
@@ -86,6 +94,16 @@ if (!isset($_POST['price_id'])) {
 
 $priceId = $_POST['price_id'];
 $mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
+$plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : null;
+$track = isset($_POST['track']) ? $_POST['track'] : null;
+
+// Store plan_id and track in session for success page
+if ($plan_id) {
+    $_SESSION['selected_plan_id'] = $plan_id;
+}
+if ($track && in_array($track, ['kids', 'adults', 'coding'])) {
+    $_SESSION['selected_track'] = $track;
+}
 
 // Domain URL (Dynamic based on server)
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
@@ -111,7 +129,7 @@ $data = [
         ],
     ],
     'mode' => $mode, // 'subscription' for recurring, 'payment' for one-time
-    'success_url' => $domain . '/success.php',
+    'success_url' => $domain . '/success.php' . ($plan_id ? '?plan_id=' . $plan_id : '') . ($track ? ($plan_id ? '&' : '?') . 'track=' . urlencode($track) : ''),
     'cancel_url' => $domain . '/cancel.php',
 ];
 

@@ -72,6 +72,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_availability'])) 
     }
 }
 
+// Handle bulk availability addition
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_bulk_availability'])) {
+    $bulk_start_time = $_POST['bulk_start_time'];
+    $bulk_end_time = $_POST['bulk_end_time'];
+    $bulk_days = $_POST['bulk_days'] ?? [];
+
+    // Validate times
+    if (strtotime($bulk_start_time) >= strtotime($bulk_end_time)) {
+        $error_msg = 'End time must be after start time';
+    } elseif (empty($bulk_days)) {
+        $error_msg = 'Please select at least one day';
+    } else {
+        $added_count = 0;
+        $skipped_count = 0;
+        
+        foreach ($bulk_days as $day) {
+            // Check if slot already exists
+            $check_stmt = $conn->prepare("
+                SELECT id FROM teacher_availability 
+                WHERE teacher_id = ? AND day_of_week = ? AND start_time = ? AND end_time = ?
+            ");
+            $check_stmt->bind_param("isss", $teacher_id, $day, $bulk_start_time, $bulk_end_time);
+            $check_stmt->execute();
+            $exists = $check_stmt->get_result()->num_rows > 0;
+            $check_stmt->close();
+            
+            if (!$exists) {
+                $stmt = $conn->prepare("
+                    INSERT INTO teacher_availability (teacher_id, day_of_week, start_time, end_time) 
+                    VALUES (?, ?, ?, ?)
+                ");
+                $stmt->bind_param("isss", $teacher_id, $day, $bulk_start_time, $bulk_end_time);
+                
+                if ($stmt->execute()) {
+                    $added_count++;
+                }
+                $stmt->close();
+            } else {
+                $skipped_count++;
+            }
+        }
+        
+        if ($added_count > 0) {
+            $success_msg = "Successfully added $added_count availability slot(s)";
+            if ($skipped_count > 0) {
+                $success_msg .= " ($skipped_count already existed)";
+            }
+        } else {
+            $error_msg = 'All selected slots already exist';
+        }
+    }
+}
+
 // Handle removing availability slots
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_availability'])) {
     $slot_id = $_POST['slot_id'];
@@ -303,6 +356,64 @@ $page_title = 'Calendar Setup';
                     <div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> <?php echo $error_msg; ?></div>
                 <?php endif; ?>
 
+                <!-- Timezone Settings -->
+                <div class="card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffffff 100%); border: 2px solid #ffc107;">
+                    <h3 style="color: #856404;"><i class="fas fa-globe"></i> Timezone Settings</h3>
+                    <p style="color: #666; margin-bottom: 15px;">Set your timezone so students see your availability in their local time.</p>
+                    
+                    <?php
+                    $current_timezone = $tzService->getUserTimezone($teacher_id);
+                    ?>
+                    <form method="POST" id="timezoneForm" style="background: white; padding: 20px; border-radius: 8px;" onsubmit="updateTimezone(event)">
+                        <div class="form-group">
+                            <label><i class="fas fa-map-marker-alt"></i> Your Timezone *</label>
+                            <select name="timezone" id="timezoneSelect" required style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;">
+                                <?php
+                                $timezones = [
+                                    'America/New_York' => 'Eastern Time (ET)',
+                                    'America/Chicago' => 'Central Time (CT)',
+                                    'America/Denver' => 'Mountain Time (MT)',
+                                    'America/Los_Angeles' => 'Pacific Time (PT)',
+                                    'America/Phoenix' => 'Arizona (MST)',
+                                    'America/Anchorage' => 'Alaska (AKST)',
+                                    'Pacific/Honolulu' => 'Hawaii (HST)',
+                                    'Europe/London' => 'London (GMT)',
+                                    'Europe/Paris' => 'Paris (CET)',
+                                    'Europe/Berlin' => 'Berlin (CET)',
+                                    'Europe/Madrid' => 'Madrid (CET)',
+                                    'Europe/Rome' => 'Rome (CET)',
+                                    'Asia/Tokyo' => 'Tokyo (JST)',
+                                    'Asia/Shanghai' => 'Shanghai (CST)',
+                                    'Asia/Hong_Kong' => 'Hong Kong (HKT)',
+                                    'Asia/Singapore' => 'Singapore (SGT)',
+                                    'Asia/Dubai' => 'Dubai (GST)',
+                                    'Australia/Sydney' => 'Sydney (AEST)',
+                                    'Australia/Melbourne' => 'Melbourne (AEST)',
+                                    'America/Sao_Paulo' => 'São Paulo (BRT)',
+                                    'America/Mexico_City' => 'Mexico City (CST)',
+                                    'America/Toronto' => 'Toronto (EST)',
+                                    'UTC' => 'UTC'
+                                ];
+                                foreach ($timezones as $tz => $label): ?>
+                                    <option value="<?php echo $tz; ?>" <?php echo $current_timezone === $tz ? 'selected' : ''; ?>>
+                                        <?php echo $label; ?> (<?php echo $tz; ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small style="color: #666; font-size: 0.85rem; margin-top: 5px; display: block;">
+                                <i class="fas fa-info-circle"></i> Current timezone: <strong><?php echo $current_timezone ?: 'Not set'; ?></strong>
+                                <button type="button" onclick="detectTimezone()" style="margin-left: 10px; padding: 4px 10px; background: #6c757d; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">
+                                    <i class="fas fa-crosshairs"></i> Auto-detect
+                                </button>
+                            </small>
+                        </div>
+                        <button type="submit" style="width: 100%; padding: 12px; background: #0b6cf5; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s;" 
+                                onmouseover="this.style.background='#0056b3';" onmouseout="this.style.background='#0b6cf5';">
+                            <i class="fas fa-save"></i> Save Timezone
+                        </button>
+                    </form>
+                </div>
+
                 <!-- Google Calendar Connection -->
                 <div class="card">
                     <h3><i class="fas fa-google"></i> Google Calendar Connection</h3>
@@ -342,6 +453,70 @@ $page_title = 'Calendar Setup';
                             <p style="margin-top: 10px; color: #666;">Loading calendar...</p>
                         </div>
                     </div>
+                </div>
+
+                <!-- Bulk Availability Setup -->
+                <div class="card" style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 2px solid #0b6cf5;">
+                    <h3 style="color: #004080;"><i class="fas fa-magic"></i> Quick Setup - Bulk Availability</h3>
+                    <p style="color: #666; margin-bottom: 20px;">Set your availability for multiple days at once. Perfect for setting up your regular weekly schedule.</p>
+                    
+                    <form method="POST" id="bulkAvailabilityForm" style="background: white; padding: 20px; border-radius: 8px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group">
+                                <label><i class="fas fa-clock"></i> Start Time *</label>
+                                <input type="time" name="bulk_start_time" id="bulkStartTime" required>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-clock"></i> End Time *</label>
+                                <input type="time" name="bulk_end_time" id="bulkEndTime" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar-week"></i> Select Days *</label>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 10px;">
+                                <?php foreach ($days as $day): ?>
+                                    <label style="display: flex; align-items: center; padding: 10px; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.2s;" 
+                                           onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
+                                           onmouseout="this.style.borderColor='#ddd'; this.style.background='#f8f9fa';">
+                                        <input type="checkbox" name="bulk_days[]" value="<?php echo $day; ?>" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="font-weight: 500;"><?php echo substr($day, 0, 3); ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" name="add_bulk_availability" style="width: 100%; padding: 15px; font-size: 1.1rem; font-weight: 600; margin-top: 15px;">
+                            <i class="fas fa-plus-circle"></i> Add Availability for Selected Days
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Add Single Availability Slot -->
+                <div class="card">
+                    <h3><i class="fas fa-plus-circle"></i> Add Single Time Slot</h3>
+                    <form method="POST" style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Day of Week</label>
+                                <select name="day_of_week" required>
+                                    <option value="">Select Day</option>
+                                    <?php foreach ($days as $day): ?>
+                                        <option value="<?php echo $day; ?>"><?php echo $day; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Start Time</label>
+                                <input type="time" name="start_time" required>
+                            </div>
+                            <div class="form-group">
+                                <label>End Time</label>
+                                <input type="time" name="end_time" required>
+                            </div>
+                            <button type="submit" name="add_availability"><i class="fas fa-plus"></i> Add Slot</button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Current Availability Slots -->
@@ -488,6 +663,111 @@ $page_title = 'Calendar Setup';
                 </div>
         </div>
     </div>
+
+<script>
+// Timezone handling
+function updateTimezone(event) {
+    event.preventDefault();
+    const form = event.target;
+    const timezone = document.getElementById('timezoneSelect').value;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    
+    fetch('api/calendar.php?action=update-timezone', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            timezone: timezone,
+            auto_detected: false
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            if (typeof toast !== 'undefined') {
+                toast.success('Timezone updated successfully!');
+            } else {
+                alert('Timezone updated successfully!');
+            }
+            // Update display
+            const currentTzDisplay = form.querySelector('small strong');
+            if (currentTzDisplay) {
+                currentTzDisplay.textContent = timezone;
+            }
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.error || 'Failed to update timezone');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to update timezone'));
+            }
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+}
+
+function detectTimezone() {
+    try {
+        const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const select = document.getElementById('timezoneSelect');
+        
+        // Try to find matching option
+        for (let option of select.options) {
+            if (option.value === detectedTz) {
+                select.value = detectedTz;
+                if (typeof toast !== 'undefined') {
+                    toast.success('Timezone detected: ' + detectedTz);
+                } else {
+                    alert('Timezone detected: ' + detectedTz);
+                }
+                return;
+            }
+        }
+        
+        // If exact match not found, try to find similar
+        const tzParts = detectedTz.split('/');
+        for (let option of select.options) {
+            if (option.value.includes(tzParts[tzParts.length - 1])) {
+                select.value = option.value;
+                if (typeof toast !== 'undefined') {
+                    toast.info('Similar timezone selected: ' + option.value);
+                } else {
+                    alert('Similar timezone selected: ' + option.value);
+                }
+                return;
+            }
+        }
+        
+        if (typeof toast !== 'undefined') {
+            toast.warning('Could not find matching timezone. Please select manually.');
+        } else {
+            alert('Could not find matching timezone. Please select manually.');
+        }
+    } catch (err) {
+        console.error('Timezone detection error:', err);
+        if (typeof toast !== 'undefined') {
+            toast.error('Could not detect timezone. Please select manually.');
+        } else {
+            alert('Could not detect timezone. Please select manually.');
+        }
+    }
+}
+</script>
 </div>
     <script src="<?php echo getAssetPath('js/teacher-calendar.js'); ?>"></script>
     <script>

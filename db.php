@@ -334,6 +334,11 @@ if (!in_array('cancel_policy_hours', $existing_lessons_cols)) $conn->query("ALTE
 if (!in_array('reminder_sent', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN reminder_sent BOOLEAN DEFAULT FALSE AFTER cancel_policy_hours");
 if (!in_array('rescheduled_from', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN rescheduled_from INT(6) UNSIGNED NULL AFTER reminder_sent");
 if (!in_array('cancellation_reason', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN cancellation_reason TEXT NULL AFTER rescheduled_from");
+// Attendance tracking fields
+if (!in_array('attendance_status', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN attendance_status ENUM('attended', 'no_show', 'cancelled') NULL AFTER status");
+if (!in_array('student_notes', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN student_notes TEXT NULL AFTER attendance_status");
+if (!in_array('completion_notes', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN completion_notes TEXT NULL AFTER student_notes");
+if (!in_array('confirmed_at', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN confirmed_at TIMESTAMP NULL AFTER completion_notes");
 
 // Add foreign keys separately
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
@@ -970,6 +975,30 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_slot_requests' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE admin_slot_requests ADD CONSTRAINT fk_slot_request_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create student_learning_needs table
+$sql = "CREATE TABLE IF NOT EXISTS student_learning_needs (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL,
+    track ENUM('kids', 'adults', 'coding') NOT NULL,
+    age_range VARCHAR(50),
+    current_level VARCHAR(100),
+    learning_goals TEXT,
+    preferred_schedule TEXT,
+    special_requirements TEXT,
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_student (student_id),
+    UNIQUE KEY unique_student_needs (student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='student_learning_needs' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE student_learning_needs ADD CONSTRAINT fk_learning_needs_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
 }
 
 // Ensure admin account exists with correct credentials

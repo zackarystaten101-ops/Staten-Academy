@@ -142,6 +142,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_goal'])) {
     exit();
 }
 
+// Handle Learning Needs Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs'])) {
+    $track = $_POST['track'] ?? $user['learning_track'] ?? null;
+    $age_range = trim($_POST['age_range'] ?? '');
+    $current_level = trim($_POST['current_level'] ?? '');
+    $learning_goals = trim($_POST['learning_goals'] ?? '');
+    $preferred_schedule = trim($_POST['preferred_schedule'] ?? '');
+    $special_requirements = trim($_POST['special_requirements'] ?? '');
+    
+    if (!$track || !in_array($track, ['kids', 'adults', 'coding'])) {
+        $_SESSION['error_message'] = 'Please select a learning track.';
+        header("Location: student-dashboard.php#learning-needs");
+        exit();
+    }
+    
+    // Check if learning needs already exist
+    $check_stmt = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ?");
+    $check_stmt->bind_param("i", $student_id);
+    $check_stmt->execute();
+    $existing = $check_stmt->get_result()->fetch_assoc();
+    $check_stmt->close();
+    
+    if ($existing) {
+        // Update existing
+        $update_stmt = $conn->prepare("
+            UPDATE student_learning_needs 
+            SET track = ?, age_range = ?, current_level = ?, learning_goals = ?, 
+                preferred_schedule = ?, special_requirements = ?, completed = 1, updated_at = NOW()
+            WHERE student_id = ?
+        ");
+        $update_stmt->bind_param("ssssssi", $track, $age_range, $current_level, $learning_goals, 
+                                 $preferred_schedule, $special_requirements, $student_id);
+        $update_stmt->execute();
+        $update_stmt->close();
+    } else {
+        // Insert new
+        $insert_stmt = $conn->prepare("
+            INSERT INTO student_learning_needs 
+            (student_id, track, age_range, current_level, learning_goals, preferred_schedule, special_requirements, completed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ");
+        $insert_stmt->bind_param("issssss", $student_id, $track, $age_range, $current_level, 
+                                 $learning_goals, $preferred_schedule, $special_requirements);
+        $insert_stmt->execute();
+        $insert_stmt->close();
+    }
+    
+    // Update user's track
+    $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
+    $track_stmt->bind_param("si", $track, $student_id);
+    $track_stmt->execute();
+    $track_stmt->close();
+    
+    // Automated teacher assignment: Find best matching teacher
+    // Priority: 1. Teachers with matching track (if applicable), 2. Available capacity, 3. Best rating
+    $teacher_match_stmt = $conn->prepare("
+        SELECT u.id, u.name, u.email, u.profile_pic, u.bio,
+               COALESCE(AVG(r.rating), 0) as avg_rating,
+               (SELECT COUNT(*) FROM lessons l WHERE l.teacher_id = u.id AND l.status = 'scheduled' AND l.lesson_date >= CURDATE()) as active_lessons
+        FROM users u
+        LEFT JOIN reviews r ON u.id = r.teacher_id
+        WHERE u.role = 'teacher' 
+        AND u.application_status = 'approved'
+        GROUP BY u.id
+        HAVING active_lessons < 50  -- Limit to prevent overloading
+        ORDER BY avg_rating DESC, active_lessons ASC
+        LIMIT 1
+    ");
+    
+    $teacher_match_stmt->execute();
+    $matched_teacher = $teacher_match_stmt->get_result()->fetch_assoc();
+    $teacher_match_stmt->close();
+    
+    if ($matched_teacher) {
+        // Assign teacher to student
+        $assign_stmt = $conn->prepare("UPDATE users SET assigned_teacher_id = ? WHERE id = ?");
+        $assign_stmt->bind_param("ii", $matched_teacher['id'], $student_id);
+        $assign_stmt->execute();
+        $assign_stmt->close();
+        
+        // Also create assignment record
+        $assign_record_stmt = $conn->prepare("
+            INSERT INTO teacher_assignments (student_id, teacher_id, assigned_at, status)
+            VALUES (?, ?, NOW(), 'active')
+            ON DUPLICATE KEY UPDATE teacher_id = VALUES(teacher_id), assigned_at = NOW(), status = 'active'
+        ");
+        $assign_record_stmt->bind_param("ii", $student_id, $matched_teacher['id']);
+        $assign_record_stmt->execute();
+        $assign_record_stmt->close();
+        
+        // Notify student
+        if (function_exists('createNotification')) {
+            createNotification($conn, $student_id, 'assignment', 'Teacher Assigned', 
+                'You have been assigned to ' . $matched_teacher['name'] . '. You can now book lessons!', 
+                'student-dashboard.php#overview');
+        }
+        
+        $_SESSION['success_message'] = 'Learning needs submitted! You have been assigned to ' . $matched_teacher['name'] . '. You can now book lessons!';
+    } else {
+        $_SESSION['success_message'] = 'Learning needs submitted! We will assign you a teacher within 24-48 hours.';
+    }
+    
+    header("Location: student-dashboard.php#overview");
+    exit();
+}
+
 // Handle Review Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
     $teacher_id = (int)$_POST['teacher_id'];
@@ -237,6 +343,27 @@ $stmt->execute();
 $lessons_result = $stmt->get_result();
 while ($row = $lessons_result->fetch_assoc()) {
     $upcoming_lessons[] = $row;
+}
+$stmt->close();
+
+// Fetch Past Lessons Needing Confirmation
+$past_lessons_pending = [];
+$stmt = $conn->prepare("
+    SELECT l.*, u.name as teacher_name, u.profile_pic as teacher_pic
+    FROM lessons l
+    JOIN users u ON l.teacher_id = u.id
+    WHERE l.student_id = ? 
+    AND l.status = 'scheduled'
+    AND CONCAT(l.lesson_date, ' ', l.end_time) < NOW()
+    AND (l.attendance_status IS NULL OR l.attendance_status = '')
+    ORDER BY l.lesson_date DESC, l.start_time DESC
+    LIMIT 5
+");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$past_result = $stmt->get_result();
+while ($row = $past_result->fetch_assoc()) {
+    $past_lessons_pending[] = $row;
 }
 $stmt->close();
 
@@ -420,6 +547,67 @@ $active_tab = 'overview';
                 <?php endif; ?>
             </div>
             
+            <?php
+            // Check student onboarding status
+            $has_plan = !empty($user['plan_id']);
+            $has_learning_needs = false;
+            $learning_needs_stmt = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
+            $learning_needs_stmt->bind_param("i", $student_id);
+            $learning_needs_stmt->execute();
+            $has_learning_needs = $learning_needs_stmt->get_result()->num_rows > 0;
+            $learning_needs_stmt->close();
+            
+            // Show TODO list if student hasn't completed onboarding
+            if (!$has_plan || !$has_learning_needs || !$assigned_teacher):
+            ?>
+            <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border: 2px solid #dc3545; margin-bottom: 30px;">
+                <h2 style="color: #dc3545; margin-bottom: 20px;">
+                    <i class="fas fa-tasks"></i> Complete Your Setup
+                </h2>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <?php if (!$has_plan): ?>
+                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #856404;">
+                                <i class="fas fa-credit-card"></i> Step 1: Select Your Plan
+                            </h3>
+                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Choose a subscription plan to get started with your learning journey.</p>
+                        </div>
+                        <a href="<?php echo $user['learning_track'] ? ($user['learning_track'] . '-plans.php') : 'index.php'; ?>" 
+                           class="btn-primary" style="white-space: nowrap;">
+                            Select Plan
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($has_plan && !$has_learning_needs): ?>
+                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #0b6cf5;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #004080;">
+                                <i class="fas fa-user-graduate"></i> Step 2: Add Your Learning Needs
+                            </h3>
+                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Tell us about your learning goals and preferences so we can assign the perfect teacher for you.</p>
+                        </div>
+                        <a href="#" onclick="switchTab('learning-needs')" class="btn-primary" style="white-space: nowrap;">
+                            Add Needs
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($has_plan && $has_learning_needs && !$assigned_teacher): ?>
+                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #28a745;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #155724;">
+                                <i class="fas fa-spinner fa-spin"></i> Step 3: Teacher Assignment
+                            </h3>
+                            <p style="margin: 0; color: #666; font-size: 0.9rem;">We're matching you with the perfect teacher based on your learning needs. This usually takes 24-48 hours.</p>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <?php if ($assigned_teacher): ?>
             <div class="dashboard-card" style="margin-bottom: 30px; padding: 25px; background: linear-gradient(135deg, var(--track-bg, #f0f7ff) 0%, #ffffff 100%);">
                 <h2 style="margin-bottom: 20px; color: var(--track-primary, #0b6cf5);">
@@ -477,22 +665,126 @@ $active_tab = 'overview';
                 </div>
             </div>
 
+            <!-- Recent Activity Section -->
+            <?php
+            // Get recent activity (recent lessons, assignments, messages)
+            $recent_activity = [];
+            
+            // Recent lessons (last 5)
+            $recent_lessons_stmt = $conn->prepare("
+                SELECT l.*, u.name as teacher_name, u.profile_pic as teacher_pic, 'lesson' as activity_type
+                FROM lessons l
+                JOIN users u ON l.teacher_id = u.id
+                WHERE l.student_id = ?
+                ORDER BY l.lesson_date DESC, l.start_time DESC
+                LIMIT 5
+            ");
+            $recent_lessons_stmt->bind_param("i", $student_id);
+            $recent_lessons_stmt->execute();
+            $recent_lessons_result = $recent_lessons_stmt->get_result();
+            while ($row = $recent_lessons_result->fetch_assoc()) {
+                $row['activity_date'] = $row['lesson_date'] . ' ' . $row['start_time'];
+                $recent_activity[] = $row;
+            }
+            $recent_lessons_stmt->close();
+            
+            // Recent assignments (last 3)
+            $recent_assignments_stmt = $conn->prepare("
+                SELECT a.*, u.name as teacher_name, 'assignment' as activity_type, a.created_at as activity_date
+                FROM assignments a
+                JOIN users u ON a.teacher_id = u.id
+                WHERE a.student_id = ?
+                ORDER BY a.created_at DESC
+                LIMIT 3
+            ");
+            $recent_assignments_stmt->bind_param("i", $student_id);
+            $recent_assignments_stmt->execute();
+            $recent_assignments_result = $recent_assignments_stmt->get_result();
+            while ($row = $recent_assignments_result->fetch_assoc()) {
+                $recent_activity[] = $row;
+            }
+            $recent_assignments_stmt->close();
+            
+            // Sort by date
+            usort($recent_activity, function($a, $b) {
+                return strtotime($b['activity_date']) - strtotime($a['activity_date']);
+            });
+            $recent_activity = array_slice($recent_activity, 0, 5);
+            ?>
+            
+            <?php if (count($recent_activity) > 0): ?>
+            <div class="card">
+                <h2><i class="fas fa-history"></i> Recent Activity</h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <?php foreach ($recent_activity as $activity): ?>
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px; transition: all 0.2s;" 
+                             onmouseover="this.style.background='#f0f7ff'; this.style.transform='translateX(5px)';" 
+                             onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
+                            <?php if ($activity['activity_type'] === 'lesson'): ?>
+                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #0b6cf5; color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #333;">
+                                        Lesson with <?php echo h($activity['teacher_name']); ?>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #666;">
+                                        <?php echo date('M d, Y', strtotime($activity['lesson_date'])); ?> 
+                                        at <?php echo date('g:i A', strtotime($activity['start_time'])); ?>
+                                        <?php if ($activity['status'] === 'completed'): ?>
+                                            <span style="color: #28a745; margin-left: 10px;"><i class="fas fa-check-circle"></i> Completed</span>
+                                        <?php elseif (strtotime($activity['lesson_date'] . ' ' . $activity['start_time']) < time()): ?>
+                                            <span style="color: #ffc107; margin-left: 10px;"><i class="fas fa-exclamation-circle"></i> Needs Confirmation</span>
+                                        <?php else: ?>
+                                            <span style="color: #0b6cf5; margin-left: 10px;"><i class="fas fa-clock"></i> Upcoming</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #ffc107; color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <i class="fas fa-tasks"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #333;">
+                                        <?php echo h($activity['title']); ?>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: #666;">
+                                        From <?php echo h($activity['teacher_name']); ?>
+                                        <?php if ($activity['status'] === 'pending'): ?>
+                                            <span style="color: #dc3545; margin-left: 10px;"><i class="fas fa-exclamation-circle"></i> Pending</span>
+                                        <?php elseif ($activity['status'] === 'submitted'): ?>
+                                            <span style="color: #0b6cf5; margin-left: 10px;"><i class="fas fa-check"></i> Submitted</span>
+                                        <?php elseif ($activity['status'] === 'graded'): ?>
+                                            <span style="color: #28a745; margin-left: 10px;"><i class="fas fa-star"></i> Graded</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <div class="card">
                 <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
-                <div class="quick-actions">
-                    <a href="schedule.php" class="quick-action-btn">
+                <div class="quick-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%);">
                         <i class="fas fa-calendar-plus"></i>
                         <span>Book Lesson</span>
                     </a>
-                    <a href="message_threads.php" class="quick-action-btn">
+                    <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                         <i class="fas fa-comments"></i>
                         <span>Messages</span>
+                        <?php if ($unread_messages > 0): ?>
+                            <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $unread_messages; ?></span>
+                        <?php endif; ?>
                     </a>
-                    <a href="classroom.php" class="quick-action-btn">
+                    <a href="classroom.php" class="quick-action-btn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                         <i class="fas fa-book-open"></i>
                         <span>Classroom</span>
                     </a>
-                    <a href="#" onclick="switchTab('goals')" class="quick-action-btn">
+                    <a href="#" onclick="switchTab('goals')" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                         <i class="fas fa-bullseye"></i>
                         <span>Set Goal</span>
                     </a>
@@ -531,6 +823,35 @@ $active_tab = 'overview';
             </div>
             <?php endif; ?>
 
+            <?php if (count($past_lessons_pending) > 0): ?>
+            <div class="card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
+                <h2 style="color: #856404; margin-bottom: 15px;">
+                    <i class="fas fa-exclamation-circle"></i> Confirm Past Lessons
+                </h2>
+                <p style="color: #856404; margin-bottom: 15px; font-size: 0.9rem;">Please confirm your attendance for these completed lessons:</p>
+                <?php foreach (array_slice($past_lessons_pending, 0, 3) as $lesson): ?>
+                    <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <strong><?php echo h($lesson['teacher_name']); ?></strong>
+                            <div style="font-size: 0.85rem; color: var(--gray); margin-top: 5px;">
+                                <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?>
+                                <i class="fas fa-clock" style="margin-left: 10px;"></i> <?php echo date('g:i A', strtotime($lesson['start_time'])); ?>
+                            </div>
+                        </div>
+                        <button onclick="showConfirmationModal(<?php echo $lesson['id']; ?>, '<?php echo h($lesson['teacher_name']); ?>', '<?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?>')" 
+                                class="btn-primary btn-sm" style="white-space: nowrap;">
+                            <i class="fas fa-check-circle"></i> Confirm
+                        </button>
+                    </div>
+                <?php endforeach; ?>
+                <?php if (count($past_lessons_pending) > 3): ?>
+                    <a href="#" onclick="switchTab('bookings')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px; text-align: center;">
+                        View all pending confirmations →
+                    </a>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
             <?php if (count($upcoming_lessons) > 0): ?>
             <div class="card">
                 <h2><i class="fas fa-calendar-check"></i> Upcoming Lessons</h2>
@@ -717,6 +1038,165 @@ $active_tab = 'overview';
             </div>
         </div>
 
+        <!-- Learning Needs Tab -->
+        <div id="learning-needs" class="tab-content">
+            <div style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 4px solid #0b6cf5;">
+                <h1 style="color: #004080; margin-bottom: 10px;">
+                    <i class="fas fa-user-graduate"></i> Add Your Learning Needs
+                </h1>
+                <p style="color: #666; margin-bottom: 0; font-size: 1.05rem; line-height: 1.6;">
+                    Help us match you with the perfect teacher by telling us about your learning goals and preferences. 
+                    This information is essential for teacher assignment and will help us create the best learning experience for you.
+                </p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; color: #0b6cf5; margin-bottom: 10px;"><i class="fas fa-bullseye"></i></div>
+                    <h3 style="margin: 0 0 5px 0; color: #004080; font-size: 1rem;">Set Goals</h3>
+                    <p style="margin: 0; color: #666; font-size: 0.85rem;">Define what you want to achieve</p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; color: #28a745; margin-bottom: 10px;"><i class="fas fa-user-tie"></i></div>
+                    <h3 style="margin: 0 0 5px 0; color: #004080; font-size: 1rem;">Get Matched</h3>
+                    <p style="margin: 0; color: #666; font-size: 0.85rem;">We'll find your perfect teacher</p>
+                </div>
+                <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; color: #ffc107; margin-bottom: 10px;"><i class="fas fa-calendar-check"></i></div>
+                    <h3 style="margin: 0 0 5px 0; color: #004080; font-size: 1rem;">Start Learning</h3>
+                    <p style="margin: 0; color: #666; font-size: 0.85rem;">Book your first lesson</p>
+                </div>
+            </div>
+            
+            <?php
+            // Get existing learning needs if any
+            $existing_needs = null;
+            $needs_stmt = $conn->prepare("SELECT * FROM student_learning_needs WHERE student_id = ?");
+            $needs_stmt->bind_param("i", $student_id);
+            $needs_stmt->execute();
+            $needs_result = $needs_stmt->get_result();
+            if ($needs_result->num_rows > 0) {
+                $existing_needs = $needs_result->fetch_assoc();
+            }
+            $needs_stmt->close();
+            ?>
+            
+            <div class="card" style="box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <form method="POST" action="student-dashboard.php#learning-needs" id="learningNeedsForm">
+                    <div class="form-group">
+                        <label style="font-weight: 600; color: #004080; margin-bottom: 8px; display: block;">
+                            <i class="fas fa-graduation-cap"></i> Learning Track *
+                        </label>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;" 
+                                   onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
+                                   onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
+                                <input type="radio" name="track" value="kids" required 
+                                       <?php echo ($existing_needs && $existing_needs['track'] === 'kids') || $user['learning_track'] === 'kids' ? 'checked' : ''; ?>
+                                       style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <div>
+                                    <div style="font-weight: 600; color: #004080;"><i class="fas fa-child"></i> Kids</div>
+                                    <div style="font-size: 0.85rem; color: #666;">Ages 3-11</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;"
+                                   onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
+                                   onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
+                                <input type="radio" name="track" value="adults" required
+                                       <?php echo ($existing_needs && $existing_needs['track'] === 'adults') || $user['learning_track'] === 'adults' ? 'checked' : ''; ?>
+                                       style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <div>
+                                    <div style="font-weight: 600; color: #004080;"><i class="fas fa-user-graduate"></i> Adults</div>
+                                    <div style="font-size: 0.85rem; color: #666;">General English</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;"
+                                   onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
+                                   onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
+                                <input type="radio" name="track" value="coding" required
+                                       <?php echo ($existing_needs && $existing_needs['track'] === 'coding') || $user['learning_track'] === 'coding' ? 'checked' : ''; ?>
+                                       style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <div>
+                                    <div style="font-weight: 600; color: #004080;"><i class="fas fa-code"></i> Coding</div>
+                                    <div style="font-size: 0.85rem; color: #666;">Programming Skills</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Age Range</label>
+                        <input type="text" name="age_range" 
+                               value="<?php echo htmlspecialchars($existing_needs['age_range'] ?? $user['age'] ?? ''); ?>" 
+                               placeholder="e.g., 8-10 years, Adult">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Current English Level</label>
+                        <select name="current_level">
+                            <option value="">Select Level</option>
+                            <option value="Beginner" <?php echo ($existing_needs && $existing_needs['current_level'] === 'Beginner') ? 'selected' : ''; ?>>Beginner</option>
+                            <option value="Elementary" <?php echo ($existing_needs && $existing_needs['current_level'] === 'Elementary') ? 'selected' : ''; ?>>Elementary</option>
+                            <option value="Intermediate" <?php echo ($existing_needs && $existing_needs['current_level'] === 'Intermediate') ? 'selected' : ''; ?>>Intermediate</option>
+                            <option value="Upper Intermediate" <?php echo ($existing_needs && $existing_needs['current_level'] === 'Upper Intermediate') ? 'selected' : ''; ?>>Upper Intermediate</option>
+                            <option value="Advanced" <?php echo ($existing_needs && $existing_needs['current_level'] === 'Advanced') ? 'selected' : ''; ?>>Advanced</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-weight: 600; color: #004080; margin-bottom: 8px; display: block;">
+                            <i class="fas fa-bullseye"></i> Learning Goals *
+                        </label>
+                        <textarea name="learning_goals" rows="4" required 
+                                  placeholder="What do you want to achieve? (e.g., Improve conversation skills, Prepare for exam, Learn business English, Build confidence in speaking...)"
+                                  style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s;"
+                                  onfocus="this.style.borderColor='#0b6cf5'; this.style.outline='none';"
+                                  onblur="this.style.borderColor='#ddd';"><?php echo htmlspecialchars($existing_needs['learning_goals'] ?? ''); ?></textarea>
+                        <small style="color: #666; font-size: 0.85rem; margin-top: 5px; display: block;">
+                            <i class="fas fa-lightbulb"></i> Be specific! This helps us match you with the right teacher.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Preferred Schedule</label>
+                        <textarea name="preferred_schedule" rows="3" 
+                                  placeholder="When are you available for lessons? (e.g., Weekdays after 5 PM, Weekends only, Flexible...)"><?php echo htmlspecialchars($existing_needs['preferred_schedule'] ?? ''); ?></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Special Requirements or Notes</label>
+                        <textarea name="special_requirements" rows="3" 
+                                  placeholder="Any specific requirements, learning style preferences, or additional information..."><?php echo htmlspecialchars($existing_needs['special_requirements'] ?? ''); ?></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; align-items: center; margin-top: 25px; padding-top: 25px; border-top: 2px solid #f0f0f0;">
+                        <button type="submit" name="submit_learning_needs" class="btn-primary" style="flex: 1; padding: 15px; font-size: 1.1rem; font-weight: 600;">
+                            <i class="fas fa-paper-plane"></i> Submit Learning Needs
+                        </button>
+                        <?php if ($existing_needs): ?>
+                            <span style="color: #666; font-size: 0.9rem;">
+                                <i class="fas fa-info-circle"></i> Updating your information will help us better match you
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </div>
+            
+            <?php if (!$existing_needs): ?>
+            <div class="card" style="background: #fff3cd; border-left: 4px solid #ffc107; margin-top: 20px;">
+                <h3 style="color: #856404; margin-bottom: 10px;">
+                    <i class="fas fa-question-circle"></i> Why do we need this?
+                </h3>
+                <ul style="color: #856404; margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li>Match you with a teacher who specializes in your learning goals</li>
+                    <li>Create personalized lesson plans tailored to your needs</li>
+                    <li>Ensure the best possible learning experience</li>
+                    <li>Help teachers prepare appropriate materials and activities</li>
+                </ul>
+            </div>
+            <?php endif; ?>
+        </div>
+
         <!-- My Teachers Tab -->
         <div id="teachers" class="tab-content">
             <h1>My Teachers</h1>
@@ -780,6 +1260,34 @@ $active_tab = 'overview';
         <!-- Bookings Tab -->
         <div id="bookings" class="tab-content">
             <h1>My Lessons</h1>
+            
+            <?php if (count($past_lessons_pending) > 0): ?>
+            <div class="card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
+                <h2 style="color: #856404; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-circle"></i> Confirm Past Lessons
+                </h2>
+                <p style="color: #856404; margin-bottom: 20px;">Please confirm your attendance for these completed lessons:</p>
+                <?php foreach ($past_lessons_pending as $lesson): ?>
+                    <div class="booking-item" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <img src="<?php echo h($lesson['teacher_pic']); ?>" alt="" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                            <div style="flex: 1; min-width: 200px;">
+                                <strong><?php echo h($lesson['teacher_name']); ?></strong>
+                                <div style="font-size: 0.85rem; color: var(--gray); margin-top: 5px;">
+                                    <i class="fas fa-calendar"></i> <?php echo date('l, F d, Y', strtotime($lesson['lesson_date'])); ?>
+                                    <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('g:i A', strtotime($lesson['start_time'])); ?> - <?php echo date('g:i A', strtotime($lesson['end_time'])); ?>
+                                </div>
+                            </div>
+                            <button onclick="showConfirmationModal(<?php echo $lesson['id']; ?>, '<?php echo h($lesson['teacher_name']); ?>', '<?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?>')" 
+                                    class="btn-primary" style="white-space: nowrap;">
+                                <i class="fas fa-check-circle"></i> Confirm Attendance
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            
             <div class="card">
                 <?php if (count($upcoming_lessons) > 0): ?>
                     <h2 style="margin-bottom: 20px;"><i class="fas fa-calendar-check"></i> Upcoming Lessons</h2>
@@ -1122,7 +1630,178 @@ function toggleMobileSidebar() {
     document.querySelector('.sidebar').classList.toggle('active');
     document.querySelector('.sidebar-overlay').classList.toggle('active');
 }
+
+// Lesson Confirmation Modal
+function showConfirmationModal(lessonId, teacherName, lessonDate) {
+    const modal = document.getElementById('confirmationModal');
+    if (!modal) {
+        createConfirmationModal();
+    }
+    document.getElementById('modalLessonId').value = lessonId;
+    document.getElementById('modalTeacherName').textContent = teacherName;
+    document.getElementById('modalLessonDate').textContent = lessonDate;
+    document.getElementById('confirmationModal').classList.add('active');
+}
+
+function closeConfirmationModal() {
+    document.getElementById('confirmationModal').classList.remove('active');
+    // Reset form
+    const form = document.getElementById('confirmationForm');
+    if (form) {
+        form.reset();
+        document.getElementById('studentNotes').value = '';
+    }
+}
+
+function createConfirmationModal() {
+    const modal = document.createElement('div');
+    modal.id = 'confirmationModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-circle"></i> Confirm Lesson Attendance</h3>
+                <button class="modal-close" onclick="closeConfirmationModal()">&times;</button>
+            </div>
+            <form id="confirmationForm" onsubmit="submitConfirmation(event)">
+                <input type="hidden" id="modalLessonId" name="lesson_id">
+                <div style="padding: 20px;">
+                    <p style="margin-bottom: 20px;">
+                        <strong>Teacher:</strong> <span id="modalTeacherName"></span><br>
+                        <strong>Date:</strong> <span id="modalLessonDate"></span>
+                    </p>
+                    
+                    <div class="form-group">
+                        <label>Attendance Status *</label>
+                        <select name="attendance_status" id="attendanceStatus" required>
+                            <option value="attended">I Attended</option>
+                            <option value="no_show">I Did Not Attend</option>
+                            <option value="cancelled">Lesson Was Cancelled</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notes (Optional)</label>
+                        <textarea name="student_notes" id="studentNotes" rows="3" placeholder="Any additional notes about this lesson..."></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button type="button" class="btn-outline" onclick="closeConfirmationModal()">Cancel</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-check"></i> Confirm
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function submitConfirmation(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    formData.append('action', 'confirm');
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirming...';
+    
+    fetch('api/lesson-confirmation.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            if (typeof toast !== 'undefined') {
+                toast.success(data.message || 'Attendance confirmed successfully!');
+            } else {
+                alert(data.message || 'Attendance confirmed successfully!');
+            }
+            closeConfirmationModal();
+            // Reload page to update UI
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.error || 'Failed to confirm attendance');
+            } else {
+                alert(data.error || 'Failed to confirm attendance');
+            }
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+}
 </script>
+
+<style>
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.active {
+    display: flex;
+}
+.modal {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    max-width: 90%;
+    max-height: 90vh;
+    overflow: auto;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+.modal-header h3 {
+    margin: 0;
+    color: #004080;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+.modal-close:hover {
+    background: #f0f0f0;
+    color: #000;
+}
+</style>
 
 </body>
 </html>

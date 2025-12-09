@@ -69,16 +69,30 @@ $user_role = $_SESSION['user_role'] ?? 'student';
 // Get user's timezone
 $user_timezone = $tzService->getUserTimezone($user_id);
 
-// For students, get their assigned teacher
+// For students, check onboarding status and get availability
 if ($user_role === 'student' || $user_role === 'new_student') {
-    // Get assigned teacher from user record or assignment table
-    $stmt = $conn->prepare("SELECT assigned_teacher_id FROM users WHERE id = ?");
+    // Check if student has completed onboarding
+    $stmt = $conn->prepare("SELECT assigned_teacher_id, plan_id, learning_track FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     $stmt->close();
     
+    $has_plan = !empty($user['plan_id']);
+    $learning_needs_check = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
+    $learning_needs_check->bind_param("i", $user_id);
+    $learning_needs_check->execute();
+    $has_learning_needs = $learning_needs_check->get_result()->num_rows > 0;
+    $learning_needs_check->close();
+    
+    // If student hasn't completed onboarding, redirect to dashboard
+    if (!$has_plan || !$has_learning_needs) {
+        header("Location: student-dashboard.php");
+        exit();
+    }
+    
+    // Get assigned teacher
     $selected_teacher = $user['assigned_teacher_id'] ?? null;
     
     // If no assigned teacher, try to get from assignment table
@@ -94,8 +108,35 @@ if ($user_role === 'student' || $user_role === 'new_student') {
                 'bio' => $assignment['teacher_bio'] ?? ''
             ];
         }
+    }
+    
+    // If still no teacher assigned but has learning needs, show all available teachers
+    if (!$selected_teacher) {
+        // Get all teachers for the student's track
+        $track = $user['learning_track'];
+        $all_teachers_stmt = $conn->prepare("
+            SELECT u.id, u.name, u.email, u.profile_pic, u.bio
+            FROM users u
+            WHERE u.role = 'teacher' 
+            AND u.application_status = 'approved'
+            ORDER BY u.name
+        ");
+        $all_teachers_stmt->execute();
+        $all_teachers_result = $all_teachers_stmt->get_result();
+        $all_available_teachers = [];
+        while ($teacher_row = $all_teachers_result->fetch_assoc()) {
+            // Get combined availability for each teacher
+            $teacher_slots = $api->getTeacherAvailability($teacher_row['id'], null, null);
+            if (count($teacher_slots) > 0) {
+                $teacher_row['availability_slots'] = $teacher_slots;
+                $all_available_teachers[] = $teacher_row;
+            }
+        }
+        $all_teachers_stmt->close();
+        
+        // Will show combined availability view instead of single teacher
     } else {
-        // Fetch teacher details
+        // Fetch assigned teacher details
         $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
         $stmt->bind_param("i", $selected_teacher);
         $stmt->execute();
@@ -104,16 +145,10 @@ if ($user_role === 'student' || $user_role === 'new_student') {
             $teacher_data = $result->fetch_assoc();
         }
         $stmt->close();
+        
+        // Fetch teacher's availability slots
+        $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
     }
-    
-    // If still no teacher assigned, redirect to track selection
-    if (!$selected_teacher) {
-        header("Location: index.php");
-        exit();
-    }
-    
-    // Fetch teacher's availability slots (only available slots - students should only see available times)
-    $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
     
     // Fetch student's upcoming lessons
     $stmt = $conn->prepare("
@@ -147,19 +182,50 @@ if ($user_role === 'student' || $user_role === 'new_student') {
 }
 
 // Handle lesson booking (AJAX request)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'book_lesson') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (
+    (isset($_POST['action']) && $_POST['action'] === 'book_lesson') ||
+    (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false)
+)) {
     header('Content-Type: application/json');
     
+    // Handle JSON input
+    $json_input = null;
+    if (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) {
+        $json_input = json_decode(file_get_contents('php://input'), true);
+        if ($json_input && isset($json_input['action']) && $json_input['action'] === 'book_lesson') {
+            $_POST = array_merge($_POST, $json_input);
+        }
+    }
+    
     // Only allow students (who have purchased) to book lessons
-    if ($_SESSION['user_role'] !== 'student') {
+    if ($_SESSION['user_role'] !== 'student' && $_SESSION['user_role'] !== 'new_student') {
         http_response_code(403);
         echo json_encode(['error' => 'Please purchase a lesson plan first to book lessons. Visit the payment page to get started.']);
         exit();
     }
     
-    if (!$selected_teacher) {
+    // Check if student has completed onboarding
+    $stmt = $conn->prepare("SELECT plan_id FROM users WHERE id = ?");
+    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->execute();
+    $user_result = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    
+    if (empty($user_result['plan_id'])) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Please select and purchase a plan first.']);
+        exit();
+    }
+    
+    // Get teacher_id from POST data (for combined availability bookings)
+    $teacher_id_from_post = isset($_POST['teacher_id']) ? (int)$_POST['teacher_id'] : null;
+    
+    // Use teacher from POST if provided (combined availability), otherwise use assigned teacher
+    $booking_teacher_id = $teacher_id_from_post ?? $selected_teacher;
+    
+    if (!$booking_teacher_id) {
         http_response_code(400);
-        echo json_encode(['error' => 'No teacher assigned. Please contact support.']);
+        echo json_encode(['error' => 'No teacher selected. Please select a teacher and time slot.']);
         exit();
     }
 
@@ -175,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     // Use the API to book lesson
     $json_input = json_encode([
-        'teacher_id' => $selected_teacher,
+        'teacher_id' => $booking_teacher_id,
         'lesson_date' => $lesson_date,
         'start_time' => $start_time,
         'end_time' => $end_time
@@ -187,8 +253,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     rewind($temp_file);
 
     // Manually call the booking logic here instead
-    $teacher_id = $selected_teacher;
+    $teacher_id = $booking_teacher_id;
     $student_id = $_SESSION['user_id'];
+    
+    // If teacher was assigned via booking, update student's assigned_teacher_id
+    if ($teacher_id_from_post && !$selected_teacher) {
+        $update_assign_stmt = $conn->prepare("UPDATE users SET assigned_teacher_id = ? WHERE id = ?");
+        $update_assign_stmt->bind_param("ii", $teacher_id, $student_id);
+        $update_assign_stmt->execute();
+        $update_assign_stmt->close();
+        
+        // Create assignment record
+        require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+        $assignmentModel = new TeacherAssignment($conn);
+        $assignmentModel->assignStudentToTeacher($student_id, $teacher_id);
+    }
 
     // Validate
     if (strtotime($lesson_date . ' ' . $start_time) <= time()) {
@@ -499,7 +578,130 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
 
     <div class="main">
             <div class="schedule-container">
-                <?php if (!isset($_GET['teacher']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student')): ?>
+                <?php if (isset($all_available_teachers) && count($all_available_teachers) > 0 && !$selected_teacher): ?>
+                    <!-- Combined Availability View: Show all available teachers' schedules -->
+                    <div class="card">
+                        <h3><i class="fas fa-calendar-alt"></i> Select Available Time Slot</h3>
+                        <p style="color: #666; margin-bottom: 20px;">
+                            Choose from available time slots across all teachers. Once you book a lesson, that teacher will be assigned to you.
+                        </p>
+                        
+                        <div style="margin-top: 20px;">
+                            <label>Select Date:</label>
+                            <input type="date" id="lesson-date-combined" 
+                                   min="<?php echo date('Y-m-d'); ?>" 
+                                   value="<?php echo date('Y-m-d'); ?>"
+                                   style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;">
+                            
+                            <div id="combined-time-slots-container" style="margin-top: 15px;">
+                                <p style="color: #666;">Select a date to see available time slots</p>
+                            </div>
+                            
+                            <div id="combined-booking-form" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                <h4>Book This Lesson</h4>
+                                <div id="selected-time-display-combined" style="font-weight: bold; margin-bottom: 15px;"></div>
+                                <button onclick="bookCombinedSlot()" class="btn-primary">Confirm Booking</button>
+                            </div>
+                        </div>
+                        
+                        <script>
+                        const allAvailableTeachers = <?php echo json_encode($all_available_teachers); ?>;
+                        let selectedCombinedSlot = null;
+                        
+                        document.getElementById('lesson-date-combined').addEventListener('change', function() {
+                            const selectedDate = this.value;
+                            const dayOfWeek = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+                            
+                            // Collect all available slots from all teachers for this date
+                            let combinedSlots = [];
+                            
+                            allAvailableTeachers.forEach(teacher => {
+                                if (teacher.availability_slots) {
+                                    teacher.availability_slots.forEach(slot => {
+                                        const isWeeklySlot = slot.day_of_week === dayOfWeek && !slot.specific_date;
+                                        const isOneTimeSlot = slot.specific_date === selectedDate;
+                                        
+                                        if ((isWeeklySlot || isOneTimeSlot) && slot.is_available) {
+                                            combinedSlots.push({
+                                                ...slot,
+                                                teacher_id: teacher.id,
+                                                teacher_name: teacher.name
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                            
+                            // Sort by time
+                            combinedSlots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+                            
+                            let html = '';
+                            if (combinedSlots.length > 0) {
+                                html = '<label>Available Times:</label><div class="time-slots">';
+                                combinedSlots.forEach(slot => {
+                                    html += `<div class="time-slot" onclick="selectCombinedSlot('${selectedDate}', '${slot.start_time.substr(0,5)}', '${slot.end_time.substr(0,5)}', ${slot.teacher_id}, '${slot.teacher_name.replace("'", "\\'")}')">
+                                        ${slot.start_time.substr(0,5)} - ${slot.end_time.substr(0,5)}<br>
+                                        <small style="color: #666;">with ${slot.teacher_name}</small>
+                                    </div>`;
+                                });
+                                html += '</div>';
+                            } else {
+                                html = '<p style="color: #dc3545;"><i class="fas fa-info-circle"></i> No available time slots for this date</p>';
+                            }
+                            
+                            document.getElementById('combined-time-slots-container').innerHTML = html;
+                        });
+                        
+                        function selectCombinedSlot(date, startTime, endTime, teacherId, teacherName) {
+                            selectedCombinedSlot = { date, startTime, endTime, teacherId, teacherName };
+                            document.getElementById('selected-time-display-combined').innerHTML = 
+                                `<strong>Date:</strong> ${date}<br><strong>Time:</strong> ${startTime} - ${endTime}<br><strong>Teacher:</strong> ${teacherName}`;
+                            document.getElementById('combined-booking-form').style.display = 'block';
+                            
+                            // Highlight selected slot
+                            document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+                            event.target.closest('.time-slot').classList.add('selected');
+                        }
+                        
+                        async function bookCombinedSlot() {
+                            if (!selectedCombinedSlot) {
+                                alert('Please select a time slot');
+                                return;
+                            }
+                            
+                            try {
+                                const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+                                const response = await fetch(basePath + '/schedule.php', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'book_lesson',
+                                        teacher_id: selectedCombinedSlot.teacherId,
+                                        lesson_date: selectedCombinedSlot.date,
+                                        start_time: selectedCombinedSlot.startTime + ':00',
+                                        end_time: selectedCombinedSlot.endTime + ':00'
+                                    })
+                                });
+                                
+                                const data = await response.json();
+                                
+                                if (data.success) {
+                                    alert('Lesson booked successfully! The teacher has been assigned to you.');
+                                    window.location.reload();
+                                } else {
+                                    alert('Error: ' + (data.error || 'Booking failed'));
+                                }
+                            } catch (error) {
+                                console.error('Booking error:', error);
+                                alert('An error occurred. Please try again.');
+                            }
+                        }
+                        
+                        // Trigger initial load
+                        document.getElementById('lesson-date-combined').dispatchEvent(new Event('change'));
+                        </script>
+                    </div>
+                <?php elseif (!isset($_GET['teacher']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student')): ?>
                     <!-- Teacher Selection -->
                     <div class="card">
                         <h3><i class="fas fa-users"></i> Select a Teacher</h3>
@@ -543,9 +745,21 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                     </div>
                                 <?php endif; ?>
                                 
-                                <!-- Calendar View -->
-                                <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #0b6cf5;">
-                                    <p style="margin: 0; color: #004080;"><i class="fas fa-info-circle"></i> <strong>Tip:</strong> Times shown are in your timezone (<?php echo htmlspecialchars($user_timezone); ?>). The calendar below shows your upcoming lessons.</p>
+                                <!-- Timezone and Calendar Info -->
+                                <div style="background: linear-gradient(135deg, #e7f3ff 0%, #f0f7ff 100%); padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #0b6cf5;">
+                                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <p style="margin: 0 0 10px 0; color: #004080; font-weight: 600;">
+                                                <i class="fas fa-globe"></i> Your Timezone: <strong><?php echo htmlspecialchars($user_timezone ?: 'Not set'); ?></strong>
+                                            </p>
+                                            <p style="margin: 0; color: #666; font-size: 0.9rem;">
+                                                <i class="fas fa-info-circle"></i> All times are displayed in your local timezone. The teacher will see the lesson in their timezone.
+                                            </p>
+                                        </div>
+                                        <button onclick="showTimezoneSelector()" class="btn-outline" style="white-space: nowrap; padding: 10px 20px;">
+                                            <i class="fas fa-cog"></i> Change Timezone
+                                        </button>
+                                    </div>
                                 </div>
                                 <div id="calendar-container" class="calendar-container" style="margin-top: 20px; margin-bottom: 30px;"></div>
                                 
@@ -713,6 +927,152 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         document.getElementById('booking-form').style.display = 'none';
                                         document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
                                     }
+                                    
+                                    function showTimezoneSelector() {
+                                        const modal = document.getElementById('timezoneModal');
+                                        if (!modal) {
+                                            createTimezoneModal();
+                                        }
+                                        document.getElementById('timezoneModal').classList.add('active');
+                                    }
+                                    
+                                    function createTimezoneModal() {
+                                        const modal = document.createElement('div');
+                                        modal.id = 'timezoneModal';
+                                        modal.className = 'modal-overlay';
+                                        modal.innerHTML = `
+                                            <div class="modal" style="max-width: 500px;">
+                                                <div class="modal-header">
+                                                    <h3><i class="fas fa-globe"></i> Change Timezone</h3>
+                                                    <button class="modal-close" onclick="closeTimezoneModal()">&times;</button>
+                                                </div>
+                                                <div style="padding: 20px;">
+                                                    <p style="color: #666; margin-bottom: 20px;">Select your timezone to see lesson times in your local time.</p>
+                                                    <select id="timezoneSelect" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; margin-bottom: 15px;">
+                                                        <option value="America/New_York">Eastern Time (ET)</option>
+                                                        <option value="America/Chicago">Central Time (CT)</option>
+                                                        <option value="America/Denver">Mountain Time (MT)</option>
+                                                        <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                                                        <option value="Europe/London">London (GMT)</option>
+                                                        <option value="Europe/Paris">Paris (CET)</option>
+                                                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                                                        <option value="Asia/Shanghai">Shanghai (CST)</option>
+                                                        <option value="Australia/Sydney">Sydney (AEST)</option>
+                                                        <option value="UTC">UTC</option>
+                                                    </select>
+                                                    <button onclick="detectAndSetTimezone()" class="btn-outline" style="width: 100%; margin-bottom: 15px;">
+                                                        <i class="fas fa-crosshairs"></i> Auto-detect My Timezone
+                                                    </button>
+                                                    <div style="display: flex; gap: 10px;">
+                                                        <button onclick="updateTimezone()" class="btn-primary" style="flex: 1;">
+                                                            <i class="fas fa-save"></i> Save
+                                                        </button>
+                                                        <button onclick="closeTimezoneModal()" class="btn-outline" style="flex: 1;">
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `;
+                                        document.body.appendChild(modal);
+                                        
+                                        // Set current timezone
+                                        const select = document.getElementById('timezoneSelect');
+                                        const currentTz = '<?php echo htmlspecialchars($user_timezone); ?>';
+                                        if (currentTz) {
+                                            select.value = currentTz;
+                                        }
+                                    }
+                                    
+                                    function closeTimezoneModal() {
+                                        document.getElementById('timezoneModal').classList.remove('active');
+                                    }
+                                    
+                                    function detectAndSetTimezone() {
+                                        try {
+                                            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                            const select = document.getElementById('timezoneSelect');
+                                            
+                                            // Try to find exact match
+                                            for (let option of select.options) {
+                                                if (option.value === detectedTz) {
+                                                    select.value = detectedTz;
+                                                    if (typeof toast !== 'undefined') {
+                                                        toast.success('Timezone detected: ' + detectedTz);
+                                                    } else {
+                                                        alert('Timezone detected: ' + detectedTz);
+                                                    }
+                                                    return;
+                                                }
+                                            }
+                                            
+                                            // Try partial match
+                                            const tzParts = detectedTz.split('/');
+                                            for (let option of select.options) {
+                                                if (option.value.includes(tzParts[tzParts.length - 1])) {
+                                                    select.value = option.value;
+                                                    if (typeof toast !== 'undefined') {
+                                                        toast.info('Similar timezone selected: ' + option.value);
+                                                    } else {
+                                                        alert('Similar timezone selected: ' + option.value);
+                                                    }
+                                                    return;
+                                                }
+                                            }
+                                            
+                                            if (typeof toast !== 'undefined') {
+                                                toast.warning('Could not find matching timezone. Please select manually.');
+                                            } else {
+                                                alert('Could not find matching timezone. Please select manually.');
+                                            }
+                                        } catch (err) {
+                                            if (typeof toast !== 'undefined') {
+                                                toast.error('Could not detect timezone.');
+                                            } else {
+                                                alert('Could not detect timezone.');
+                                            }
+                                        }
+                                    }
+                                    
+                                    function updateTimezone() {
+                                        const timezone = document.getElementById('timezoneSelect').value;
+                                        
+                                        fetch('api/calendar.php?action=update-timezone', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                timezone: timezone,
+                                                auto_detected: false
+                                            })
+                                        })
+                                        .then(res => res.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                if (typeof toast !== 'undefined') {
+                                                    toast.success('Timezone updated! Page will reload.');
+                                                } else {
+                                                    alert('Timezone updated! Page will reload.');
+                                                }
+                                                setTimeout(() => location.reload(), 1000);
+                                            } else {
+                                                if (typeof toast !== 'undefined') {
+                                                    toast.error(data.error || 'Failed to update timezone');
+                                                } else {
+                                                    alert('Error: ' + (data.error || 'Failed to update timezone'));
+                                                }
+                                            }
+                                        })
+                                        .catch(err => {
+                                            console.error('Error:', err);
+                                            if (typeof toast !== 'undefined') {
+                                                toast.error('An error occurred. Please try again.');
+                                            } else {
+                                                alert('An error occurred. Please try again.');
+                                            }
+                                        });
+                                    }
 
                                     document.getElementById('booking-form').addEventListener('submit', async function(e) {
                                         e.preventDefault();
@@ -780,11 +1140,57 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
 
                                                 const data = await response.json();
                                                 
-                                                if (response.ok) {
-                                                    alert('Lesson booked successfully! Proceeding to payment.');
-                                                    window.location.href = 'payment.php';
+                                                if (response.ok && data.success) {
+                                                    // Show success message with booking details
+                                                    const bookingDetails = `
+                                                        <div style="text-align: center; padding: 20px;">
+                                                            <div style="font-size: 3rem; color: #28a745; margin-bottom: 15px;">
+                                                                <i class="fas fa-check-circle"></i>
+                                                            </div>
+                                                            <h2 style="color: #004080; margin-bottom: 15px;">Lesson Booked Successfully!</h2>
+                                                            <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: left; display: inline-block;">
+                                                                <p style="margin: 5px 0;"><strong>Date:</strong> ${selectedSlot.date}</p>
+                                                                <p style="margin: 5px 0;"><strong>Time:</strong> ${selectedSlot.startTime} - ${selectedSlot.endTime}</p>
+                                                                <p style="margin: 5px 0;"><strong>Teacher:</strong> <?php echo htmlspecialchars($teacher_data['name']); ?></p>
+                                                            </div>
+                                                            <p style="color: #666; margin: 20px 0;">You will receive a confirmation email shortly.</p>
+                                                            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 25px;">
+                                                                <a href="student-dashboard.php#bookings" class="btn-primary" style="padding: 12px 24px; text-decoration: none;">
+                                                                    <i class="fas fa-calendar"></i> View My Lessons
+                                                                </a>
+                                                                <button onclick="location.reload()" class="btn-outline" style="padding: 12px 24px;">
+                                                                    Book Another
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    `;
+                                                    
+                                                    // Create and show modal
+                                                    const modal = document.createElement('div');
+                                                    modal.className = 'modal-overlay active';
+                                                    modal.style.zIndex = '10000';
+                                                    modal.innerHTML = `
+                                                        <div class="modal" style="max-width: 600px;">
+                                                            <div class="modal-header">
+                                                                <h3>Booking Confirmed</h3>
+                                                                <button class="modal-close" onclick="this.closest('.modal-overlay').remove(); location.href='student-dashboard.php#bookings';">&times;</button>
+                                                            </div>
+                                                            ${bookingDetails}
+                                                        </div>
+                                                    `;
+                                                    document.body.appendChild(modal);
+                                                    
+                                                    // Auto-close after 5 seconds and redirect
+                                                    setTimeout(() => {
+                                                        modal.remove();
+                                                        window.location.href = 'student-dashboard.php#bookings';
+                                                    }, 5000);
                                                 } else {
-                                                    alert('Error: ' + (data.error || 'Booking failed'));
+                                                    if (typeof toast !== 'undefined') {
+                                                        toast.error(data.error || 'Booking failed');
+                                                    } else {
+                                                        alert('Error: ' + (data.error || 'Booking failed'));
+                                                    }
                                                 }
                                             } catch (error) {
                                                 alert('Error booking lesson: ' + error);

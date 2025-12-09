@@ -100,12 +100,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Clear output buffer before redirect
             ob_end_clean();
             
-            // Redirect to payment if plan was selected, otherwise dashboard
-            if ($plan_id) {
-                header("Location: payment.php?track=" . urlencode($track) . "&plan_id=" . urlencode($plan_id));
-            } else {
-                header("Location: index.php");
-            }
+            // Redirect to student dashboard (will show todo list)
+            // Plan selection will be handled via todo list or they can complete it from the plan page
+            header("Location: student-dashboard.php");
             exit();
         } else {
             $register_error = "Error creating account. Please try again or contact support.";

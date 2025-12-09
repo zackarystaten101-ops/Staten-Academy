@@ -420,6 +420,12 @@ while ($row = $lessons_result->fetch_assoc()) {
 }
 $stmt->close();
 
+// Get unread messages count
+$unread_messages = 0;
+if (function_exists('getUnreadMessagesCount')) {
+    $unread_messages = getUnreadMessagesCount($conn, $teacher_id);
+}
+
 $active_tab = 'overview';
 ?>
 <!DOCTYPE html>
@@ -547,6 +553,113 @@ $active_tab = 'overview';
                 <div class="alert-success"><i class="fas fa-check-circle"></i> <?php echo $msg; ?></div>
             <?php endif; ?>
             
+            <?php
+            // Check teacher onboarding status
+            $has_calendar_setup = !empty($user['google_calendar_token']);
+            $has_profile_complete = !empty($user['bio']) && !empty($user['profile_pic']);
+            $has_students = count($assigned_students) > 0;
+            
+            // Get today's lessons
+            $today_lessons = [];
+            $today_stmt = $conn->prepare("
+                SELECT l.*, u.name as student_name, u.profile_pic as student_pic
+                FROM lessons l
+                JOIN users u ON l.student_id = u.id
+                WHERE l.teacher_id = ? 
+                AND l.lesson_date = CURDATE()
+                AND l.status = 'scheduled'
+                ORDER BY l.start_time ASC
+            ");
+            $today_stmt->bind_param("i", $teacher_id);
+            $today_stmt->execute();
+            $today_result = $today_stmt->get_result();
+            while ($row = $today_result->fetch_assoc()) {
+                $today_lessons[] = $row;
+            }
+            $today_stmt->close();
+            
+            // Show onboarding checklist if not complete
+            if (!$has_calendar_setup || !$has_profile_complete): ?>
+            <div class="card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
+                <h2 style="color: #856404; margin-bottom: 20px;">
+                    <i class="fas fa-clipboard-check"></i> Complete Your Teacher Setup
+                </h2>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <?php if (!$has_calendar_setup): ?>
+                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #856404;">
+                                <i class="fas fa-calendar-alt"></i> Step 1: Set Up Your Calendar
+                            </h3>
+                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Connect your Google Calendar and set your availability so students can book lessons with you.</p>
+                        </div>
+                        <a href="teacher-calendar-setup.php" class="btn-primary" style="white-space: nowrap;">
+                            Set Up Calendar
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if (!$has_profile_complete): ?>
+                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #0b6cf5;">
+                        <div style="flex: 1;">
+                            <h3 style="margin: 0 0 5px 0; color: #004080;">
+                                <i class="fas fa-user-edit"></i> Step 2: Complete Your Profile
+                            </h3>
+                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Add your bio, profile picture, and teaching information to help students get to know you.</p>
+                        </div>
+                        <a href="#" onclick="switchTab('profile')" class="btn-primary" style="white-space: nowrap;">
+                            Edit Profile
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <?php if (count($today_lessons) > 0): ?>
+            <div class="card" style="background: linear-gradient(135deg, #e8f5e9 0%, #ffffff 100%); border: 2px solid #28a745; margin-bottom: 30px;">
+                <h2 style="color: #155724; margin-bottom: 20px;">
+                    <i class="fas fa-calendar-day"></i> Today's Schedule
+                </h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <?php foreach ($today_lessons as $lesson): ?>
+                        <?php
+                        $lesson_time = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
+                        $current_time = time();
+                        $can_join = $lesson_time <= ($current_time + 3600); // Can join 1 hour before
+                        $is_now = $lesson_time <= $current_time && strtotime($lesson['lesson_date'] . ' ' . $lesson['end_time']) >= $current_time;
+                        ?>
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid <?php echo $is_now ? '#28a745' : '#0b6cf5'; ?>; <?php echo $is_now ? 'box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);' : ''; ?>">
+                            <img src="<?php echo h($lesson['student_pic']); ?>" alt="" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #333; font-size: 1.05rem;">
+                                    <?php echo h($lesson['student_name']); ?>
+                                    <?php if ($is_now): ?>
+                                        <span style="color: #28a745; margin-left: 10px; font-size: 0.85rem;">
+                                            <i class="fas fa-circle" style="font-size: 0.6rem; animation: pulse 2s infinite;"></i> In Progress
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                                <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+                                    <i class="fas fa-clock"></i> <?php echo date('g:i A', strtotime($lesson['start_time'])); ?> - <?php echo date('g:i A', strtotime($lesson['end_time'])); ?>
+                                    <?php if (!$is_now && $can_join): ?>
+                                        <span style="color: #0b6cf5; margin-left: 10px;">• Join now available</span>
+                                    <?php elseif (!$is_now): ?>
+                                        <span style="color: #666; margin-left: 10px;">• Starts in <?php echo round(($lesson_time - $current_time) / 60); ?> minutes</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <a href="classroom.php?lessonId=<?php echo $lesson['id']; ?>" 
+                               class="btn <?php echo $can_join ? 'btn-primary' : 'btn-outline'; ?>" 
+                               style="white-space: nowrap;">
+                                <i class="fas fa-video"></i> <?php echo $is_now ? 'Join Now' : ($can_join ? 'Join' : 'View'); ?>
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <div class="stats-grid">
                 <a href="#" onclick="switchTab('students'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
                     <div class="stat-icon"><i class="fas fa-users"></i></div>
@@ -592,23 +705,30 @@ $active_tab = 'overview';
 
             <div class="card">
                 <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
-                <div class="quick-actions">
-                    <a href="schedule.php" class="quick-action-btn">
+                <div class="quick-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); position: relative;">
                         <i class="fas fa-calendar"></i>
                         <span>View Schedule</span>
                     </a>
-                    <a href="message_threads.php" class="quick-action-btn">
+                    <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); position: relative;">
                         <i class="fas fa-comments"></i>
                         <span>Messages</span>
+                        <?php if ($unread_messages > 0): ?>
+                            <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $unread_messages; ?></span>
+                        <?php endif; ?>
                     </a>
-                    <a href="#" onclick="switchTab('assignments')" class="quick-action-btn">
+                    <a href="#" onclick="switchTab('assignments')" class="quick-action-btn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); position: relative;">
                         <i class="fas fa-tasks"></i>
                         <span>Assignments</span>
                         <?php if ($pending_assignments > 0): ?>
-                            <span class="notification-badge" style="position: static; margin-left: 5px;"><?php echo $pending_assignments; ?></span>
+                            <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $pending_assignments; ?></span>
                         <?php endif; ?>
                     </a>
-                    <a href="profile.php?id=<?php echo $teacher_id; ?>" class="quick-action-btn">
+                    <a href="teacher-calendar-setup.php" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Calendar Setup</span>
+                    </a>
+                    <a href="profile.php?id=<?php echo $teacher_id; ?>" class="quick-action-btn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
                         <i class="fas fa-user"></i>
                         <span>My Profile</span>
                     </a>

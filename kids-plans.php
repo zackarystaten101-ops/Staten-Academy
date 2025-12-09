@@ -297,10 +297,27 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
                     <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
                 </ul>
-                <?php if (isset($_SESSION['user_id'])): ?>
-                    <a href="payment.php?track=kids<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Choose This Plan</a>
+                <?php if (isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'student'): ?>
+                    <!-- Student: Go directly to checkout -->
+                    <form action="create_checkout_session.php" method="POST" style="display: inline;">
+                        <input type="hidden" name="plan_id" value="<?php echo $plan['id']; ?>">
+                        <input type="hidden" name="track" value="kids">
+                        <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? 'price_PLACEHOLDER'); ?>">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-cta" style="border: none; background: none; cursor: pointer; width: 100%; padding: 0; font: inherit; color: inherit; text-decoration: none;">Choose This Plan</button>
+                    </form>
+                <?php elseif (isset($_SESSION['user_id']) && ($_SESSION['user_role'] === 'new_student' || $_SESSION['user_role'] === 'visitor')): ?>
+                    <!-- New student or visitor: Go directly to checkout -->
+                    <form action="create_checkout_session.php" method="POST" style="display: inline;">
+                        <input type="hidden" name="plan_id" value="<?php echo $plan['id']; ?>">
+                        <input type="hidden" name="track" value="kids">
+                        <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? 'price_PLACEHOLDER'); ?>">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-cta" style="border: none; background: none; cursor: pointer; width: 100%; padding: 0; font: inherit; color: inherit; text-decoration: none;">Choose This Plan</button>
+                    </form>
                 <?php else: ?>
-                    <a href="register.php?track=kids<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Get Started</a>
+                    <!-- Not logged in: Register first, then they'll see todo list -->
+                    <a href="register.php?track=kids&plan_id=<?php echo $plan['id']; ?>" class="plan-cta">Get Started</a>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>

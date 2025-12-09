@@ -165,6 +165,34 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="student-dashboard.php#profile" class="<?php echo $active_tab === 'profile' ? 'active' : ''; ?>">
                 <i class="fas fa-user"></i> My Profile
             </a>
+            <?php
+            // Show learning needs link if not completed and has plan
+            if (isset($conn) && isset($user_id)) {
+                $plan_check = $conn->prepare("SELECT plan_id FROM users WHERE id = ?");
+                if ($plan_check) {
+                    $plan_check->bind_param("i", $user_id);
+                    $plan_check->execute();
+                    $plan_result = $plan_check->get_result();
+                    $plan_user = $plan_result->fetch_assoc();
+                    $plan_check->close();
+                    
+                    if ($plan_user && $plan_user['plan_id']) {
+                        $needs_check = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
+                        $needs_check->bind_param("i", $user_id);
+                        $needs_check->execute();
+                        $needs_completed = $needs_check->get_result()->num_rows > 0;
+                        $needs_check->close();
+                        
+                        if (!$needs_completed) {
+                            echo '<a href="student-dashboard.php#learning-needs" class="' . ($active_tab === 'learning-needs' ? 'active' : '') . '" style="background: rgba(255, 193, 7, 0.15); color: #856404; font-weight: bold;">';
+                            echo '<i class="fas fa-user-graduate"></i> Add Learning Needs';
+                            echo '<span class="sidebar-badge" style="background: #ffc107; color: #000;">!</span>';
+                            echo '</a>';
+                        }
+                    }
+                }
+            }
+            ?>
             <a href="student-dashboard.php#teachers" class="<?php echo $active_tab === 'teachers' ? 'active' : ''; ?>">
                 <i class="fas fa-heart"></i> My Teachers
             </a>

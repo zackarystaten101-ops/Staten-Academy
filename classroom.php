@@ -81,7 +81,7 @@ if ($user_role === 'student' && $lessonId && $lesson_data) {
         $currentTime = time();
         $minutesUntilLesson = ($lessonDateTime - $currentTime) / 60;
         
-        // Students can only join 4 minutes before lesson starts
+        // Students can only join 4 minutes before lesson starts (or if lesson has already started)
         if ($minutesUntilLesson > 4) {
             $canJoinClassroom = false;
             $hoursUntil = floor($minutesUntilLesson / 60);
@@ -91,6 +91,11 @@ if ($user_role === 'student' && $lessonId && $lesson_data) {
             } else {
                 $joinRestrictionMessage = "You can join this classroom 4 minutes before the lesson starts. The lesson starts in " . round($minutesUntilLesson) . " minute" . (round($minutesUntilLesson) != 1 ? 's' : '') . ".";
             }
+        } elseif ($minutesUntilLesson < -60) {
+            // Lesson ended more than 1 hour ago - show message
+            $canJoinClassroom = false;
+            $hoursAgo = floor(abs($minutesUntilLesson) / 60);
+            $joinRestrictionMessage = "This lesson ended {$hoursAgo} hour" . ($hoursAgo > 1 ? 's' : '') . " ago. Please contact your teacher if you need to access the classroom.";
         }
     }
 }

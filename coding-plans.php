@@ -317,9 +317,15 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     <li><i class="fas fa-check-circle"></i> Code documentation practice</li>
                 </ul>
                 <?php if (isset($_SESSION['user_id'])): ?>
-                    <a href="payment.php?track=coding<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Choose This Plan</a>
+                    <form action="create_checkout_session.php" method="POST" style="display: inline;">
+                        <input type="hidden" name="plan_id" value="<?php echo $plan['id']; ?>">
+                        <input type="hidden" name="track" value="coding">
+                        <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? 'price_PLACEHOLDER'); ?>">
+                        <input type="hidden" name="mode" value="subscription">
+                        <button type="submit" class="plan-cta" style="border: none; background: none; cursor: pointer; width: 100%; padding: 0; font: inherit; color: inherit; text-decoration: none;">Choose This Plan</button>
+                    </form>
                 <?php else: ?>
-                    <a href="register.php?track=coding<?php echo isset($plan['id']) ? '&plan_id=' . $plan['id'] : ''; ?>" class="plan-cta">Get Started</a>
+                    <a href="register.php?track=coding&plan_id=<?php echo $plan['id']; ?>" class="plan-cta">Get Started</a>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
