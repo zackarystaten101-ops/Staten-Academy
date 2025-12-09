@@ -1,0 +1,88 @@
+/**
+ * Coding Track Theme
+ * Tech/modern styling with code elements for English for Coding
+ */
+
+.track-coding {
+    --primary-color: #00d4ff;
+    --secondary-color: #0066cc;
+    --bg-color: #f0f9ff;
+    --text-color: #333;
+    --accent-color: #e0f2ff;
+    font-family: 'Courier New', 'Monaco', monospace, sans-serif;
+}
+
+.track-coding .btn-primary,
+.track-coding .primary-button {
+    background: linear-gradient(135deg, #00d4ff, #0066cc);
+    color: white;
+    border-radius: 8px;
+    padding: 12px 30px;
+    font-weight: 600;
+    font-size: 1rem;
+    font-family: 'Courier New', monospace, sans-serif;
+}
+
+.track-coding .btn-primary:hover,
+.track-coding .primary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+}
+
+.track-coding .card,
+.track-coding .dashboard-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 212, 255, 0.15);
+    border: 2px solid transparent;
+    position: relative;
+}
+
+.track-coding .card::before,
+.track-coding .dashboard-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #00d4ff, #0066cc);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.track-coding .card:hover::before,
+.track-coding .dashboard-card:hover::before {
+    opacity: 1;
+}
+
+.track-coding .card:hover,
+.track-coding .dashboard-card:hover {
+    border-color: #00d4ff;
+    box-shadow: 0 8px 25px rgba(0, 212, 255, 0.2);
+}
+
+.track-coding h1, .track-coding h2, .track-coding h3 {
+    color: #0066cc;
+    font-weight: 700;
+    font-family: 'Courier New', monospace, sans-serif;
+}
+
+.track-coding .badge {
+    background: linear-gradient(135deg, #00d4ff, #0066cc);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace, sans-serif;
+}
+
+.track-coding code {
+    background: #f0f9ff;
+    color: #0066cc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+

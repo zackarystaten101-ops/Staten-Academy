@@ -13,6 +13,43 @@ $student_id = $_SESSION['user_id'];
 $user = getUserById($conn, $student_id);
 $user_role = $_SESSION['user_role']; // Keep actual role (student or new_student)
 
+// Get student's track and assigned teacher
+require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+require_once __DIR__ . '/app/Models/GroupClass.php';
+$assignmentModel = new TeacherAssignment($conn);
+$groupClassModel = new GroupClass($conn);
+
+$assigned_teacher = null;
+$student_track = $user['learning_track'] ?? null;
+
+// Get assigned teacher
+if ($user['assigned_teacher_id']) {
+    $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user['assigned_teacher_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $assigned_teacher = $result->fetch_assoc();
+    $stmt->close();
+} else {
+    // Try assignment table
+    $assignment = $assignmentModel->getStudentTeacher($student_id);
+    if ($assignment) {
+        $assigned_teacher = [
+            'id' => $assignment['teacher_id'],
+            'name' => $assignment['teacher_name'],
+            'email' => $assignment['teacher_email'],
+            'profile_pic' => $assignment['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg'),
+            'bio' => $assignment['teacher_bio'] ?? ''
+        ];
+    }
+}
+
+// Get group classes for student's track
+$group_classes = [];
+if ($student_track) {
+    $group_classes = $groupClassModel->getTrackClasses($student_track);
+}
+
 // Initialize Google Calendar API
 $api = new GoogleCalendarAPI($conn);
 $has_calendar = !empty($user['google_calendar_token']);
@@ -283,6 +320,36 @@ $active_tab = 'overview';
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
+    <script>
+        function enrollInGroupClass(classId) {
+            if (!confirm('Are you sure you want to enroll in this group class?')) {
+                return;
+            }
+            
+            fetch('api/group-classes.php?action=enroll', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    class_id: classId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Successfully enrolled in group class!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to enroll'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            });
+        }
+    </script>
 </head>
 <body class="dashboard-layout">
 
@@ -295,7 +362,41 @@ $active_tab = 'overview';
         
         <!-- Overview Tab -->
         <div id="overview" class="tab-content active">
-            <h1>Welcome back, <?php echo h($user['name']); ?>! 👋</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h1>Welcome back, <?php echo h($user['name']); ?>! 👋</h1>
+                <?php if ($student_track): ?>
+                    <span class="badge" style="font-size: 1rem; padding: 8px 20px;">
+                        <i class="fas fa-<?php echo $student_track === 'kids' ? 'child' : ($student_track === 'coding' ? 'code' : 'user-graduate'); ?>"></i>
+                        <?php echo ucfirst($student_track); ?> Track
+                    </span>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($assigned_teacher): ?>
+            <div class="dashboard-card" style="margin-bottom: 30px; padding: 25px; background: linear-gradient(135deg, var(--track-bg, #f0f7ff) 0%, #ffffff 100%);">
+                <h2 style="margin-bottom: 20px; color: var(--track-primary, #0b6cf5);">
+                    <i class="fas fa-chalkboard-teacher"></i> Your Assigned Teacher
+                </h2>
+                <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                    <img src="<?php echo htmlspecialchars($assigned_teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                         alt="<?php echo htmlspecialchars($assigned_teacher['name']); ?>" 
+                         style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid var(--track-primary, #0b6cf5);">
+                    <div style="flex: 1; min-width: 200px;">
+                        <h3 style="margin: 0 0 10px 0; color: var(--track-primary, #004080);"><?php echo htmlspecialchars($assigned_teacher['name']); ?></h3>
+                        <?php if (!empty($assigned_teacher['bio'])): ?>
+                            <p style="color: #666; margin: 0; line-height: 1.6;"><?php echo htmlspecialchars(substr($assigned_teacher['bio'], 0, 150)); ?><?php echo strlen($assigned_teacher['bio']) > 150 ? '...' : ''; ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="dashboard-card" style="margin-bottom: 30px; padding: 25px; background: #fff3cd; border-left: 4px solid #ffc107;">
+                <h3 style="margin: 0; color: #856404;">
+                    <i class="fas fa-info-circle"></i> No Teacher Assigned Yet
+                </h3>
+                <p style="margin: 10px 0 0 0; color: #856404;">Your teacher will be assigned soon. Please contact support if you have questions.</p>
+            </div>
+            <?php endif; ?>
             
             <div class="stats-grid">
                 <div class="stat-card">
@@ -438,6 +539,43 @@ $active_tab = 'overview';
                     <?php endif; ?>
                 <?php endforeach; ?>
                 <a href="#" onclick="switchTab('homework')" style="color: var(--primary); text-decoration: none;">View all homework →</a>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($group_classes) && $student_track): ?>
+            <div class="card">
+                <h2><i class="fas fa-users"></i> Available Group Classes</h2>
+                <p style="color: #666; margin-bottom: 20px;">Join group classes with other students in your track</p>
+                <?php foreach (array_slice($group_classes, 0, 3) as $class): ?>
+                    <div class="dashboard-card" style="padding: 20px; margin-bottom: 15px; border-left: 4px solid var(--track-primary, #0b6cf5);">
+                        <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 15px;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <h3 style="margin: 0 0 10px 0; color: var(--track-primary, #004080);">
+                                    <?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?>
+                                </h3>
+                                <?php if (!empty($class['description'])): ?>
+                                    <p style="color: #666; margin: 0 0 10px 0; font-size: 0.9rem;">
+                                        <?php echo htmlspecialchars(substr($class['description'], 0, 100)); ?>
+                                        <?php echo strlen($class['description']) > 100 ? '...' : ''; ?>
+                                    </p>
+                                <?php endif; ?>
+                                <div style="font-size: 0.85rem; color: #666;">
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
+                                    <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
+                                    <i class="fas fa-user" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment']; ?>/<?php echo $class['max_students']; ?> students
+                                </div>
+                            </div>
+                            <button onclick="enrollInGroupClass(<?php echo $class['id']; ?>)" 
+                                    class="btn-primary" 
+                                    style="white-space: nowrap;"
+                                    <?php echo $class['current_enrollment'] >= $class['max_students'] ? 'disabled' : ''; ?>>
+                                <i class="fas fa-user-plus"></i> 
+                                <?php echo $class['current_enrollment'] >= $class['max_students'] ? 'Full' : 'Enroll'; ?>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <a href="#" onclick="switchTab('group-classes')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all group classes →</a>
             </div>
             <?php endif; ?>
         </div>

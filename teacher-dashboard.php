@@ -15,6 +15,36 @@ $teacher_id = $_SESSION['user_id'];
 $user = getUserById($conn, $teacher_id);
 $user_role = 'teacher';
 
+// Load models for assigned students and group classes
+require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+require_once __DIR__ . '/app/Models/GroupClass.php';
+$assignmentModel = new TeacherAssignment($conn);
+$groupClassModel = new GroupClass($conn);
+
+// Get assigned students
+$assigned_students = $assignmentModel->getTeacherStudents($teacher_id);
+
+// Get teacher's track(s) from assigned students
+$teacher_tracks = [];
+foreach ($assigned_students as $student) {
+    if (!empty($student['learning_track']) && !in_array($student['learning_track'], $teacher_tracks)) {
+        $teacher_tracks[] = $student['learning_track'];
+    }
+}
+
+// Get group classes for teacher's tracks
+$group_classes = [];
+if (!empty($teacher_tracks)) {
+    foreach ($teacher_tracks as $track) {
+        $track_classes = $groupClassModel->getTrackClasses($track);
+        $group_classes = array_merge($group_classes, $track_classes);
+    }
+}
+// Filter to only show classes taught by this teacher
+$group_classes = array_filter($group_classes, function($class) use ($teacher_id) {
+    return $class['teacher_id'] == $teacher_id;
+});
+
 // Handle Profile Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $dob = $_POST['dob'];
@@ -283,26 +313,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_note'])) {
 // Fetch Stats
 $rating_data = getTeacherRating($conn, $teacher_id);
 $earnings_data = getTeacherEarnings($conn, $teacher_id);
-$student_count = getTeacherStudentCount($conn, $teacher_id);
+$student_count = count($assigned_students); // Use assigned students count
 $pending_assignments = getPendingAssignmentsCount($conn, $teacher_id);
 
-// Fetch Students - Only show students who have booked lessons with this teacher
+// Use assigned students instead of students from lessons
 $students = [];
-$stmt = $conn->prepare("
-    SELECT DISTINCT u.id, u.name, u.email, u.profile_pic,
-           (SELECT COUNT(*) FROM lessons WHERE student_id = u.id AND teacher_id = ?) as lesson_count,
-           (SELECT note FROM lesson_notes WHERE student_id = u.id AND teacher_id = ? ORDER BY created_at DESC LIMIT 1) as last_note
-    FROM users u 
-    JOIN lessons l ON u.id = l.student_id 
-    WHERE l.teacher_id = ? AND u.role IN ('student', 'new_student')
-");
-$stmt->bind_param("iii", $teacher_id, $teacher_id, $teacher_id);
-$stmt->execute();
-$result = $stmt->get_result();
-while ($row = $result->fetch_assoc()) {
-    $students[] = $row;
+foreach ($assigned_students as $assignment) {
+    $student_id = $assignment['student_id'];
+    $stmt = $conn->prepare("
+        SELECT u.id, u.name, u.email, u.profile_pic, u.learning_track,
+               (SELECT COUNT(*) FROM lessons WHERE student_id = u.id AND teacher_id = ?) as lesson_count,
+               (SELECT note FROM lesson_notes WHERE student_id = u.id AND teacher_id = ? ORDER BY created_at DESC LIMIT 1) as last_note
+        FROM users u 
+        WHERE u.id = ?
+    ");
+    $stmt->bind_param("iii", $teacher_id, $teacher_id, $student_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $row['track'] = $assignment['track'];
+        $row['assigned_at'] = $assignment['assigned_at'];
+        $students[] = $row;
+    }
+    $stmt->close();
 }
-$stmt->close();
 
 // Fetch Assignments
 $assignments = [];
@@ -401,6 +435,98 @@ $active_tab = 'overview';
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
+    <script>
+        function createGroupClass(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            fetch('api/group-classes.php?action=create', {
+                method: 'POST',
+                body: JSON.stringify({
+                    track: formData.get('track'),
+                    teacher_id: <?php echo $teacher_id; ?>,
+                    scheduled_date: formData.get('scheduled_date'),
+                    scheduled_time: formData.get('scheduled_time'),
+                    duration: parseInt(formData.get('duration')),
+                    max_students: parseInt(formData.get('max_students')),
+                    title: formData.get('title'),
+                    description: formData.get('description')
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Group class created successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to create group class'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            });
+        }
+        
+        function viewGroupClassStudents(classId) {
+            fetch('api/group-classes.php?action=details&class_id=' + classId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.class.students) {
+                        const students = data.class.students;
+                        let message = 'Enrolled Students:\n\n';
+                        if (students.length > 0) {
+                            students.forEach((s, i) => {
+                                message += (i + 1) + '. ' + s.name + ' (' + s.email + ')\n';
+                            });
+                        } else {
+                            message += 'No students enrolled yet.';
+                        }
+                        alert(message);
+                    } else {
+                        alert('Error loading students');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred');
+                });
+        }
+        
+        function updateGroupClassStatus(classId, status) {
+            if (!confirm('Are you sure you want to ' + status + ' this class?')) {
+                return;
+            }
+            
+            fetch('api/group-classes.php?action=update-status', {
+                method: 'POST',
+                body: JSON.stringify({
+                    class_id: classId,
+                    status: status
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Class status updated!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update status'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+        }
+    </script>
 </head>
 <body class="dashboard-layout">
 
@@ -625,7 +751,19 @@ $active_tab = 'overview';
 
         <!-- Students Tab -->
         <div id="students" class="tab-content">
-            <h1>My Students</h1>
+            <h1>My Assigned Students</h1>
+            
+            <?php if (!empty($teacher_tracks)): ?>
+                <div style="margin-bottom: 20px; padding: 15px; background: #f0f7ff; border-radius: 8px; border-left: 4px solid #0b6cf5;">
+                    <strong>Teaching Tracks:</strong> 
+                    <?php foreach ($teacher_tracks as $track): ?>
+                        <span style="display: inline-block; padding: 5px 15px; background: white; border-radius: 20px; margin-left: 10px; font-size: 0.9rem;">
+                            <i class="fas fa-<?php echo $track === 'kids' ? 'child' : ($track === 'coding' ? 'code' : 'user-graduate'); ?>"></i>
+                            <?php echo ucfirst($track); ?>
+                        </span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             
             <?php if (count($students) > 0): ?>
                 <?php foreach ($students as $student): ?>
@@ -633,9 +771,19 @@ $active_tab = 'overview';
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
                         <img src="<?php echo h($student['profile_pic']); ?>" alt="" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                         <div style="flex: 1;">
-                            <h3 style="margin: 0 0 5px; border: none; padding: 0;"><?php echo h($student['name']); ?></h3>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <h3 style="margin: 0; border: none; padding: 0;"><?php echo h($student['name']); ?></h3>
+                                <?php if (!empty($student['track'])): ?>
+                                    <span style="display: inline-block; padding: 3px 10px; background: #e1f0ff; color: #0b6cf5; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                        <?php echo ucfirst($student['track']); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <div style="font-size: 0.9rem; color: var(--gray); margin-bottom: 10px;">
                                 <?php echo h($student['email']); ?> • <?php echo $student['lesson_count']; ?> lessons
+                                <?php if (!empty($student['assigned_at'])): ?>
+                                    • Assigned <?php echo date('M d, Y', strtotime($student['assigned_at'])); ?>
+                                <?php endif; ?>
                             </div>
                             <?php if ($student['last_note']): ?>
                             <div style="background: var(--light-gray); padding: 10px; border-radius: 5px; font-size: 0.9rem; margin-bottom: 10px;">

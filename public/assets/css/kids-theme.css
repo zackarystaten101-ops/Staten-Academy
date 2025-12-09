@@ -1,0 +1,57 @@
+/**
+ * Kids Track Theme
+ * Bright, playful styling for kids classes
+ */
+
+.track-kids {
+    --primary-color: #ff6b9d;
+    --secondary-color: #ffa500;
+    --bg-color: #fff5f8;
+    --text-color: #333;
+    --accent-color: #ffc0cb;
+}
+
+.track-kids .btn-primary,
+.track-kids .primary-button {
+    background: linear-gradient(135deg, #ff6b9d, #ffa500);
+    color: white;
+    border-radius: 25px;
+    padding: 12px 30px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.track-kids .btn-primary:hover,
+.track-kids .primary-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(255, 107, 157, 0.4);
+}
+
+.track-kids .card,
+.track-kids .dashboard-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(255, 107, 157, 0.15);
+    border: 2px solid transparent;
+}
+
+.track-kids .card:hover,
+.track-kids .dashboard-card:hover {
+    border-color: #ff6b9d;
+    box-shadow: 0 10px 30px rgba(255, 107, 157, 0.25);
+}
+
+.track-kids h1, .track-kids h2, .track-kids h3 {
+    color: #ff6b9d;
+    font-weight: 700;
+}
+
+.track-kids .badge {
+    background: linear-gradient(135deg, #ff6b9d, #ffa500);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+

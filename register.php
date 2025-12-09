@@ -64,11 +64,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // Hash password and create account
     if (empty($register_error)) {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-
-            // Insert user with new_student role
-            $stmt = $conn->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'new_student')");
-            $stmt->bind_param("sss", $name, $email, $hashed_password);
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+        
+        // Get track and plan_id from POST or URL parameters
+        $track = $_POST['track'] ?? $_GET['track'] ?? null;
+        $plan_id = $_POST['plan_id'] ?? $_GET['plan_id'] ?? null;
+        
+        // Validate track if provided
+        if ($track && !in_array($track, ['kids', 'adults', 'coding'])) {
+            $track = null;
+        }
+        
+        // Convert plan_id to integer if provided
+        if ($plan_id) {
+            $plan_id = (int)$plan_id;
+            if ($plan_id <= 0) {
+                $plan_id = null;
+            }
+        } else {
+            $plan_id = null;
+        }
+        
+        // Insert user with new_student role, track, and plan_id
+        $sql = "INSERT INTO users (name, email, password, role, learning_track, plan_id) VALUES (?, ?, ?, 'new_student', ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ssssi", $name, $email, $hashed_password, $track, $plan_id);
 
         if ($stmt->execute()) {
             $newUserId = $stmt->insert_id;
@@ -79,7 +99,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->close();
             // Clear output buffer before redirect
             ob_end_clean();
-            header("Location: student-dashboard.php");
+            
+            // Redirect to payment if plan was selected, otherwise dashboard
+            if ($plan_id) {
+                header("Location: payment.php?track=" . urlencode($track) . "&plan_id=" . urlencode($plan_id));
+            } else {
+                header("Location: index.php");
+            }
             exit();
         } else {
             $register_error = "Error creating account. Please try again or contact support.";
@@ -142,7 +168,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         <?php endif; ?>
         
-        <form action="register.php" method="POST" id="registerForm">
+        <?php 
+        $track = $_GET['track'] ?? null;
+        $plan_id = $_GET['plan_id'] ?? null;
+        if ($track): ?>
+            <div class="alert-info" style="background: #d1ecf1; color: #0c5460; padding: 12px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">
+                <i class="fas fa-info-circle"></i> You're signing up for the <strong><?php echo ucfirst($track); ?></strong> track.
+            </div>
+        <?php endif; ?>
+        
+        <form action="register.php<?php echo $track ? '?track=' . urlencode($track) . ($plan_id ? '&plan_id=' . urlencode($plan_id) : '') : ''; ?>" method="POST" id="registerForm">
+            <?php if ($track): ?>
+                <input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>">
+            <?php endif; ?>
+            <?php if ($plan_id): ?>
+                <input type="hidden" name="plan_id" value="<?php echo htmlspecialchars($plan_id); ?>">
+            <?php endif; ?>
             <div class="form-group">
                 <label for="name">Full Name</label>
                 <input type="text" id="name" name="name" required>

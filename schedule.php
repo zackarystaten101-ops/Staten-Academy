@@ -45,16 +45,16 @@ if (!function_exists('getAssetPath')) {
 
 // If not logged in, redirect to login
 if (!isset($_SESSION['user_id'])) {
-    if (isset($_GET['teacher'])) {
-        $_SESSION['redirect_teacher'] = $_GET['teacher'];
-    }
     header("Location: login.php");
     exit();
 }
 
+require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+
 $api = new GoogleCalendarAPI($conn);
 $tzService = new TimezoneService($conn);
 $calendarService = new CalendarService($conn);
+$assignmentModel = new TeacherAssignment($conn);
 
 // Get user ID from session (needed early for timezone and other operations)
 $user_id = $_SESSION['user_id'];
@@ -69,8 +69,53 @@ $user_role = $_SESSION['user_role'] ?? 'student';
 // Get user's timezone
 $user_timezone = $tzService->getUserTimezone($user_id);
 
-// Fetch student's upcoming lessons (for students)
+// For students, get their assigned teacher
 if ($user_role === 'student' || $user_role === 'new_student') {
+    // Get assigned teacher from user record or assignment table
+    $stmt = $conn->prepare("SELECT assigned_teacher_id FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+    $stmt->close();
+    
+    $selected_teacher = $user['assigned_teacher_id'] ?? null;
+    
+    // If no assigned teacher, try to get from assignment table
+    if (!$selected_teacher) {
+        $assignment = $assignmentModel->getStudentTeacher($user_id);
+        if ($assignment) {
+            $selected_teacher = $assignment['teacher_id'];
+            $teacher_data = [
+                'id' => $assignment['teacher_id'],
+                'name' => $assignment['teacher_name'],
+                'email' => $assignment['teacher_email'],
+                'profile_pic' => $assignment['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg'),
+                'bio' => $assignment['teacher_bio'] ?? ''
+            ];
+        }
+    } else {
+        // Fetch teacher details
+        $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
+        $stmt->bind_param("i", $selected_teacher);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            $teacher_data = $result->fetch_assoc();
+        }
+        $stmt->close();
+    }
+    
+    // If still no teacher assigned, redirect to track selection
+    if (!$selected_teacher) {
+        header("Location: index.php");
+        exit();
+    }
+    
+    // Fetch teacher's availability slots (only available slots - students should only see available times)
+    $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
+    
+    // Fetch student's upcoming lessons
     $stmt = $conn->prepare("
         SELECT l.*, u.name as teacher_name, u.profile_pic as teacher_pic
         FROM lessons l
@@ -86,32 +131,19 @@ if ($user_role === 'student' || $user_role === 'new_student') {
         $student_upcoming_lessons[] = $row;
     }
     $stmt->close();
-}
-
-// If teacher parameter is set, fetch teacher details
-if (isset($_GET['teacher'])) {
-    $teacher_param = trim($_GET['teacher']);
-    $teacher_search = "%{$teacher_param}%";
-    
-    $stmt = $conn->prepare("SELECT id, name, email, profile_pic FROM users WHERE role='teacher' AND name LIKE ? LIMIT 1");
-    $stmt->bind_param("s", $teacher_search);
+} elseif ($user_role === 'teacher') {
+    // Teachers view their own schedule
+    $selected_teacher = $user_id;
+    $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
+    $stmt->bind_param("i", $selected_teacher);
     $stmt->execute();
     $result = $stmt->get_result();
-    
     if ($result->num_rows > 0) {
         $teacher_data = $result->fetch_assoc();
-        $selected_teacher = $teacher_data['id'];
-        $stmt->close();
-        
-        // Fetch teacher's availability slots (only available slots - students should only see available times)
-        // Note: getTeacherAvailability already filters by is_available = 1
-        $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
-        
-        // Fetch booked lessons (if user is teacher viewing own lessons)
-        if ($user_role === 'teacher' && $selected_teacher === $_SESSION['user_id']) {
-            $current_lessons = $api->getTeacherLessons($selected_teacher);
-        }
     }
+    $stmt->close();
+    
+    $current_lessons = $api->getTeacherLessons($selected_teacher);
 }
 
 // Handle lesson booking (AJAX request)
@@ -127,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     if (!$selected_teacher) {
         http_response_code(400);
-        echo json_encode(['error' => 'No teacher selected']);
+        echo json_encode(['error' => 'No teacher assigned. Please contact support.']);
         exit();
     }
 

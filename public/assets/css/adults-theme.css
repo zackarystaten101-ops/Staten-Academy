@@ -1,0 +1,57 @@
+/**
+ * Adults Track Theme
+ * Professional, clean styling for adult classes
+ */
+
+.track-adults {
+    --primary-color: #0b6cf5;
+    --secondary-color: #004080;
+    --bg-color: #f0f7ff;
+    --text-color: #333;
+    --accent-color: #e3f2fd;
+}
+
+.track-adults .btn-primary,
+.track-adults .primary-button {
+    background: linear-gradient(135deg, #0b6cf5, #004080);
+    color: white;
+    border-radius: 8px;
+    padding: 12px 30px;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.track-adults .btn-primary:hover,
+.track-adults .primary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(11, 108, 245, 0.3);
+}
+
+.track-adults .card,
+.track-adults .dashboard-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(11, 108, 245, 0.1);
+    border: 1px solid #e1e5e9;
+}
+
+.track-adults .card:hover,
+.track-adults .dashboard-card:hover {
+    border-color: #0b6cf5;
+    box-shadow: 0 8px 25px rgba(11, 108, 245, 0.15);
+}
+
+.track-adults h1, .track-adults h2, .track-adults h3 {
+    color: #004080;
+    font-weight: 600;
+}
+
+.track-adults .badge {
+    background: linear-gradient(135deg, #0b6cf5, #004080);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+

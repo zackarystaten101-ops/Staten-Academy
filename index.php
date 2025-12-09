@@ -27,144 +27,27 @@ if (session_status() === PHP_SESSION_NONE) {
 // Load database connection
 require_once __DIR__ . '/db.php';
 
-// Check if database connection is successful
-if (!isset($conn) || $conn->connect_error) {
-    die("Database connection failed. Please check your database configuration in env.php");
-}
-
 // Load dashboard functions
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
 // Ensure getAssetPath function is available
 if (!function_exists('getAssetPath')) {
     function getAssetPath($asset) {
-        // Remove leading slash if present
         $asset = ltrim($asset, '/');
-        
-        // Build base asset path
         if (strpos($asset, 'assets/') === 0) {
             $assetPath = $asset;
         } else {
             $assetPath = 'assets/' . $asset;
         }
-        
-        // Get base path from SCRIPT_NAME - more reliable for subdirectories
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $basePath = dirname($scriptName);
         $basePath = str_replace('\\', '/', $basePath);
-        
-        // Handle root case
         if ($basePath === '.' || $basePath === '/' || empty($basePath)) {
             $basePath = '';
         } else {
-            // Ensure leading slash and remove trailing
             $basePath = '/' . trim($basePath, '/');
         }
-        
-        // Check if file exists in public/ directory (local development)
-        // Use absolute path from project root
-        $publicAssetPath = __DIR__ . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $assetPath);
-        
-        // If file exists in public/ directory, use that path
-        if (file_exists($publicAssetPath)) {
-            // For local dev with public/ directory structure
-            return $basePath . '/public/' . $assetPath;
-        }
-        
-        // For cPanel flat structure (files directly in public_html/assets/)
         return $basePath . '/' . $assetPath;
-    }
-}
-
-// Get filter parameters
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$specialty_filter = isset($_GET['specialty']) ? trim($_GET['specialty']) : '';
-$min_rating = isset($_GET['min_rating']) ? (float)$_GET['min_rating'] : 0;
-$sort = isset($_GET['sort']) ? $_GET['sort'] : 'default';
-
-// Build query with filters
-$sql = "SELECT u.id, u.name, u.bio, u.profile_pic, u.specialty, u.hourly_rate,
-        COALESCE((SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id), 0) as avg_rating,
-        COALESCE((SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id), 0) as review_count
-        FROM users u 
-        WHERE u.role='teacher' AND u.application_status='approved'";
-
-$params = [];
-$types = "";
-
-if ($search) {
-    $sql .= " AND (u.name LIKE ? OR u.bio LIKE ? OR u.specialty LIKE ?)";
-    $search_param = "%$search%";
-    $params[] = $search_param;
-    $params[] = $search_param;
-    $params[] = $search_param;
-    $types .= "sss";
-}
-
-if ($specialty_filter) {
-    $sql .= " AND u.specialty LIKE ?";
-    $params[] = "%$specialty_filter%";
-    $types .= "s";
-}
-
-if ($min_rating > 0) {
-    $sql .= " HAVING avg_rating >= ?";
-    $params[] = $min_rating;
-    $types .= "d";
-}
-
-// Sort
-switch ($sort) {
-    case 'rating':
-        $sql .= " ORDER BY avg_rating DESC";
-        break;
-    case 'reviews':
-        $sql .= " ORDER BY review_count DESC";
-        break;
-    case 'price_low':
-        $sql .= " ORDER BY COALESCE(u.hourly_rate, 999) ASC";
-        break;
-    case 'price_high':
-        $sql .= " ORDER BY COALESCE(u.hourly_rate, 0) DESC";
-        break;
-    default:
-        $sql .= " ORDER BY u.id DESC";
-}
-
-$stmt = $conn->prepare($sql);
-if ($stmt) {
-    if (count($params) > 0) {
-        $stmt->bind_param($types, ...$params);
-    }
-    $stmt->execute();
-    $teachers_result = $stmt->get_result();
-    if (!$teachers_result) {
-        // If execute failed, use fallback
-        $teachers_result = $conn->query("SELECT u.id, u.name, u.bio, u.profile_pic, u.specialty, u.hourly_rate,
-            COALESCE((SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id), 0) as avg_rating,
-            COALESCE((SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id), 0) as review_count
-            FROM users u 
-            WHERE u.role='teacher' AND u.application_status='approved'
-            ORDER BY u.id DESC");
-    }
-} else {
-    // Fallback to simple query with all necessary columns
-    $teachers_result = $conn->query("SELECT u.id, u.name, u.bio, u.profile_pic, u.specialty, u.hourly_rate,
-        COALESCE((SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id), 0) as avg_rating,
-        COALESCE((SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id), 0) as review_count
-        FROM users u 
-        WHERE u.role='teacher' AND u.application_status='approved'
-        ORDER BY u.id DESC");
-}
-
-// Get unique specialties for filter dropdown
-$specialties = [];
-$spec_result = $conn->query("SELECT DISTINCT specialty FROM users WHERE role='teacher' AND application_status='approved' AND specialty IS NOT NULL AND specialty != ''");
-if ($spec_result) {
-    while ($row = $spec_result->fetch_assoc()) {
-        if (!empty($row['specialty'])) {
-            $specialties[] = $row['specialty'];
-        }
     }
 }
 
@@ -177,212 +60,199 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <meta name="theme-color" content="#004080">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="Welcome to Staten Academy - Learn English with professional teachers and flexible plans.">
-    <title>Staten Academy - Learn English</title>
+    <meta name="description" content="Staten Academy - Choose your English learning track: Kids, Adults, or English for Coding">
+    <title>Staten Academy - Choose Your Learning Track</title>
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
-    <!-- MODERN SHADOWS - To disable, comment out the line below -->
-    <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/tracks.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        .filter-bar {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            margin-bottom: 30px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: center;
-        }
-        .filter-bar input[type="text"],
-        .filter-bar select {
-            padding: 12px 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            transition: border-color 0.2s;
-        }
-        .filter-bar input[type="text"]:focus,
-        .filter-bar select:focus {
-            outline: none;
-            border-color: #0b6cf5;
-        }
-        .filter-bar input[type="text"] {
-            flex: 1;
-            min-width: 200px;
-        }
-        .filter-bar select {
-            min-width: 150px;
-        }
-        .filter-bar button {
-            background: linear-gradient(135deg, #0b6cf5 0%, #0056b3 100%);
+        .hero-section {
+            background: linear-gradient(135deg, #004080 0%, #0b6cf5 100%);
             color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .filter-bar button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(11, 108, 245, 0.3);
-        }
-        .filter-bar .clear-btn {
-            background: #f0f2f5;
-            color: #666;
-        }
-        .filter-bar .clear-btn:hover {
-            background: #e0e2e5;
-            box-shadow: none;
-        }
-        
-        .teacher-card {
-            position: relative;
-        }
-        .teacher-rating {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-top: 8px;
-            font-size: 0.9rem;
-        }
-        .teacher-rating i {
-            color: #ffc107;
-        }
-        .teacher-rating span {
-            color: #666;
-        }
-        .teacher-specialty {
-            display: inline-block;
-            background: #e1f0ff;
-            color: #0b6cf5;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            margin-top: 8px;
-        }
-        .teacher-price {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: linear-gradient(135deg, #0b6cf5 0%, #0056b3 100%);
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 0.85rem;
-        }
-        .no-results {
-            grid-column: 1 / -1;
+            padding: 80px 20px;
             text-align: center;
-            padding: 60px 20px;
-            background: #f9fbff;
-            border-radius: 12px;
-            border: 2px dashed #0b6cf5;
         }
-        .no-results i {
+        .hero-section h1 {
             font-size: 3rem;
-            color: #0b6cf5;
-            opacity: 0.5;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            font-weight: 700;
         }
-
-        @media (max-width: 768px) {
-            .filter-bar {
-                flex-direction: column;
-            }
-            .filter-bar input[type="text"],
-            .filter-bar select {
-                width: 100%;
-            }
+        .hero-section p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            max-width: 600px;
+            margin: 0 auto 40px;
         }
-        
-        /* Plans Section Styles */
-        .plans-section {
-            background: #f9fbff;
-            padding: 60px 20px;
+        .tracks-container {
+            max-width: 1400px;
+            margin: -60px auto 80px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 10;
+        }
+        .tracks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
             margin-top: 40px;
         }
-        .plans-container {
+        .track-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            position: relative;
+            overflow: hidden;
+        }
+        .track-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--track-color-1), var(--track-color-2));
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+        .track-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .track-card:hover::before {
+            transform: scaleX(1);
+        }
+        .track-card.kids {
+            --track-color-1: #ff6b9d;
+            --track-color-2: #ffa500;
+        }
+        .track-card.adults {
+            --track-color-1: #0b6cf5;
+            --track-color-2: #004080;
+        }
+        .track-card.coding {
+            --track-color-1: #00d4ff;
+            --track-color-2: #0066cc;
+        }
+        .track-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+        .track-card.kids .track-icon {
+            color: #ff6b9d;
+        }
+        .track-card.adults .track-icon {
+            color: #0b6cf5;
+        }
+        .track-card.coding .track-icon {
+            color: #00d4ff;
+        }
+        .track-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #004080;
+        }
+        .track-description {
+            font-size: 1.1rem;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .track-features {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .track-features li {
+            padding: 10px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .track-features li i {
+            color: var(--track-color-1);
+            font-size: 1.2rem;
+        }
+        .track-cta {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--track-color-1), var(--track-color-2));
+            color: white;
+            padding: 15px 35px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-decoration: none;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .track-cta:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        .features-section {
+            background: #f9fbff;
+            padding: 80px 20px;
+            text-align: center;
+        }
+        .features-section h2 {
+            font-size: 2.5rem;
+            color: #004080;
+            margin-bottom: 50px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
             max-width: 1200px;
             margin: 0 auto;
         }
-        .plans-section h2 {
-            color: #004080;
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-        .plans-intro {
-            text-align: center;
-            color: #666;
-            font-size: 1.1rem;
-            margin-bottom: 40px;
-        }
-        .single-class-box {
+        .feature-item {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             padding: 30px;
-            text-align: center;
-            margin-bottom: 40px;
-            border: 2px solid #0b6cf5;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
         }
-        .single-class-box h3 {
+        .feature-item i {
+            font-size: 3rem;
+            color: #0b6cf5;
+            margin-bottom: 20px;
+        }
+        .feature-item h3 {
             color: #004080;
             margin-bottom: 10px;
-            font-size: 1.8rem;
         }
-        .single-class-box p {
+        .feature-item p {
             color: #666;
-            margin-bottom: 15px;
+            line-height: 1.6;
         }
-        .single-class-price {
-            font-size: 2.5rem;
-            color: #0b6cf5;
-            font-weight: bold;
-            margin: 20px 0;
-        }
-        .single-class-price span {
-            font-size: 1rem;
-            color: #666;
-            font-weight: normal;
-        }
-        .btn-buy {
-            display: inline-block;
-            background: #0b6cf5;
-            color: white;
-            padding: 15px 40px;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 1.1rem;
-            border: none;
-            cursor: pointer;
-            transition: transform 0.2s, background 0.2s;
-            margin-top: 10px;
-        }
-        .btn-buy:hover {
-            transform: scale(1.05);
-            background: #0056b3;
-        }
-        .plans-subtitle {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #004080;
-            font-size: 1.8rem;
-        }
-        .plans-disclaimer {
-            text-align: center;
-            margin-top: 30px;
-            color: #666;
-            font-size: 0.9rem;
+        @media (max-width: 768px) {
+            .hero-section h1 {
+                font-size: 2rem;
+            }
+            .hero-section p {
+                font-size: 1.1rem;
+            }
+            .tracks-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            .track-card {
+                padding: 30px;
+            }
+            .track-title {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -393,43 +263,22 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo">
             </a>
         </div>
-
         <div class="header-center">
             <div class="branding">
                 <h1 class="site-title">Staten Academy</h1>
                 <p class="site-tag">Learn English with professional teachers and flexible plans.</p>
             </div>
         </div>
-
         <?php include 'header-user.php'; ?>
-
         <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
             <span class="hamburger" aria-hidden="true"></span>
         </button>
-
         <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
             <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
-            
             <a class="nav-btn" href="index.php">
                 <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                 <span class="nav-label">Home</span>
             </a>
-            
-            <a class="nav-btn" href="#teachers">
-                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
-                <span class="nav-label">Teachers</span>
-            </a>
-            
-            <a class="nav-btn" href="#plans">
-                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M7.5 21H2V9h5.5v12zm7.25-18h-5.5v18h5.5V3zM22 11h-5.5v10H22V11z"/></svg>
-                <span class="nav-label">Plans</span>
-            </a>
-            
-            <a class="nav-btn" href="#about">
-                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M11 17h2v-6h-2v6zm0-8h2V7h-2v2z"/></svg>
-                <span class="nav-label">About Us</span>
-            </a>
-            
             <?php if (isset($_SESSION['user_id'])): ?>
                 <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
                     <a class="nav-btn" href="teacher-dashboard.php" style="background-color: #28a745; color: white; border: none;">
@@ -450,206 +299,109 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             <?php endif; ?>
         </div>
     </header>
-
     <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
 
     <main id="main-content">
-    <section id="teachers" class="teachers">
-        <h2>Meet Our Teachers</h2>
-        
-        <!-- Filter Bar -->
-        <form class="filter-bar" method="GET" action="index.php#teachers">
-            <input type="text" name="search" placeholder="Search teachers..." value="<?php echo htmlspecialchars($search); ?>">
-            
-            <?php if (count($specialties) > 0): ?>
-            <select name="specialty">
-                <option value="">All Subjects</option>
-                <?php foreach ($specialties as $spec): ?>
-                <option value="<?php echo htmlspecialchars($spec); ?>" <?php echo $specialty_filter === $spec ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($spec); ?>
-                </option>
-                <?php endforeach; ?>
-            </select>
-            <?php endif; ?>
-            
-            <select name="min_rating">
-                <option value="0">Any Rating</option>
-                <option value="4" <?php echo $min_rating == 4 ? 'selected' : ''; ?>>4+ Stars</option>
-                <option value="4.5" <?php echo $min_rating == 4.5 ? 'selected' : ''; ?>>4.5+ Stars</option>
-            </select>
-            
-            <select name="sort">
-                <option value="default">Sort By</option>
-                <option value="rating" <?php echo $sort === 'rating' ? 'selected' : ''; ?>>Highest Rated</option>
-                <option value="reviews" <?php echo $sort === 'reviews' ? 'selected' : ''; ?>>Most Reviews</option>
-                <option value="price_low" <?php echo $sort === 'price_low' ? 'selected' : ''; ?>>Price: Low to High</option>
-                <option value="price_high" <?php echo $sort === 'price_high' ? 'selected' : ''; ?>>Price: High to Low</option>
-            </select>
-            
-            <button type="submit"><i class="fas fa-search"></i> Search</button>
-            <?php if ($search || $specialty_filter || $min_rating || $sort !== 'default'): ?>
-            <a href="index.php#teachers" class="filter-bar button clear-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
-                <i class="fas fa-times"></i> Clear
-            </a>
-            <?php endif; ?>
-        </form>
-        
-        <div class="teachers-grid">
-            <?php 
-            $has_teachers = false;
-            while($teacher = $teachers_result->fetch_assoc()): 
-                $has_teachers = true;
-            ?>
-            <article class="teacher-card">
-                <?php if (!empty($teacher['hourly_rate']) && $teacher['hourly_rate'] > 0): ?>
-                <span class="teacher-price">$<?php echo number_format($teacher['hourly_rate'], 0); ?>/hr</span>
-                <?php endif; ?>
-                <a href="profile.php?id=<?php echo $teacher['id']; ?>" style="text-decoration: none; color: inherit;">
-                    <img src="<?php echo htmlspecialchars(!empty($teacher['profile_pic']) ? $teacher['profile_pic'] : getAssetPath('images/placeholder-teacher.svg')); ?>" alt="<?php echo htmlspecialchars($teacher['name']); ?>" onerror="this.onerror=null;this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
-                    <div class="teacher-info">
-                        <h3><?php echo htmlspecialchars($teacher['name']); ?></h3>
-                        <?php if (!empty($teacher['specialty'])): ?>
-                        <span class="teacher-specialty"><?php echo htmlspecialchars($teacher['specialty']); ?></span>
-                        <?php endif; ?>
-                        <div class="teacher-rating">
-                            <?php 
-                            $rating = round($teacher['avg_rating'], 1);
-                            for ($i = 1; $i <= 5; $i++) {
-                                if ($i <= $rating) {
-                                    echo '<i class="fas fa-star"></i>';
-                                } elseif ($i - 0.5 <= $rating) {
-                                    echo '<i class="fas fa-star-half-alt"></i>';
-                                } else {
-                                    echo '<i class="far fa-star"></i>';
-                                }
-                            }
-                            ?>
-                            <span><?php echo $rating; ?> (<?php echo $teacher['review_count']; ?>)</span>
-                        </div>
-                        <?php if (!empty($teacher['bio'])): ?>
-                        <p><?php echo htmlspecialchars(substr($teacher['bio'], 0, 80)); ?><?php echo strlen($teacher['bio']) > 80 ? '...' : ''; ?></p>
-                        <?php else: ?>
-                        <p style="color: #999; font-style: italic;">No bio available</p>
-                        <?php endif; ?>
-                    </div>
+        <section class="hero-section">
+            <h1>Choose Your Learning Track</h1>
+            <p>Select the perfect English learning path for you. Each track is designed with your goals in mind.</p>
+        </section>
+
+        <div class="tracks-container">
+            <div class="tracks-grid">
+                <a href="kids-plans.php" class="track-card kids">
+                    <i class="fas fa-child track-icon"></i>
+                    <h2 class="track-title">Kids Classes</h2>
+                    <p class="track-description">Fun, interactive English lessons designed for children ages 3-11. Engaging activities, games, and age-appropriate content.</p>
+                    <ul class="track-features">
+                        <li><i class="fas fa-check-circle"></i> Ages 3-11</li>
+                        <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
+                        <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
+                        <li><i class="fas fa-check-circle"></i> Kid-friendly teachers</li>
+                    </ul>
+                    <span class="track-cta">View Kids Plans →</span>
                 </a>
-            </article>
-            <?php endwhile; ?>
-            
-            <?php if (!$has_teachers): ?>
-            <div class="no-results">
-                <?php if ($search || $specialty_filter || $min_rating): ?>
-                    <i class="fas fa-search"></i>
-                    <h3 style="color: #004080; margin-bottom: 10px;">No Teachers Found</h3>
-                    <p style="color: #666; margin-bottom: 15px;">Try adjusting your search filters or browse all teachers.</p>
-                    <a href="index.php#teachers" style="color: #0b6cf5; font-weight: bold;">View All Teachers</a>
-                <?php else: ?>
-                    <i class="fas fa-chalkboard-teacher"></i>
-                    <h3 style="color: #0b6cf5; margin-bottom: 10px;">Our Teachers Coming Soon</h3>
-                    <p style="color: #666; margin-bottom: 15px;">We're adding qualified teachers to our platform. Check back soon!</p>
-                    <p style="color: #999; font-size: 0.9rem;">Interested in teaching? <a href="apply-teacher.php" style="color: #0b6cf5; font-weight: bold;">Apply here</a>.</p>
-                <?php endif; ?>
+
+                <a href="adults-plans.php" class="track-card adults">
+                    <i class="fas fa-user-graduate track-icon"></i>
+                    <h2 class="track-title">Adult Classes</h2>
+                    <p class="track-description">Professional English training for adults 12+. Focus on fluency, career advancement, travel, and real-world communication.</p>
+                    <ul class="track-features">
+                        <li><i class="fas fa-check-circle"></i> Ages 12+</li>
+                        <li><i class="fas fa-check-circle"></i> Career & business English</li>
+                        <li><i class="fas fa-check-circle"></i> Travel & conversation</li>
+                        <li><i class="fas fa-check-circle"></i> Flexible scheduling</li>
+                    </ul>
+                    <span class="track-cta">View Adult Plans →</span>
+                </a>
+
+                <a href="coding-plans.php" class="track-card coding">
+                    <i class="fas fa-code track-icon"></i>
+                    <h2 class="track-title">English for Coding</h2>
+                    <p class="track-description">Specialized English training for developers. Technical vocabulary, interview prep, documentation, and developer communication.</p>
+                    <ul class="track-features">
+                        <li><i class="fas fa-check-circle"></i> Technical vocabulary</li>
+                        <li><i class="fas fa-check-circle"></i> Interview preparation</li>
+                        <li><i class="fas fa-check-circle"></i> Code documentation</li>
+                        <li><i class="fas fa-check-circle"></i> Developer scenarios</li>
+                    </ul>
+                    <span class="track-cta">View Coding Plans →</span>
+                </a>
             </div>
-            <?php endif; ?>
         </div>
-    </section>
 
-    <section id="plans" class="plans-section">
-        <div class="plans-container">
-            <h2>Our Plans & Pricing</h2>
-            <p class="plans-intro">Choose the perfect plan for your English learning journey</p>
-            
-            <!-- Trial / Individual Class -->
-            <div class="single-class-box">
-                <h3>Trial Lesson / Individual Class</h3>
-                <p>Perfect for trying out a teacher or flexible scheduling.</p>
-                <div class="single-class-price">$30 <span>/ hour</span></div>
-                <a href="payment.php" class="btn-buy">Book Now</a>
-            </div>
-
-            <!-- Subscription Plans -->
-            <h3 class="plans-subtitle">Monthly Subscriptions</h3>
-            
-            <div class="plans-grid">
-                
-                <a href="payment.php" class="plan">
-                    <div class="plan-body">
-                        <h3>Economy Plan</h3>
-                        <p class="desc">1 class per week with a certified teacher.</p>
-                        <p class="desc" style="color: #d9534f; font-weight: 600; margin-top: 8px; font-size: 0.9rem;"><i class="fas fa-info-circle"></i> Teacher will be assigned</p>
-                        <p class="price">$85 / month</p>
-                    </div>
-                </a>
-
-                <a href="payment.php" class="plan">
-                    <div class="plan-body">
-                        <h3>Basic Plan</h3>
-                        <p class="desc">2 classes per week. Choose your own tutor.</p>
-                        <p class="price">$240 / month</p>
-                    </div>
-                </a>
-
-                <a href="payment.php" class="plan">
-                    <div class="plan-body">
-                        <h3>Standard Plan</h3>
-                        <p class="desc">4 classes per week, extra learning resources.</p>
-                        <p class="price">$400 / month</p>
-                    </div>
-                </a>
-
-                <a href="payment.php" class="plan">
-                    <div class="plan-body">
-                        <h3>Premium Plan</h3>
-                        <p class="desc">Unlimited classes, exclusive materials.</p>
-                        <p class="price">$850 / month</p>
-                    </div>
-                </a>
-
-            </div>
-            
-            <p class="plans-disclaimer">* Plans renew automatically. Cancel anytime.</p>
-            
-            <!-- Custom Plan Option -->
-            <div style="text-align: center; margin-top: 40px; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
-                <h3 style="color: #004080; margin-bottom: 15px; font-size: 1.8rem;">Need a Custom Plan?</h3>
-                <p style="color: #666; margin-bottom: 20px; max-width: 600px; margin-left: auto; margin-right: auto;">
-                    Build your own plan with the exact number of hours and courses you need. Choose your teacher, add extra courses, and include group support classes.
+        <!-- Video Introduction Section -->
+        <section class="video-intro-section" style="background: linear-gradient(135deg, #004080 0%, #0b6cf5 100%); color: white; padding: 80px 20px; text-align: center;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <h2 style="font-size: 2.5rem; margin-bottom: 20px; font-weight: 700;">Discover Our Teaching Style</h2>
+                <p style="font-size: 1.2rem; margin-bottom: 40px; opacity: 0.95; max-width: 700px; margin-left: auto; margin-right: auto;">
+                    Watch our introduction video to learn about our unique teaching approach and hear from our students about their learning experience.
                 </p>
-                <a href="custom-plan.php" style="display: inline-block; background: linear-gradient(135deg, #0b6cf5 0%, #0056b3 100%); color: white; padding: 15px 40px; border-radius: 50px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: transform 0.2s, box-shadow 0.2s;">
-                    <i class="fas fa-cog"></i> Create Custom Plan
-                </a>
+                <div style="max-width: 900px; margin: 0 auto; position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    <iframe 
+                        id="intro-video" 
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" 
+                        src="https://www.youtube.com/embed/YOUR_VIDEO_ID_HERE" 
+                        title="Staten Academy Introduction Video"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen>
+                    </iframe>
+                </div>
+                <p style="margin-top: 30px; font-size: 0.95rem; opacity: 0.8;">
+                    <i class="fas fa-info-circle"></i> Replace "YOUR_VIDEO_ID_HERE" with your YouTube video ID in the code
+                </p>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="about" class="about-us" style="background: white; padding: 60px 20px; margin-top: 40px;">
-        <div class="container" style="text-align: center; max-width: 900px; margin: 0 auto;">
-            <h2 style="color: #004080; font-size: 2.5rem; margin-bottom: 20px;">About Staten Academy</h2>
-            <p style="font-size: 1.1rem; line-height: 1.8; color: #555; margin-bottom: 30px;">
-                Staten Academy is a family-owned English school dedicated to providing personalized, high-quality education to students of all ages. Founded on the belief that language learning should be engaging and accessible, we have grown from a small tutoring service into a full academy with a team of passionate educators.
-            </p>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; text-align: left; margin-top: 40px;">
-                <div style="padding: 20px; background: #f9fbff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                    <h3 style="color: #0b6cf5; margin-bottom: 10px;"><i class="fas fa-book-open"></i> Our Method</h3>
-                    <p style="color: #666;">We believe in "Natural Acquisition" through immersion and interaction. Our classes focus on speaking and listening first, mimicking how we learn our native languages.</p>
+        <section class="features-section">
+            <h2>Why Choose Staten Academy?</h2>
+            <div class="features-grid">
+                <div class="feature-item">
+                    <i class="fas fa-user-tie"></i>
+                    <h3>Expert Teachers</h3>
+                    <p>All our teachers are certified and experienced in their specialized tracks.</p>
                 </div>
-                <div style="padding: 20px; background: #f9fbff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                    <h3 style="color: #0b6cf5; margin-bottom: 10px;"><i class="fas fa-heart"></i> Family Values</h3>
-                    <p style="color: #666;">As a family-run business, we treat every student like a member of our community. We offer a supportive, non-judgmental environment for learning.</p>
+                <div class="feature-item">
+                    <i class="fas fa-calendar-check"></i>
+                    <h3>Flexible Scheduling</h3>
+                    <p>Book classes that fit your schedule with our easy-to-use calendar system.</p>
                 </div>
-                <div style="padding: 20px; background: #f9fbff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                    <h3 style="color: #0b6cf5; margin-bottom: 10px;"><i class="fas fa-clock"></i> Flexibility</h3>
-                    <p style="color: #666;">We understand that every learner is unique. That's why we offer flexible scheduling and customized learning plans to fit your goals.</p>
+                <div class="feature-item">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>Track Your Progress</h3>
+                    <p>Monitor your improvement with detailed progress reports and analytics.</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-users"></i>
+                    <h3>Group Classes</h3>
+                    <p>Join group sessions to practice with peers and enhance your learning.</p>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
     </main>
 
     <footer>
-        <p>Contact us: info@statenacademy.com | Phone: +1 234 567 890</p>
-        <p>&copy; 2023 Staten Academy. All rights reserved.</p>
+        <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
     </footer>
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>

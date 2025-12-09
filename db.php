@@ -95,6 +95,11 @@ if (!in_array('age', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN
 if (!in_array('age_visibility', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN age_visibility ENUM('private', 'public') DEFAULT 'private' AFTER age");
 if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN specialty VARCHAR(100) DEFAULT NULL AFTER age_visibility");
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
+if (!in_array('learning_track', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN learning_track ENUM('kids', 'adults', 'coding') NULL AFTER hourly_rate");
+if (!in_array('assigned_teacher_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN assigned_teacher_id INT(6) UNSIGNED NULL AFTER learning_track");
+if (!in_array('plan_id', $existing_cols) && !in_array('subscription_plan_id', $existing_cols)) {
+    $conn->query("ALTER TABLE users ADD COLUMN plan_id INT NULL AFTER assigned_teacher_id");
+}
 
 // Phase 1: Visitor role and subscription fields
 // Update role ENUM to include 'visitor' if not already updated
@@ -650,6 +655,17 @@ if ($conn->query($sql) === FALSE) {
     }
 }
 
+// Add track-specific columns to subscription_plans table
+$plan_cols = $conn->query("SHOW COLUMNS FROM subscription_plans");
+$existing_plan_cols = [];
+if ($plan_cols) {
+    while($row = $plan_cols->fetch_assoc()) { $existing_plan_cols[] = $row['Field']; }
+}
+if (!in_array('track', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track ENUM('kids', 'adults', 'coding') NULL AFTER display_order");
+if (!in_array('one_on_one_classes_per_week', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN one_on_one_classes_per_week INT DEFAULT 0 AFTER track");
+if (!in_array('group_classes_included', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN group_classes_included BOOLEAN DEFAULT FALSE AFTER one_on_one_classes_per_week");
+if (!in_array('track_specific_features', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track_specific_features JSON NULL AFTER group_classes_included");
+
 // Create user_selected_courses table
 $sql = "CREATE TABLE IF NOT EXISTS user_selected_courses (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -766,4 +782,99 @@ if ($conn->query($sql) === FALSE) {
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='custom_plans' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE custom_plans ADD CONSTRAINT fk_custom_plan_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Phase 4: Three-Track Platform Tables
+// Create teacher_assignments table
+$sql = "CREATE TABLE IF NOT EXISTS teacher_assignments (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    track ENUM('kids', 'adults', 'coding') NOT NULL,
+    assigned_by INT(6) UNSIGNED NOT NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('active', 'inactive', 'transferred') DEFAULT 'active',
+    notes TEXT,
+    INDEX idx_student (student_id),
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_track (track),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys for teacher_assignments
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_assignments' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE teacher_assignments ADD CONSTRAINT fk_assignment_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_assignments' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE teacher_assignments ADD CONSTRAINT fk_assignment_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_assignments' AND COLUMN_NAME='assigned_by' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE teacher_assignments ADD CONSTRAINT fk_assignment_admin FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create group_classes table
+$sql = "CREATE TABLE IF NOT EXISTS group_classes (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    track ENUM('kids', 'adults', 'coding') NOT NULL,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    scheduled_date DATE NOT NULL,
+    scheduled_time TIME NOT NULL,
+    duration INT DEFAULT 60,
+    max_students INT DEFAULT 10,
+    current_enrollment INT DEFAULT 0,
+    status ENUM('scheduled', 'in_progress', 'completed', 'cancelled') DEFAULT 'scheduled',
+    title VARCHAR(255),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_track (track),
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_date (scheduled_date),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign key for group_classes
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='group_classes' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE group_classes ADD CONSTRAINT fk_groupclass_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create group_class_enrollments table
+$sql = "CREATE TABLE IF NOT EXISTS group_class_enrollments (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    group_class_id INT(6) UNSIGNED NOT NULL,
+    student_id INT(6) UNSIGNED NOT NULL,
+    enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    attendance_status ENUM('enrolled', 'attended', 'absent', 'cancelled') DEFAULT 'enrolled',
+    UNIQUE KEY unique_enrollment (group_class_id, student_id),
+    INDEX idx_class (group_class_id),
+    INDEX idx_student (student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys for group_class_enrollments
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='group_class_enrollments' AND COLUMN_NAME='group_class_id' AND REFERENCED_TABLE_NAME='group_classes'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE group_class_enrollments ADD CONSTRAINT fk_enrollment_class FOREIGN KEY (group_class_id) REFERENCES group_classes(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='group_class_enrollments' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE group_class_enrollments ADD CONSTRAINT fk_enrollment_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Add foreign key for assigned_teacher_id in users table
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='users' AND COLUMN_NAME='assigned_teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_assigned_teacher FOREIGN KEY (assigned_teacher_id) REFERENCES users(id) ON DELETE SET NULL");
+}
+
+// Add foreign key for plan_id in users table
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='users' AND COLUMN_NAME='plan_id' AND REFERENCED_TABLE_NAME='subscription_plans'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL");
 }

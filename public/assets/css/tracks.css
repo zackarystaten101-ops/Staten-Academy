@@ -1,0 +1,55 @@
+/**
+ * Track-Specific Styles
+ * Base styles for the three learning tracks
+ */
+
+/* Track Color Variables */
+:root {
+    --track-kids-primary: #ff6b9d;
+    --track-kids-secondary: #ffa500;
+    --track-kids-bg: #fff5f8;
+    
+    --track-adults-primary: #0b6cf5;
+    --track-adults-secondary: #004080;
+    --track-adults-bg: #f0f7ff;
+    
+    --track-coding-primary: #00d4ff;
+    --track-coding-secondary: #0066cc;
+    --track-coding-bg: #f0f9ff;
+}
+
+/* Track-specific classes */
+.track-kids {
+    --track-primary: var(--track-kids-primary);
+    --track-secondary: var(--track-kids-secondary);
+    --track-bg: var(--track-kids-bg);
+}
+
+.track-adults {
+    --track-primary: var(--track-adults-primary);
+    --track-secondary: var(--track-adults-secondary);
+    --track-bg: var(--track-adults-bg);
+}
+
+.track-coding {
+    --track-primary: var(--track-coding-primary);
+    --track-secondary: var(--track-coding-secondary);
+    --track-bg: var(--track-coding-bg);
+}
+
+/* Apply track colors to elements */
+.track-kids .btn-primary,
+.track-kids .primary-button {
+    background: linear-gradient(135deg, var(--track-kids-primary), var(--track-kids-secondary));
+}
+
+.track-adults .btn-primary,
+.track-adults .primary-button {
+    background: linear-gradient(135deg, var(--track-adults-primary), var(--track-adults-secondary));
+}
+
+.track-coding .btn-primary,
+.track-coding .primary-button {
+    background: linear-gradient(135deg, var(--track-coding-primary), var(--track-coding-secondary));
+}
+

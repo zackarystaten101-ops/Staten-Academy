@@ -121,7 +121,6 @@ if (isset($admin_stats_for_sidebar)) {
                 <i class="fas fa-user"></i> My Profile
             </a>
             <?php endif; ?>
-            <a href="index.php#teachers"><i class="fas fa-chalkboard-teacher"></i> Browse Teachers</a>
             <a href="payment.php" class="upgrade-link" style="background: #004080; color: white; font-weight: bold;">
                 <i class="fas fa-arrow-up"></i> Upgrade to Student
             </a>
@@ -245,6 +244,9 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reviews'); } return false;" class="<?php echo $active_tab === 'reviews' ? 'active' : ''; ?>">
                 <i class="fas fa-star"></i> Reviews
             </a>
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('group-classes'); } return false;" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">
+                <i class="fas fa-users"></i> Group Classes
+            </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('resources'); } return false;" class="<?php echo $active_tab === 'resources' ? 'active' : ''; ?>">
                 <i class="fas fa-folder-open"></i> Resources
             </a>
@@ -274,6 +276,9 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="teacher-dashboard.php#reviews" class="<?php echo $active_tab === 'reviews' ? 'active' : ''; ?>">
                 <i class="fas fa-star"></i> Reviews
             </a>
+            <a href="teacher-dashboard.php#group-classes" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">
+                <i class="fas fa-users"></i> Group Classes
+            </a>
             <a href="teacher-dashboard.php#resources" class="<?php echo $active_tab === 'resources' ? 'active' : ''; ?>">
                 <i class="fas fa-folder-open"></i> Resources
             </a>
@@ -285,7 +290,6 @@ if (isset($admin_stats_for_sidebar)) {
                 <i class="fas fa-user-edit"></i> Edit Profile
             </a>
             <?php endif; ?>
-            <a href="profile.php?id=<?php echo $user_id; ?>"><i class="fas fa-eye"></i> View Profile</a>
             <a href="teacher-calendar-setup.php" class="<?php echo ($active_tab === 'calendar-setup' || basename($_SERVER['PHP_SELF']) === 'teacher-calendar-setup.php') ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> Calendar Setup</a>
             <a href="schedule.php" class="<?php echo (basename($_SERVER['PHP_SELF']) === 'schedule.php') ? 'active' : ''; ?>"><i class="fas fa-calendar"></i> View Bookings</a>
             <hr>

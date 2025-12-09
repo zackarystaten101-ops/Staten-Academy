@@ -34,6 +34,25 @@ class SubscriptionPlan extends Model {
         $result = $stmt->get_result();
         return $result->fetch_assoc();
     }
+    
+    /**
+     * Get plans by track
+     */
+    public function getPlansByTrack($track) {
+        $sql = "SELECT * FROM {$this->table} 
+                WHERE track = ? AND is_active = TRUE 
+                ORDER BY display_order ASC, one_on_one_classes_per_week ASC";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param("s", $track);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $plans = [];
+        while ($row = $result->fetch_assoc()) {
+            $plans[] = $row;
+        }
+        $stmt->close();
+        return $plans;
+    }
 }
 
 
