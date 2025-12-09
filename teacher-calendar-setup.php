@@ -215,7 +215,8 @@ $page_title = 'Calendar Setup';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Calendar page specific styles */
-        .calendar-container { max-width: 1200px; margin: 0 auto; }
+        .calendar-container { max-width: 100%; margin: 0; }
+        #teacher-calendar { width: 100% !important; }
 
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .card h3 { margin-top: 0; color: #004080; border-bottom: 2px solid #0b6cf5; padding-bottom: 10px; }
@@ -299,7 +300,7 @@ $page_title = 'Calendar Setup';
                 </div>
 
                 <!-- Preply-Style Calendar -->
-                <div class="card" style="padding: 0; overflow: hidden;">
+                <div class="card" style="padding: 0; overflow-x: auto; overflow-y: visible;">
                     <div style="padding: 20px; border-bottom: 2px solid #dee2e6;">
                         <h3 style="margin: 0;"><i class="fas fa-calendar-alt"></i> Manage Your Availability</h3>
                         <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin-top: 15px; border-left: 4px solid #0b6cf5;">
@@ -313,7 +314,7 @@ $page_title = 'Calendar Setup';
                             </ul>
                         </div>
                     </div>
-                    <div id="teacher-calendar" style="padding: 20px; position: relative;">
+                    <div id="teacher-calendar" style="padding: 20px; position: relative; width: 100%; overflow-x: auto;">
                         <div id="calendar-loading" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100;">
                             <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
                             <p style="margin-top: 10px; color: #666;">Loading calendar...</p>
