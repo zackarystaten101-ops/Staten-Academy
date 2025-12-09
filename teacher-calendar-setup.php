@@ -216,7 +216,29 @@ $page_title = 'Calendar Setup';
     <style>
         /* Calendar page specific styles */
         .calendar-container { max-width: 100%; margin: 0; }
-        #teacher-calendar { width: 100% !important; }
+        #teacher-calendar { 
+            width: 100% !important; 
+            min-width: calc(70px + 140px * 7) !important;
+            overflow-x: auto !important;
+        }
+        .teacher-calendar-grid {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            min-width: calc(70px + 140px * 7) !important;
+        }
+        .calendar-days-container {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+        }
+        .calendar-day-column {
+            flex: 0 0 auto !important;
+            width: calc((100% - 70px) / 7) !important;
+            min-width: 140px !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
 
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .card h3 { margin-top: 0; color: #004080; border-bottom: 2px solid #0b6cf5; padding-bottom: 10px; }
@@ -314,7 +336,7 @@ $page_title = 'Calendar Setup';
                             </ul>
                         </div>
                     </div>
-                    <div id="teacher-calendar" style="padding: 20px; position: relative; width: 100%; overflow-x: auto;">
+                    <div id="teacher-calendar" style="padding: 20px; position: relative; width: 100%; overflow-x: auto; min-width: calc(70px + 140px * 7);">
                         <div id="calendar-loading" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 100;">
                             <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
                             <p style="margin-top: 10px; color: #666;">Loading calendar...</p>

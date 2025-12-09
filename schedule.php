@@ -103,7 +103,8 @@ if (isset($_GET['teacher'])) {
         $selected_teacher = $teacher_data['id'];
         $stmt->close();
         
-        // Fetch teacher's availability slots
+        // Fetch teacher's availability slots (only available slots - students should only see available times)
+        // Note: getTeacherAvailability already filters by is_available = 1
         $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
         
         // Fetch booked lessons (if user is teacher viewing own lessons)
@@ -580,7 +581,15 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                                         const selectedDate = this.value;
                                         const dayOfWeek = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
                                         
-                                        const slotsForDay = availabilitySlots.filter(slot => slot.day_of_week === dayOfWeek && slot.is_available);
+                                        // Filter to only show available slots for this day
+                                        // Note: availabilitySlots from getTeacherAvailability already filters by is_available = 1
+                                        // This additional filter ensures we only show slots for the selected day (weekly or one-time)
+                                        const slotsForDay = availabilitySlots.filter(slot => {
+                                            // Check if it's a weekly slot for this day OR a one-time slot for this specific date
+                                            const isWeeklySlot = slot.day_of_week === dayOfWeek && !slot.specific_date;
+                                            const isOneTimeSlot = slot.specific_date === selectedDate;
+                                            return (isWeeklySlot || isOneTimeSlot) && slot.is_available;
+                                        });
                                         
                                         let html = '';
                                         if (slotsForDay.length > 0) {

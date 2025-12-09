@@ -234,13 +234,37 @@ class CalendarService {
         $tzService = new TimezoneService($this->conn);
         
         $dayOfWeek = date('l', strtotime($date));
-        $stmt = $this->conn->prepare("
-            SELECT day_of_week, start_time, end_time, is_available 
-            FROM teacher_availability 
-            WHERE teacher_id = ? AND day_of_week = ? AND is_available = 1
-            ORDER BY start_time
-        ");
-        $stmt->bind_param("is", $teacherId, $dayOfWeek);
+        
+        // Check if specific_date column exists
+        $columnCheck = $this->conn->query("SHOW COLUMNS FROM teacher_availability LIKE 'specific_date'");
+        $hasSpecificDate = $columnCheck && $columnCheck->num_rows > 0;
+        
+        // Get available slots: weekly slots for this day OR one-time slots for this specific date
+        // IMPORTANT: Only return slots where is_available = 1 (students should only see available times)
+        if ($hasSpecificDate) {
+            $stmt = $this->conn->prepare("
+                SELECT day_of_week, specific_date, start_time, end_time, is_available 
+                FROM teacher_availability 
+                WHERE teacher_id = ? 
+                AND is_available = 1
+                AND (
+                    (specific_date IS NULL AND day_of_week = ?)
+                    OR (specific_date IS NOT NULL AND specific_date = ?)
+                )
+                ORDER BY start_time
+            ");
+            $stmt->bind_param("iss", $teacherId, $dayOfWeek, $date);
+        } else {
+            // Fallback for older database schema
+            $stmt = $this->conn->prepare("
+                SELECT day_of_week, start_time, end_time, is_available 
+                FROM teacher_availability 
+                WHERE teacher_id = ? AND day_of_week = ? AND is_available = 1
+                ORDER BY start_time
+            ");
+            $stmt->bind_param("is", $teacherId, $dayOfWeek);
+        }
+        
         $stmt->execute();
         $result = $stmt->get_result();
         $slots = [];
