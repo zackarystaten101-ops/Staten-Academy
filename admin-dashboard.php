@@ -222,7 +222,7 @@ $all_users_stmt = $conn->prepare("
     WHERE u.id != ? AND u.role != 'admin'
     ORDER BY last_message_time IS NULL, last_message_time DESC, u.name ASC
 ");
-$all_users_stmt->bind_param("iiiii", $admin_id, $admin_id, $admin_id, $admin_id);
+$all_users_stmt->bind_param("iiii", $admin_id, $admin_id, $admin_id, $admin_id);
 $all_users_stmt->execute();
 $all_users_result = $all_users_stmt->get_result();
 $all_users = [];
