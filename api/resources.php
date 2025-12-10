@@ -127,20 +127,16 @@ function uploadResource($conn, $teacher_id) {
 function deleteResource($conn, $teacher_id) {
     $resource_id = isset($_POST['resource_id']) ? (int)$_POST['resource_id'] : 0;
     
-    // Get file path first
-    $stmt = $conn->prepare("SELECT file_path FROM teacher_resources WHERE id = ? AND teacher_id = ?");
+    // Verify resource belongs to this teacher
+    $stmt = $conn->prepare("SELECT id FROM teacher_resources WHERE id = ? AND teacher_id = ? AND is_deleted = 0");
     $stmt->bind_param("ii", $resource_id, $teacher_id);
     $stmt->execute();
     $result = $stmt->get_result();
     
-    if ($row = $result->fetch_assoc()) {
-        // Delete file if exists
-        if ($row['file_path'] && file_exists('../' . $row['file_path'])) {
-            unlink('../' . $row['file_path']);
-        }
-        
-        // Delete record
-        $del = $conn->prepare("DELETE FROM teacher_resources WHERE id = ?");
+    if ($result->num_rows > 0) {
+        // Soft delete - DO NOT delete the file, just mark as deleted
+        // Files are preserved for recovery and historical purposes
+        $del = $conn->prepare("UPDATE teacher_resources SET is_deleted = 1, deleted_at = NOW() WHERE id = ?");
         $del->bind_param("i", $resource_id);
         $del->execute();
         $del->close();

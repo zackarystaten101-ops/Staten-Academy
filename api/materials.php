@@ -54,6 +54,14 @@ function addMaterial($conn, $user_id) {
     $description = trim($_POST['description'] ?? '');
     $type = $_POST['type'] ?? 'file';
     $link_url = trim($_POST['link_url'] ?? '');
+    $category = trim($_POST['category'] ?? 'general');
+    $tags = trim($_POST['tags'] ?? '');
+    
+    // Validate category
+    $valid_categories = ['general', 'kids', 'adults', 'coding'];
+    if (!in_array($category, $valid_categories)) {
+        $category = 'general';
+    }
     
     if (empty($title)) {
         http_response_code(400);
@@ -194,9 +202,9 @@ function addMaterial($conn, $user_id) {
         exit;
     }
     
-    $stmt = $conn->prepare("INSERT INTO classroom_materials (title, description, file_path, link_url, type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO classroom_materials (title, description, file_path, link_url, type, uploaded_by, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     if ($stmt) {
-        $stmt->bind_param("sssssi", $title, $description, $file_path, $link_url, $type, $user_id);
+        $stmt->bind_param("sssssiss", $title, $description, $file_path, $link_url, $type, $user_id, $category, $tags);
         if ($stmt->execute()) {
             $material_id = $conn->insert_id;
             $stmt->close();
@@ -223,16 +231,67 @@ function addMaterial($conn, $user_id) {
 }
 
 function listMaterials($conn) {
-    $result = $conn->query("
+    // Get optional filter parameters
+    $category = $_GET['category'] ?? null;
+    $search = trim($_GET['search'] ?? '');
+    $tags_filter = trim($_GET['tags'] ?? '');
+    
+    // Build query with filters
+    $where = "m.is_deleted = 0";
+    $params = [];
+    $types = [];
+    
+    if ($category && in_array($category, ['general', 'kids', 'adults', 'coding'])) {
+        $where .= " AND m.category = ?";
+        $params[] = $category;
+        $types[] = 's';
+    }
+    
+    if ($search) {
+        $where .= " AND (m.title LIKE ? OR m.description LIKE ?)";
+        $search_param = '%' . $search . '%';
+        $params[] = $search_param;
+        $params[] = $search_param;
+        $types[] = 's';
+        $types[] = 's';
+    }
+    
+    if ($tags_filter) {
+        $where .= " AND m.tags LIKE ?";
+        $params[] = '%' . $tags_filter . '%';
+        $types[] = 's';
+    }
+    
+    $query = "
         SELECT m.*, u.name as uploaded_by_name 
         FROM classroom_materials m 
         LEFT JOIN users u ON m.uploaded_by = u.id 
-        ORDER BY m.created_at DESC
-    ");
+        WHERE $where
+        ORDER BY m.usage_count DESC, m.created_at DESC
+    ";
+    
+    if (!empty($params)) {
+        $stmt = $conn->prepare($query);
+        if ($stmt) {
+            $stmt->bind_param(implode('', $types), ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+        } else {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Database query error']);
+            return;
+        }
+    } else {
+        $result = $conn->query($query);
+    }
     
     $materials = [];
     while ($row = $result->fetch_assoc()) {
         $materials[] = $row;
+    }
+    
+    if (isset($stmt)) {
+        $stmt->close();
     }
     
     echo json_encode(['success' => true, 'materials' => $materials]);
@@ -247,11 +306,12 @@ function viewMaterial($conn) {
         exit;
     }
     
+    // Only show non-deleted materials
     $stmt = $conn->prepare("
         SELECT m.*, u.name as uploaded_by_name 
         FROM classroom_materials m 
         LEFT JOIN users u ON m.uploaded_by = u.id 
-        WHERE m.id = ?
+        WHERE m.id = ? AND m.is_deleted = 0
     ");
     $stmt->bind_param("i", $material_id);
     $stmt->execute();
@@ -276,37 +336,31 @@ function deleteMaterial($conn) {
         exit;
     }
     
-    // Get file path first
-    $stmt = $conn->prepare("SELECT file_path FROM classroom_materials WHERE id = ?");
+    // Verify material exists and is not already deleted
+    $stmt = $conn->prepare("SELECT id FROM classroom_materials WHERE id = ? AND is_deleted = 0");
     $stmt->bind_param("i", $material_id);
     $stmt->execute();
     $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
     
-    if ($row && $row['file_path'] && file_exists('../' . $row['file_path'])) {
-        // Handle both old format (uploads/materials/) and new format (/uploads/materials/)
-        $file_path = $row['file_path'];
-        if (strpos($file_path, '/') !== 0) {
-            $file_path = '/' . $file_path;
-        }
-        $full_path = __DIR__ . '/../public' . $file_path;
-        if (file_exists($full_path)) {
-            unlink($full_path);
-        }
-    }
-    
-    // Delete record
-    $stmt = $conn->prepare("DELETE FROM classroom_materials WHERE id = ?");
-    $stmt->bind_param("i", $material_id);
-    
-    if ($stmt->execute()) {
+    if ($result->num_rows > 0) {
+        // Soft delete - DO NOT delete the file, just mark as deleted
+        // Files are preserved for recovery and historical purposes
         $stmt->close();
-        echo json_encode(['success' => true]);
+        $stmt = $conn->prepare("UPDATE classroom_materials SET is_deleted = 1, deleted_at = NOW() WHERE id = ?");
+        $stmt->bind_param("i", $material_id);
+        
+        if ($stmt->execute()) {
+            $stmt->close();
+            echo json_encode(['success' => true, 'message' => 'Material soft-deleted successfully']);
+        } else {
+            $stmt->close();
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Failed to delete material']);
+        }
     } else {
         $stmt->close();
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Failed to delete material']);
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Material not found or already deleted']);
     }
 }
 

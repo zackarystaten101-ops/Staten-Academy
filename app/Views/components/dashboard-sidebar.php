@@ -271,15 +271,17 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
             <?php
             // Get pending slot requests count for badge
+            // Available to ALL teachers - no exclusions
             $pending_slot_requests_count = 0;
-            if (isset($conn) && isset($user_id) && $user_role === 'teacher') {
+            if (isset($conn) && isset($user_id) && $user_id > 0 && $user_role === 'teacher') {
                 $slot_req_stmt = $conn->prepare("SELECT COUNT(*) as c FROM admin_slot_requests WHERE teacher_id = ? AND status = 'pending'");
                 if ($slot_req_stmt) {
                     $slot_req_stmt->bind_param("i", $user_id);
                     $slot_req_stmt->execute();
                     $slot_req_result = $slot_req_stmt->get_result();
                     if ($slot_req_result) {
-                        $pending_slot_requests_count = $slot_req_result->fetch_assoc()['c'] ?? 0;
+                        $row = $slot_req_result->fetch_assoc();
+                        $pending_slot_requests_count = $row['c'] ?? 0;
                     }
                     $slot_req_stmt->close();
                 }
@@ -319,16 +321,18 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
             <?php
             // Get pending slot requests count for badge (non-dashboard page)
+            // Available to ALL teachers - no exclusions
             if (!isset($pending_slot_requests_count)) {
                 $pending_slot_requests_count = 0;
-                if (isset($conn) && isset($user_id) && $user_role === 'teacher') {
+                if (isset($conn) && isset($user_id) && $user_id > 0 && $user_role === 'teacher') {
                     $slot_req_stmt = $conn->prepare("SELECT COUNT(*) as c FROM admin_slot_requests WHERE teacher_id = ? AND status = 'pending'");
                     if ($slot_req_stmt) {
                         $slot_req_stmt->bind_param("i", $user_id);
                         $slot_req_stmt->execute();
                         $slot_req_result = $slot_req_stmt->get_result();
                         if ($slot_req_result) {
-                            $pending_slot_requests_count = $slot_req_result->fetch_assoc()['c'] ?? 0;
+                            $row = $slot_req_result->fetch_assoc();
+                            $pending_slot_requests_count = $row['c'] ?? 0;
                         }
                         $slot_req_stmt->close();
                     }

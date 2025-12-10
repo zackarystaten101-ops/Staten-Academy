@@ -222,6 +222,61 @@ if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE classroom_materials ADD CONSTRAINT fk_materials_uploaded FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE");
 }
 
+// Add soft delete columns to classroom_materials if they don't exist
+$materials_cols = $conn->query("SHOW COLUMNS FROM classroom_materials");
+$existing_materials_cols = [];
+if ($materials_cols) {
+    while($row = $materials_cols->fetch_assoc()) { $existing_materials_cols[] = $row['Field']; }
+}
+if (!in_array('is_deleted', $existing_materials_cols)) {
+    $conn->query("ALTER TABLE classroom_materials ADD COLUMN is_deleted BOOLEAN DEFAULT 0 AFTER uploaded_by");
+}
+if (!in_array('deleted_at', $existing_materials_cols)) {
+    $conn->query("ALTER TABLE classroom_materials ADD COLUMN deleted_at TIMESTAMP NULL AFTER is_deleted");
+}
+if (!in_array('category', $existing_materials_cols)) {
+    $conn->query("ALTER TABLE classroom_materials ADD COLUMN category ENUM('general', 'kids', 'adults', 'coding') DEFAULT 'general' AFTER is_deleted");
+}
+if (!in_array('tags', $existing_materials_cols)) {
+    $conn->query("ALTER TABLE classroom_materials ADD COLUMN tags VARCHAR(255) NULL AFTER category");
+}
+if (!in_array('usage_count', $existing_materials_cols)) {
+    $conn->query("ALTER TABLE classroom_materials ADD COLUMN usage_count INT DEFAULT 0 AFTER tags");
+}
+
+// Create teacher_resources table if it doesn't exist
+$tables = $conn->query("SHOW TABLES LIKE 'teacher_resources'");
+if (!$tables || $tables->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS teacher_resources (
+        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        teacher_id INT(6) UNSIGNED NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        file_path VARCHAR(255) DEFAULT NULL,
+        file_type VARCHAR(50) DEFAULT NULL,
+        external_url VARCHAR(500) DEFAULT NULL,
+        category VARCHAR(100) DEFAULT 'general',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_teacher (teacher_id),
+        FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+} else {
+    // Add soft delete columns to teacher_resources if they don't exist
+    $resources_cols = $conn->query("SHOW COLUMNS FROM teacher_resources");
+    $existing_resources_cols = [];
+    if ($resources_cols) {
+        while($row = $resources_cols->fetch_assoc()) { $existing_resources_cols[] = $row['Field']; }
+    }
+    if (!in_array('is_deleted', $existing_resources_cols)) {
+        $conn->query("ALTER TABLE teacher_resources ADD COLUMN is_deleted BOOLEAN DEFAULT 0 AFTER category");
+    }
+    if (!in_array('deleted_at', $existing_resources_cols)) {
+        $conn->query("ALTER TABLE teacher_resources ADD COLUMN deleted_at TIMESTAMP NULL AFTER is_deleted");
+    }
+}
+
 // Create message_threads table (for user-to-user conversations)
 $sql = "CREATE TABLE IF NOT EXISTS message_threads (
     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -982,6 +1037,26 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_slot_requests' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE admin_slot_requests ADD CONSTRAINT fk_slot_request_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+
+// Create preferred_times table for student time preferences
+$sql = "CREATE TABLE IF NOT EXISTS preferred_times (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL,
+    day_of_week ENUM('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday') NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_student (student_id),
+    INDEX idx_day_time (day_of_week, start_time),
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Check if foreign key exists for preferred_times
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='preferred_times' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE preferred_times ADD CONSTRAINT fk_preferred_times_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
 }
 
 // Create student_learning_needs table

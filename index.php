@@ -402,10 +402,161 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 </div>
             </div>
         </section>
+
+        <!-- How We Work Section -->
+        <section style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); padding: 80px 20px;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <div style="text-align: center; margin-bottom: 50px;">
+                    <h2 style="font-size: 2.5rem; color: #004080; margin-bottom: 15px;">How We Work</h2>
+                    <p style="font-size: 1.2rem; color: #666; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+                        Getting started with Staten Academy is simple and straightforward. Follow these steps to begin your English learning journey.
+                    </p>
+                </div>
+
+                <!-- Visual Process Timeline -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin-bottom: 40px; position: relative;">
+                    <div style="text-align: center; position: relative;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
+                            1
+                        </div>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Sign Up</h3>
+                        <p style="color: #666; line-height: 1.6;">Create your account and choose your learning track</p>
+                    </div>
+
+                    <div style="text-align: center; position: relative;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
+                            2
+                        </div>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Assessment</h3>
+                        <p style="color: #666; line-height: 1.6;">Complete your learning needs assessment</p>
+                    </div>
+
+                    <div style="text-align: center; position: relative;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
+                            3
+                        </div>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Get Matched</h3>
+                        <p style="color: #666; line-height: 1.6;">We match you with the perfect teacher</p>
+                    </div>
+
+                    <div style="text-align: center; position: relative;">
+                        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
+                            4
+                        </div>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Start Learning</h3>
+                        <p style="color: #666; line-height: 1.6;">Book classes and start your journey!</p>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 40px;">
+                    <a href="how-we-work.php" class="btn-primary" style="padding: 15px 40px; font-size: 1.1rem; text-decoration: none; display: inline-block; border-radius: 8px;">
+                        <i class="fas fa-info-circle"></i> Learn More About How We Work
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Us Section -->
+        <section style="background: white; padding: 80px 20px;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+                    <div>
+                        <h2 style="font-size: 2.5rem; color: #004080; margin-bottom: 20px;">About Staten Academy</h2>
+                        <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 20px;">
+                            Staten Academy is dedicated to providing high-quality, personalized English language education 
+                            that adapts to each learner's unique needs and goals.
+                        </p>
+                        <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 30px;">
+                            We believe that language learning should be engaging, accessible, and effective. Our platform 
+                            connects students with expert teachers through interactive online classes, flexible scheduling, 
+                            and comprehensive progress tracking.
+                        </p>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <a href="about.php" class="btn-primary" style="padding: 12px 30px; font-size: 1rem; text-decoration: none; display: inline-block; border-radius: 8px;">
+                                <i class="fas fa-info-circle"></i> Learn More About Us
+                            </a>
+                            <a href="how-we-work.php" class="btn-outline" style="padding: 12px 30px; font-size: 1rem; text-decoration: none; display: inline-block; border: 2px solid #0b6cf5; color: #0b6cf5; border-radius: 8px;">
+                                <i class="fas fa-arrow-right"></i> Our Process
+                            </a>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                        <div style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); padding: 30px; border-radius: 12px; text-align: center; border: 2px solid #e0e7ff;">
+                            <div style="font-size: 2.5rem; color: #0b6cf5; margin-bottom: 10px;">
+                                <i class="fas fa-user-tie"></i>
+                            </div>
+                            <h3 style="color: #004080; margin-bottom: 10px;">Expert Teachers</h3>
+                            <p style="color: #666; font-size: 0.9rem;">Certified and experienced</p>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #f0fff4 0%, #ffffff 100%); padding: 30px; border-radius: 12px; text-align: center; border: 2px solid #c3e6cb;">
+                            <div style="font-size: 2.5rem; color: #28a745; margin-bottom: 10px;">
+                                <i class="fas fa-laptop"></i>
+                            </div>
+                            <h3 style="color: #004080; margin-bottom: 10px;">Online Platform</h3>
+                            <p style="color: #666; font-size: 0.9rem;">Interactive and modern</p>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #fff4f0 0%, #ffffff 100%); padding: 30px; border-radius: 12px; text-align: center; border: 2px solid #ffc3b3;">
+                            <div style="font-size: 2.5rem; color: #dc3545; margin-bottom: 10px;">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <h3 style="color: #004080; margin-bottom: 10px;">Global Reach</h3>
+                            <p style="color: #666; font-size: 0.9rem;">Students worldwide</p>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%); padding: 30px; border-radius: 12px; text-align: center; border: 2px solid #b3d9ff;">
+                            <div style="font-size: 2.5rem; color: #17a2b8; margin-bottom: 10px;">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <h3 style="color: #004080; margin-bottom: 10px;">Track Progress</h3>
+                            <p style="color: #666; font-size: 0.9rem;">Monitor improvement</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
-    <footer>
-        <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
+    <footer style="background: #004080; color: white; padding: 40px 20px; text-align: center;">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; margin-bottom: 30px; text-align: left;">
+                <div>
+                    <h3 style="margin-bottom: 15px; color: white;">Staten Academy</h3>
+                    <p style="color: rgba(255,255,255,0.8); line-height: 1.8; font-size: 0.95rem;">
+                        Empowering learners worldwide to achieve their English language goals.
+                    </p>
+                </div>
+                <div>
+                    <h3 style="margin-bottom: 15px; color: white;">Quick Links</h3>
+                    <ul style="list-style: none; padding: 0; line-height: 2;">
+                        <li><a href="index.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Home</a></li>
+                        <li><a href="about.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">About Us</a></li>
+                        <li><a href="how-we-work.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">How We Work</a></li>
+                        <li><a href="payment.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Plans & Pricing</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="margin-bottom: 15px; color: white;">Learning Tracks</h3>
+                    <ul style="list-style: none; padding: 0; line-height: 2;">
+                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Kids Classes</a></li>
+                        <li><a href="adults-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Adult Classes</a></li>
+                        <li><a href="coding-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">English for Coding</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 style="margin-bottom: 15px; color: white;">Support</h3>
+                    <ul style="list-style: none; padding: 0; line-height: 2;">
+                        <li><a href="support_contact.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Contact Support</a></li>
+                        <?php if (!isset($_SESSION['user_id'])): ?>
+                            <li><a href="login.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Login</a></li>
+                            <li><a href="register.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Sign Up</a></li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
+            </div>
+            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.2); margin: 30px 0;">
+            <p style="color: rgba(255,255,255,0.8); margin: 0;">
+                &copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.
+            </p>
+        </div>
     </footer>
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>

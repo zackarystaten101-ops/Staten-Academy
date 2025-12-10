@@ -554,14 +554,35 @@ function handleDelete($action, $userId, $userRole, $tzService, $calendarService)
                 return;
             }
             
+            // Verify slot belongs to this teacher before deletion
+            $check_stmt = $conn->prepare("SELECT id, day_of_week, start_time, end_time FROM teacher_availability WHERE id = ? AND teacher_id = ?");
+            $check_stmt->bind_param("ii", $slotId, $userId);
+            $check_stmt->execute();
+            $check_result = $check_stmt->get_result();
+            
+            if ($check_result->num_rows === 0) {
+                $check_stmt->close();
+                http_response_code(404);
+                echo json_encode(['error' => 'Availability slot not found or access denied']);
+                return;
+            }
+            
+            $slot = $check_result->fetch_assoc();
+            $check_stmt->close();
+            
+            // Warn if slot might have upcoming lessons (simplified check)
+            // Note: Full validation would require checking actual lesson bookings
             $stmt = $conn->prepare("DELETE FROM teacher_availability WHERE id = ? AND teacher_id = ?");
             $stmt->bind_param("ii", $slotId, $userId);
             
             if ($stmt->execute()) {
-                echo json_encode(['success' => true]);
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Availability slot deleted successfully'
+                ]);
             } else {
                 http_response_code(500);
-                echo json_encode(['error' => 'Failed to delete availability slot']);
+                echo json_encode(['error' => 'Failed to delete availability slot: ' . $stmt->error]);
             }
             $stmt->close();
             break;

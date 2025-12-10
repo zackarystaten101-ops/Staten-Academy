@@ -790,33 +790,58 @@ body.dashboard-layout {
 
 .quick-action-btn {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    padding: 20px;
+    justify-content: flex-start;
+    padding: 16px 20px;
     background: white;
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
+    border: none;
+    border-radius: var(--radius-sm);
     text-decoration: none;
-    color: var(--dark);
-    transition: var(--transition);
+    color: white;
+    transition: all 0.3s ease;
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+}
+
+.quick-action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.quick-action-btn:hover::before {
+    left: 100%;
 }
 
 .quick-action-btn:hover {
-    border-color: var(--primary);
-    background: var(--primary-light);
     transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.quick-action-btn:active {
+    transform: translateY(-1px);
 }
 
 .quick-action-btn i {
-    font-size: 1.8rem;
-    color: var(--primary);
-    margin-bottom: 10px;
+    font-size: 1.4rem;
+    margin-right: 12px;
+    color: white;
+    opacity: 0.95;
 }
 
 .quick-action-btn span {
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: white;
 }
 
 /* Modal Styles */
@@ -1105,6 +1130,35 @@ body.dashboard-layout {
     color: white;
 }
 
+/* Enhanced Card Styling */
+.card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 25px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+    transition: box-shadow 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+/* Improved Notification Badge */
+.notification-badge {
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    min-width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
 /* ===========================================
    Tab Content
    =========================================== */
@@ -1112,6 +1166,25 @@ body.dashboard-layout {
 .tab-content {
     display: none;
     animation: fadeIn 0.3s ease;
+    padding: 0;
+}
+
+.tab-content h1 {
+    margin-bottom: 20px;
+    color: var(--secondary);
+    font-size: 2rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.tab-content h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: var(--secondary);
+    font-size: 1.5rem;
+    font-weight: 600;
 }
 
 .tab-section.active,

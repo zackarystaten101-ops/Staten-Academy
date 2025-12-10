@@ -34,7 +34,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
+$materials = $conn->query("SELECT * FROM classroom_materials WHERE is_deleted = 0 ORDER BY created_at DESC");
 
 // Fetch user data for header
 $user_id = $_SESSION['user_id'];

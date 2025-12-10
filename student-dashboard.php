@@ -195,21 +195,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
     $track_stmt->execute();
     $track_stmt->close();
     
+    // Save preferred times
+    // First, delete existing preferred times
+    $delete_times = $conn->prepare("DELETE FROM preferred_times WHERE student_id = ?");
+    $delete_times->bind_param("i", $student_id);
+    $delete_times->execute();
+    $delete_times->close();
+    
+    // Insert new preferred times
+    if (isset($_POST['preferred_times']) && is_array($_POST['preferred_times'])) {
+        $insert_time = $conn->prepare("INSERT INTO preferred_times (student_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)");
+        foreach ($_POST['preferred_times'] as $time_slot) {
+            if (!empty($time_slot['day']) && !empty($time_slot['start']) && !empty($time_slot['end'])) {
+                $day = $time_slot['day'];
+                $start = $time_slot['start'];
+                $end = $time_slot['end'];
+                
+                // Validate that end time is after start time
+                if (strtotime($end) > strtotime($start)) {
+                    $insert_time->bind_param("isss", $student_id, $day, $start, $end);
+                    $insert_time->execute();
+                }
+            }
+        }
+        $insert_time->close();
+    }
+    
     // Automated teacher assignment: Find best matching teacher
-    // Priority: 1. Teachers with matching track (if applicable), 2. Available capacity, 3. Best rating
-    $teacher_match_stmt = $conn->prepare("
-        SELECT u.id, u.name, u.email, u.profile_pic, u.bio,
-               COALESCE(AVG(r.rating), 0) as avg_rating,
-               (SELECT COUNT(*) FROM lessons l WHERE l.teacher_id = u.id AND l.status = 'scheduled' AND l.lesson_date >= CURDATE()) as active_lessons
-        FROM users u
-        LEFT JOIN reviews r ON u.id = r.teacher_id
-        WHERE u.role = 'teacher' 
-        AND u.application_status = 'approved'
-        GROUP BY u.id
-        HAVING active_lessons < 50  -- Limit to prevent overloading
-        ORDER BY avg_rating DESC, active_lessons ASC
-        LIMIT 1
-    ");
+    // Priority: 1. Teachers with matching preferred times (if specified), 2. Teachers with matching track, 3. Available capacity, 4. Best rating
+    
+    // Check if student has preferred times
+    $preferred_times_check = $conn->prepare("SELECT COUNT(*) as time_count FROM preferred_times WHERE student_id = ?");
+    $preferred_times_check->bind_param("i", $student_id);
+    $preferred_times_check->execute();
+    $preferred_times_result = $preferred_times_check->get_result();
+    $preferred_times_row = $preferred_times_result->fetch_assoc();
+    $has_preferred_times = $preferred_times_row['time_count'] > 0;
+    $preferred_times_check->close();
+    
+    if ($has_preferred_times) {
+        // Match teachers with overlapping availability
+        $teacher_match_stmt = $conn->prepare("
+            SELECT DISTINCT u.id, u.name, u.email, u.profile_pic, u.bio,
+                   COALESCE(AVG(r.rating), 0) as avg_rating,
+                   (SELECT COUNT(*) FROM lessons l WHERE l.teacher_id = u.id AND l.status = 'scheduled' AND l.lesson_date >= CURDATE()) as active_lessons,
+                   COUNT(DISTINCT pt.id) as matching_time_slots
+            FROM users u
+            LEFT JOIN reviews r ON u.id = r.teacher_id
+            INNER JOIN teacher_availability ta ON u.id = ta.teacher_id
+            INNER JOIN preferred_times pt ON ta.day_of_week = pt.day_of_week 
+                AND pt.student_id = ?
+                AND ta.start_time <= pt.end_time 
+                AND ta.end_time >= pt.start_time
+                AND ta.is_available = 1
+            WHERE u.role = 'teacher' 
+            AND u.application_status = 'approved'
+            GROUP BY u.id
+            HAVING active_lessons < 50
+            ORDER BY matching_time_slots DESC, avg_rating DESC, active_lessons ASC
+            LIMIT 1
+        ");
+        $teacher_match_stmt->bind_param("i", $student_id);
+    } else {
+        // Fallback to original matching without preferred times
+        $teacher_match_stmt = $conn->prepare("
+            SELECT u.id, u.name, u.email, u.profile_pic, u.bio,
+                   COALESCE(AVG(r.rating), 0) as avg_rating,
+                   (SELECT COUNT(*) FROM lessons l WHERE l.teacher_id = u.id AND l.status = 'scheduled' AND l.lesson_date >= CURDATE()) as active_lessons
+            FROM users u
+            LEFT JOIN reviews r ON u.id = r.teacher_id
+            WHERE u.role = 'teacher' 
+            AND u.application_status = 'approved'
+            GROUP BY u.id
+            HAVING active_lessons < 50
+            ORDER BY avg_rating DESC, active_lessons ASC
+            LIMIT 1
+        ");
+    }
     
     $teacher_match_stmt->execute();
     $matched_teacher = $teacher_match_stmt->get_result()->fetch_assoc();
@@ -1162,15 +1224,80 @@ $active_tab = 'overview';
                     </div>
                     
                     <div class="form-group">
-                        <label>Preferred Schedule</label>
+                        <label style="font-weight: 600; color: #004080; margin-bottom: 8px; display: block;">
+                            <i class="fas fa-clock"></i> General Preferred Schedule
+                        </label>
                         <textarea name="preferred_schedule" rows="3" 
-                                  placeholder="When are you available for lessons? (e.g., Weekdays after 5 PM, Weekends only, Flexible...)"><?php echo htmlspecialchars($existing_needs['preferred_schedule'] ?? ''); ?></textarea>
+                                  placeholder="General availability (e.g., Weekdays after 5 PM, Weekends only, Flexible mornings...)"
+                                  style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s;"
+                                  onfocus="this.style.borderColor='#0b6cf5'; this.style.outline='none';"
+                                  onblur="this.style.borderColor='#ddd';"><?php echo htmlspecialchars($existing_needs['preferred_schedule'] ?? ''); ?></textarea>
+                        <small style="color: #666; font-size: 0.85rem; margin-top: 5px; display: block;">
+                            <i class="fas fa-info-circle"></i> Describe your general availability preferences
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-weight: 600; color: #004080; margin-bottom: 15px; display: block;">
+                            <i class="fas fa-calendar-check"></i> Specific Preferred Time Slots (Optional)
+                        </label>
+                        <p style="color: #666; font-size: 0.9rem; margin-bottom: 15px;">
+                            Select specific days and times when you prefer to have lessons. This helps us match you with teachers who have availability during these times.
+                        </p>
+                        <div id="preferred-times-container" style="border: 2px dashed #ddd; border-radius: 8px; padding: 20px; background: #f9f9f9; margin-bottom: 15px;">
+                            <?php
+                            // Load existing preferred times
+                            $existing_times = [];
+                            if ($existing_needs) {
+                                $times_stmt = $conn->prepare("SELECT * FROM preferred_times WHERE student_id = ? ORDER BY day_of_week, start_time");
+                                $times_stmt->bind_param("i", $student_id);
+                                $times_stmt->execute();
+                                $times_result = $times_stmt->get_result();
+                                while ($time = $times_result->fetch_assoc()) {
+                                    $existing_times[] = $time;
+                                }
+                                $times_stmt->close();
+                            }
+                            ?>
+                            <div id="preferred-times-list">
+                                <?php if (count($existing_times) > 0): ?>
+                                    <?php foreach ($existing_times as $idx => $time): ?>
+                                        <div class="preferred-time-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: white; border-radius: 6px; border: 1px solid #ddd;">
+                                            <select name="preferred_times[<?php echo $idx; ?>][day]" class="day-select" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                                <option value="">Select Day</option>
+                                                <option value="Monday" <?php echo $time['day_of_week'] === 'Monday' ? 'selected' : ''; ?>>Monday</option>
+                                                <option value="Tuesday" <?php echo $time['day_of_week'] === 'Tuesday' ? 'selected' : ''; ?>>Tuesday</option>
+                                                <option value="Wednesday" <?php echo $time['day_of_week'] === 'Wednesday' ? 'selected' : ''; ?>>Wednesday</option>
+                                                <option value="Thursday" <?php echo $time['day_of_week'] === 'Thursday' ? 'selected' : ''; ?>>Thursday</option>
+                                                <option value="Friday" <?php echo $time['day_of_week'] === 'Friday' ? 'selected' : ''; ?>>Friday</option>
+                                                <option value="Saturday" <?php echo $time['day_of_week'] === 'Saturday' ? 'selected' : ''; ?>>Saturday</option>
+                                                <option value="Sunday" <?php echo $time['day_of_week'] === 'Sunday' ? 'selected' : ''; ?>>Sunday</option>
+                                            </select>
+                                            <input type="time" name="preferred_times[<?php echo $idx; ?>][start]" value="<?php echo date('H:i', strtotime($time['start_time'])); ?>" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                            <input type="time" name="preferred_times[<?php echo $idx; ?>][end]" value="<?php echo date('H:i', strtotime($time['end_time'])); ?>" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                                            <button type="button" onclick="removePreferredTime(this)" class="btn-danger" style="padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                            <button type="button" onclick="addPreferredTime()" class="btn-outline" style="margin-top: 10px;">
+                                <i class="fas fa-plus"></i> Add Time Slot
+                            </button>
+                        </div>
+                        <small style="color: #666; font-size: 0.85rem; display: block;">
+                            <i class="fas fa-lightbulb"></i> You can add multiple time slots. Leave empty if you prefer general availability only.
+                        </small>
                     </div>
                     
                     <div class="form-group">
                         <label>Special Requirements or Notes</label>
                         <textarea name="special_requirements" rows="3" 
-                                  placeholder="Any specific requirements, learning style preferences, or additional information..."><?php echo htmlspecialchars($existing_needs['special_requirements'] ?? ''); ?></textarea>
+                                  placeholder="Any specific requirements, learning style preferences, or additional information..."
+                                  style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s;"
+                                  onfocus="this.style.borderColor='#0b6cf5'; this.style.outline='none';"
+                                  onblur="this.style.borderColor='#ddd';"><?php echo htmlspecialchars($existing_needs['special_requirements'] ?? ''); ?></textarea>
                     </div>
                     
                     <div style="display: flex; gap: 15px; align-items: center; margin-top: 25px; padding-top: 25px; border-top: 2px solid #f0f0f0;">
@@ -1773,6 +1900,46 @@ async function startAdminChat(event) {
         } else {
             alert('An error occurred. Please try again.');
         }
+    }
+}
+
+// Preferred Times Management
+let preferredTimeIndex = <?php echo (isset($existing_times) && is_array($existing_times) && count($existing_times) > 0) ? count($existing_times) : 0; ?>;
+
+function addPreferredTime() {
+    const container = document.getElementById('preferred-times-list');
+    if (!container) return;
+    
+    const row = document.createElement('div');
+    row.className = 'preferred-time-row';
+    row.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: white; border-radius: 6px; border: 1px solid #ddd;';
+    
+    row.innerHTML = `
+        <select name="preferred_times[${preferredTimeIndex}][day]" class="day-select" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+            <option value="">Select Day</option>
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+            <option value="Saturday">Saturday</option>
+            <option value="Sunday">Sunday</option>
+        </select>
+        <input type="time" name="preferred_times[${preferredTimeIndex}][start]" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+        <input type="time" name="preferred_times[${preferredTimeIndex}][end]" required style="padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+        <button type="button" onclick="removePreferredTime(this)" class="btn-danger" style="padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; background: #dc3545; color: white;">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    container.appendChild(row);
+    preferredTimeIndex++;
+}
+
+function removePreferredTime(button) {
+    const row = button.closest('.preferred-time-row');
+    if (row) {
+        row.remove();
     }
 }
 </script>

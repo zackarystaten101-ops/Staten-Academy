@@ -51,13 +51,16 @@ function handleGet($action, $userId, $userRole) {
     
     switch ($action) {
         case 'get-pending':
-            // Teachers can get their pending requests
+            // ALL TEACHERS can get their pending requests (no exclusions)
+            // This includes all teachers regardless of email or any other attribute
             if ($userRole !== 'teacher') {
                 http_response_code(403);
                 echo json_encode(['error' => 'Only teachers can view pending slot requests']);
                 return;
             }
             
+            // Fetch pending slot requests for THIS teacher (by user_id from session)
+            // Works for ALL teachers including ZacharyStayton101@gmail.com
             $stmt = $conn->prepare("
                 SELECT sr.*, 
                        a.name as admin_name, 
@@ -138,16 +141,31 @@ function handlePost($action, $userId, $userRole) {
                 $requestedTime = $request['requested_time'];
                 $durationMinutes = $request['duration_minutes'];
                 
-                // Calculate end time
-                $startTimeObj = new DateTime($requestedDate . ' ' . $requestedTime);
-                $endTimeObj = clone $startTimeObj;
-                $endTimeObj->modify("+{$durationMinutes} minutes");
-                
-                $startTime = $startTimeObj->format('H:i:s');
-                $endTime = $endTimeObj->format('H:i:s');
+                // Calculate end time - ensure we handle timezone correctly
+                try {
+                    $startTimeObj = new DateTime($requestedDate . ' ' . $requestedTime);
+                    $endTimeObj = clone $startTimeObj;
+                    $endTimeObj->modify("+{$durationMinutes} minutes");
+                    
+                    $startTime = $startTimeObj->format('H:i:s');
+                    $endTime = $endTimeObj->format('H:i:s');
+                } catch (Exception $e) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid date/time format']);
+                    return;
+                }
                 
                 // Get day of week for the requested date
                 $dayOfWeek = date('l', strtotime($requestedDate));
+                
+                // Validate that the date is not in the past
+                $requestDateTime = new DateTime($requestedDate . ' ' . $startTime);
+                $now = new DateTime();
+                if ($requestDateTime < $now) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Cannot create availability for past dates']);
+                    return;
+                }
                 
                 // Create as one-time slot (specific date)
                 if ($hasSpecificDate) {
@@ -169,12 +187,32 @@ function handlePost($action, $userId, $userRole) {
                 
                 if ($insertStmt->execute()) {
                     $slotId = $insertStmt->insert_id;
+                    
+                    // Check for SQL errors
+                    if ($insertStmt->error) {
+                        $insertStmt->close();
+                        http_response_code(500);
+                        echo json_encode(['error' => 'Database error: ' . $insertStmt->error]);
+                        return;
+                    }
+                    
                     $insertStmt->close();
                     
-                    // Update request status
+                    // Update request status to accepted
                     $updateStmt = $conn->prepare("UPDATE admin_slot_requests SET status = 'accepted', responded_at = NOW() WHERE id = ?");
+                    if (!$updateStmt) {
+                        http_response_code(500);
+                        echo json_encode(['error' => 'Failed to prepare update statement']);
+                        return;
+                    }
+                    
                     $updateStmt->bind_param("i", $requestId);
-                    $updateStmt->execute();
+                    if (!$updateStmt->execute()) {
+                        $updateStmt->close();
+                        http_response_code(500);
+                        echo json_encode(['error' => 'Failed to update request status: ' . $updateStmt->error]);
+                        return;
+                    }
                     $updateStmt->close();
                     
                     // Notify admin

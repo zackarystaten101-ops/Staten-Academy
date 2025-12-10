@@ -1112,7 +1112,11 @@
         }
         
         async deleteSlot(slotId) {
-            if (!confirm('Are you sure you want to delete this slot?')) return;
+            // Enhanced confirmation with more details
+            const confirmMessage = 'Are you sure you want to permanently delete this availability slot?\n\n' +
+                'This action cannot be undone. If this slot has upcoming lessons, they will be affected.\n\n' +
+                'Click OK to confirm deletion, or Cancel to keep the slot.';
+            if (!confirm(confirmMessage)) return;
             
             const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
             const apiPath = basePath + '/api/calendar.php';

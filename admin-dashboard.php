@@ -147,7 +147,7 @@ if (!$teachers) {
     $teachers = new mysqli_result($conn);
 }
 
-$materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
+$materials = $conn->query("SELECT * FROM classroom_materials WHERE is_deleted = 0 ORDER BY created_at DESC");
 if (!$materials) {
     error_log("Error fetching materials: " . $conn->error);
     $materials = new mysqli_result($conn);

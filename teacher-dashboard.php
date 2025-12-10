@@ -11,7 +11,10 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'teacher') {
     exit();
 }
 
+// ALL TEACHERS (including ZacharyStayton101@gmail.com) have equal access to all dashboard features
+// No teacher-specific exclusions - all features available to all users with role='teacher'
 $teacher_id = $_SESSION['user_id'];
+$user_id = $teacher_id; // Ensure $user_id is set for sidebar component and slot requests
 $user = getUserById($conn, $teacher_id);
 $user_role = 'teacher';
 
@@ -387,9 +390,9 @@ if ($earnings_result) {
     }
 }
 
-// Fetch Resources
+// Fetch Resources (excluding soft-deleted)
 $resources = [];
-$res_stmt = $conn->prepare("SELECT * FROM teacher_resources WHERE teacher_id = ? ORDER BY created_at DESC");
+$res_stmt = $conn->prepare("SELECT * FROM teacher_resources WHERE teacher_id = ? AND is_deleted = 0 ORDER BY created_at DESC");
 $res_stmt->bind_param("i", $teacher_id);
 $res_stmt->execute();
 $res_result = $res_stmt->get_result();
@@ -400,7 +403,7 @@ if ($res_result) {
 }
 
 // Fetch Classroom Materials
-$materials = $conn->query("SELECT * FROM classroom_materials ORDER BY created_at DESC");
+$materials = $conn->query("SELECT * FROM classroom_materials WHERE is_deleted = 0 ORDER BY created_at DESC");
 
 // Fetch Upcoming Lessons for teacher
 $upcoming_lessons = [];
@@ -547,10 +550,26 @@ $active_tab = 'overview';
         
         <!-- Overview Tab -->
         <div id="overview" class="tab-content active">
-            <h1>Welcome back, <?php echo h($user['name']); ?>! 👋</h1>
+            <div style="margin-bottom: 30px;">
+                <h1 style="margin-bottom: 10px; display: flex; align-items: center; gap: 15px;">
+                    <div style="width: 60px; height: 60px; border-radius: 15px; background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem; box-shadow: 0 4px 15px rgba(11, 108, 245, 0.3);">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #004080; line-height: 1.2;">
+                            Welcome back, <?php echo h($user['name']); ?>! 👋
+                        </div>
+                        <div style="font-size: 1rem; color: #666; font-weight: 400; margin-top: 5px;">
+                            Here's what's happening today
+                        </div>
+                    </div>
+                </h1>
+            </div>
             
             <?php if (isset($msg)): ?>
-                <div class="alert-success"><i class="fas fa-check-circle"></i> <?php echo $msg; ?></div>
+                <div class="alert-success" style="margin-bottom: 25px; padding: 15px 20px; border-radius: 10px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-left: 4px solid #28a745;">
+                    <i class="fas fa-check-circle"></i> <?php echo $msg; ?>
+                </div>
             <?php endif; ?>
             
             <?php
@@ -660,79 +679,174 @@ $active_tab = 'overview';
             </div>
             <?php endif; ?>
             
-            <div class="stats-grid">
-                <a href="#" onclick="switchTab('students'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+            <!-- Statistics Cards - Improved Design -->
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <a href="#" onclick="switchTab('students'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: all 0.3s; border-top: 4px solid #0b6cf5;" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 6px 20px rgba(11, 108, 245, 0.2)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%);"><i class="fas fa-users"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $student_count; ?></h3>
-                        <p>Active Students</p>
+                        <h3 style="font-size: 2rem; margin: 0;"><?php echo $student_count; ?></h3>
+                        <p style="margin-top: 5px; font-size: 0.95rem; color: #666;">Active Students</p>
                     </div>
-                    <div style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
+                    <div style="position: absolute; top: 15px; right: 15px; opacity: 0.3; font-size: 1.5rem;">
                         <i class="fas fa-arrow-right"></i>
                     </div>
                 </a>
-                <a href="#" onclick="switchTab('earnings'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    <div class="stat-icon success"><i class="fas fa-clock"></i></div>
+                <a href="#" onclick="switchTab('performance'); switchPerformanceSubTab('earnings'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: all 0.3s; border-top: 4px solid #28a745;" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 6px 20px rgba(40, 167, 69, 0.2)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    <div class="stat-icon success" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);"><i class="fas fa-clock"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $user['hours_taught'] ?? 0; ?></h3>
-                        <p>Hours Taught</p>
+                        <h3 style="font-size: 2rem; margin: 0;"><?php echo $user['hours_taught'] ?? 0; ?></h3>
+                        <p style="margin-top: 5px; font-size: 0.95rem; color: #666;">Hours Taught</p>
                     </div>
-                    <div style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
+                    <div style="position: absolute; top: 15px; right: 15px; opacity: 0.3; font-size: 1.5rem;">
                         <i class="fas fa-arrow-right"></i>
                     </div>
                 </a>
-                <a href="#" onclick="switchTab('reviews'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    <div class="stat-icon warning"><i class="fas fa-star"></i></div>
+                <a href="#" onclick="switchTab('performance'); switchPerformanceSubTab('reviews'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: all 0.3s; border-top: 4px solid #ffc107;" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 6px 20px rgba(255, 193, 7, 0.2)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    <div class="stat-icon warning" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);"><i class="fas fa-star"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $rating_data['avg_rating']; ?></h3>
-                        <p><?php echo $rating_data['review_count']; ?> Reviews</p>
+                        <h3 style="font-size: 2rem; margin: 0;"><?php echo number_format($rating_data['avg_rating'], 1); ?></h3>
+                        <p style="margin-top: 5px; font-size: 0.95rem; color: #666;"><?php echo $rating_data['review_count']; ?> Reviews</p>
                     </div>
-                    <div style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
+                    <div style="position: absolute; top: 15px; right: 15px; opacity: 0.3; font-size: 1.5rem;">
                         <i class="fas fa-arrow-right"></i>
                     </div>
                 </a>
-                <a href="#" onclick="switchTab('earnings'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    <div class="stat-icon info"><i class="fas fa-dollar-sign"></i></div>
+                <a href="#" onclick="switchTab('performance'); switchPerformanceSubTab('earnings'); return false;" class="stat-card" style="text-decoration: none; color: inherit; cursor: pointer; transition: all 0.3s; border-top: 4px solid #17a2b8;" onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 6px 20px rgba(23, 162, 184, 0.2)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    <div class="stat-icon info" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);"><i class="fas fa-dollar-sign"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo formatCurrency($earnings_data['total_earnings']); ?></h3>
-                        <p>Total Earnings</p>
+                        <h3 style="font-size: 2rem; margin: 0;"><?php echo formatCurrency($earnings_data['total_earnings']); ?></h3>
+                        <p style="margin-top: 5px; font-size: 0.95rem; color: #666;">Total Earnings</p>
                     </div>
-                    <div style="position: absolute; top: 10px; right: 10px; opacity: 0.5;">
+                    <div style="position: absolute; top: 15px; right: 15px; opacity: 0.3; font-size: 1.5rem;">
                         <i class="fas fa-arrow-right"></i>
                     </div>
                 </a>
             </div>
 
-            <div class="card">
-                <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
-                <div class="quick-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-                    <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); position: relative;">
-                        <i class="fas fa-calendar"></i>
-                        <span>View Schedule</span>
-                    </a>
-                    <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); position: relative;">
-                        <i class="fas fa-comments"></i>
-                        <span>Messages</span>
-                        <?php if ($unread_messages > 0): ?>
-                            <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $unread_messages; ?></span>
-                        <?php endif; ?>
-                    </a>
-                    <a href="#" onclick="switchTab('assignments')" class="quick-action-btn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); position: relative;">
-                        <i class="fas fa-tasks"></i>
-                        <span>Assignments</span>
-                        <?php if ($pending_assignments > 0): ?>
-                            <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $pending_assignments; ?></span>
-                        <?php endif; ?>
-                    </a>
-                    <a href="teacher-calendar-setup.php" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Calendar Setup</span>
-                    </a>
-                    <a href="profile.php?id=<?php echo $teacher_id; ?>" class="quick-action-btn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-                        <i class="fas fa-user"></i>
-                        <span>My Profile</span>
-                    </a>
+            <!-- Organized Quick Actions by Category -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                
+                <!-- Calendar & Scheduling Section -->
+                <div class="card" style="border-top: 4px solid #0b6cf5; background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);">
+                    <h3 style="margin-top: 0; color: #004080; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-calendar-alt" style="font-size: 1.3rem;"></i>
+                        Calendar & Scheduling
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-calendar"></i>
+                            <span>View Schedule</span>
+                        </a>
+                        <a href="teacher-calendar-setup.php" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-cog"></i>
+                            <span>Calendar Setup</span>
+                        </a>
+                        <a href="#" onclick="switchTab('slot-requests'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); text-decoration: none; color: white; position: relative;">
+                            <i class="fas fa-calendar-plus"></i>
+                            <span>Slot Requests</span>
+                            <?php
+                            // Get pending slot requests count
+                            $pending_slot_count = 0;
+                            $slot_count_stmt = $conn->prepare("SELECT COUNT(*) as c FROM admin_slot_requests WHERE teacher_id = ? AND status = 'pending'");
+                            if ($slot_count_stmt) {
+                                $slot_count_stmt->bind_param("i", $teacher_id);
+                                $slot_count_stmt->execute();
+                                $slot_count_result = $slot_count_stmt->get_result();
+                                if ($slot_count_result) {
+                                    $pending_slot_count = $slot_count_result->fetch_assoc()['c'] ?? 0;
+                                }
+                                $slot_count_stmt->close();
+                            }
+                            ?>
+                            <?php if ($pending_slot_count > 0): ?>
+                                <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #ffffff; color: #dc3545; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><?php echo $pending_slot_count; ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </div>
                 </div>
+
+                <!-- Teaching & Students Section -->
+                <div class="card" style="border-top: 4px solid #28a745; background: linear-gradient(135deg, #e8f5e9 0%, #ffffff 100%);">
+                    <h3 style="margin-top: 0; color: #155724; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-chalkboard-teacher" style="font-size: 1.3rem;"></i>
+                        Teaching & Students
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="#" onclick="switchTab('students'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-users"></i>
+                            <span>My Students</span>
+                        </a>
+                        <a href="#" onclick="switchTab('assignments'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); text-decoration: none; color: white; position: relative;">
+                            <i class="fas fa-tasks"></i>
+                            <span>Assignments</span>
+                            <?php if ($pending_assignments > 0): ?>
+                                <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><?php echo $pending_assignments; ?></span>
+                            <?php endif; ?>
+                        </a>
+                        <a href="#" onclick="switchTab('performance'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Performance</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Communication Section -->
+                <div class="card" style="border-top: 4px solid #9c27b0; background: linear-gradient(135deg, #f3e5f5 0%, #ffffff 100%);">
+                    <h3 style="margin-top: 0; color: #4a148c; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-comments" style="font-size: 1.3rem;"></i>
+                        Communication
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); text-decoration: none; color: white; position: relative;">
+                            <i class="fas fa-inbox"></i>
+                            <span>Messages</span>
+                            <?php if ($unread_messages > 0): ?>
+                                <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><?php echo $unread_messages; ?></span>
+                            <?php endif; ?>
+                        </a>
+                        <a href="classroom.php" class="quick-action-btn" style="background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-video"></i>
+                            <span>Classroom</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Resources & Materials Section -->
+                <div class="card" style="border-top: 4px solid #ff9800; background: linear-gradient(135deg, #fff3e0 0%, #ffffff 100%);">
+                    <h3 style="margin-top: 0; color: #e65100; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-folder-open" style="font-size: 1.3rem;"></i>
+                        Resources & Materials
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="#" onclick="switchTab('materials'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-book"></i>
+                            <span>Materials</span>
+                        </a>
+                        <a href="#" onclick="switchTab('group-classes'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #607d8b 0%, #455a64 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-users"></i>
+                            <span>Group Classes</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Profile & Settings Section -->
+                <div class="card" style="border-top: 4px solid #607d8b; background: linear-gradient(135deg, #eceff1 0%, #ffffff 100%);">
+                    <h3 style="margin-top: 0; color: #263238; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-cog" style="font-size: 1.3rem;"></i>
+                        Profile & Settings
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <a href="profile.php?id=<?php echo $teacher_id; ?>" class="quick-action-btn" style="background: linear-gradient(135deg, #607d8b 0%, #455a64 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-user"></i>
+                            <span>View Profile</span>
+                        </a>
+                        <a href="#" onclick="switchTab('settings'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #546e7a 0%, #37474f 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-edit"></i>
+                            <span>Edit Settings</span>
+                        </a>
+                    </div>
+                </div>
+
             </div>
 
             <?php if ($pending_assignments > 0): ?>
@@ -1118,13 +1232,24 @@ $active_tab = 'overview';
 
         <!-- Slot Requests Tab -->
         <div id="slot-requests" class="tab-content">
-            <h1><i class="fas fa-calendar-plus"></i> Slot Requests</h1>
-            <p style="color: var(--gray); margin-bottom: 20px;">Review and respond to admin requests for opening specific time slots. When you accept, the slot will be immediately added to your calendar.</p>
+            <div style="margin-bottom: 25px;">
+                <h1 style="margin-bottom: 10px; display: flex; align-items: center; gap: 15px;">
+                    <div style="width: 50px; height: 50px; border-radius: 12px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-calendar-plus"></i>
+                    </div>
+                    Slot Requests
+                </h1>
+                <p style="color: var(--gray); font-size: 1rem; line-height: 1.6;">
+                    Review and respond to admin requests for opening specific time slots. When you accept, the slot will be <strong>immediately added</strong> to your calendar and available for students to book.
+                </p>
+            </div>
             
             <div id="slot-requests-container">
-                <div style="text-align: center; padding: 40px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
-                    <p style="margin-top: 15px; color: #666;">Loading slot requests...</p>
+                <div style="text-align: center; padding: 60px 40px;">
+                    <div style="display: inline-block; padding: 20px; background: #f8f9fa; border-radius: 50%; margin-bottom: 20px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2.5rem; color: #0b6cf5;"></i>
+                    </div>
+                    <p style="margin-top: 15px; color: #666; font-size: 1.1rem;">Loading slot requests...</p>
                 </div>
             </div>
         </div>
@@ -1201,52 +1326,101 @@ $active_tab = 'overview';
                 All teachers can add materials here. All materials are visible to all teachers for use during lessons.
             </p>
             
-            <div class="card">
-                <h2><i class="fas fa-upload"></i> Add Shared Material</h2>
+            <div class="card" style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 2px solid #0b6cf5;">
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
+                    <div style="width: 50px; height: 50px; border-radius: 12px; background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-upload"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; color: #004080;">Add Shared Material</h2>
+                        <p style="margin: 5px 0 0; color: #666; font-size: 0.9rem;">Share teaching materials with all teachers</p>
+                    </div>
+                </div>
+                
                 <form id="addMaterialForm" enctype="multipart/form-data">
                     <div class="profile-grid">
                         <div class="form-group">
                             <label>Title *</label>
-                            <input type="text" name="title" id="material_title" placeholder="Material title" required>
+                            <input type="text" name="title" id="material_title" placeholder="e.g., Beginner Vocabulary Worksheet" required>
                         </div>
                         <div class="form-group">
-                            <label>Type</label>
-                            <select name="type" id="material_type" onchange="toggleMaterialInputs()">
-                                <option value="file">File Upload</option>
-                                <option value="link">External Link</option>
-                                <option value="video">Video Link</option>
+                            <label>Category *</label>
+                            <select name="category" id="material_category" required style="padding: 10px;">
+                                <option value="general">General (All Classes)</option>
+                                <option value="kids">Kids Classes</option>
+                                <option value="adults">Adult Classes</option>
+                                <option value="coding">English for Coding</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="profile-grid">
+                        <div class="form-group">
+                            <label>Material Type *</label>
+                            <select name="type" id="material_type" onchange="toggleMaterialInputs()" required style="padding: 10px;">
+                                <option value="file">File Upload (PDF, DOC, Images, Videos)</option>
+                                <option value="link">External Link</option>
+                                <option value="video">Video Link (YouTube, etc.)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tags (optional)</label>
+                            <input type="text" name="tags" id="material_tags" placeholder="e.g., vocabulary, grammar, beginner (comma-separated)">
+                            <small style="color: var(--gray); display: block; margin-top: 5px;">Add keywords to help teachers find this material</small>
                         </div>
                     </div>
                     <div class="form-group">
                         <label>Description</label>
-                        <textarea name="description" id="material_description" rows="3" placeholder="Brief description of the material..."></textarea>
+                        <textarea name="description" id="material_description" rows="3" placeholder="Brief description of what this material covers and how to use it..."></textarea>
                     </div>
                     <div class="form-group" id="file-input-group">
                         <label>File</label>
-                        <div id="material-dropzone" style="border: 2px dashed var(--primary-light); border-radius: 8px; padding: 30px; text-align: center; background: #f9fbff; cursor: pointer; transition: all 0.3s;" 
-                             onmouseover="this.style.borderColor='var(--primary)'; this.style.background='#f0f7ff';" 
-                             onmouseout="this.style.borderColor='var(--primary-light)'; this.style.background='#f9fbff';">
-                            <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: var(--primary); margin-bottom: 10px;"></i>
-                            <div style="color: var(--gray); margin-bottom: 10px;">
-                                <strong style="color: var(--primary);">Drag & drop files here</strong> or click to browse
+                        <div id="material-dropzone" style="border: 3px dashed var(--primary-light); border-radius: 12px; padding: 40px; text-align: center; background: #ffffff; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;" 
+                             onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 4px 15px rgba(11, 108, 245, 0.2)';" 
+                             onmouseout="this.style.borderColor='var(--primary-light)'; this.style.boxShadow='none';">
+                            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #0b6cf5, #004080); opacity: 0; transition: opacity 0.3s;" id="dropzone-progress"></div>
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: var(--primary); margin-bottom: 15px; display: block;"></i>
+                            <div style="color: var(--gray); margin-bottom: 10px; font-size: 1.1rem;">
+                                <strong style="color: var(--primary); display: block; margin-bottom: 5px;">Drag & Drop Files Here</strong>
+                                <span style="font-size: 0.9rem;">or click to browse</span>
                             </div>
-                            <div id="material-file-info" style="color: var(--gray); font-size: 0.9rem; margin-top: 10px;"></div>
+                            <div id="material-file-info" style="color: var(--success); font-size: 0.9rem; margin-top: 15px; font-weight: 600;"></div>
                             <input type="file" name="file" id="material_file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.mp4,.mp3,.zip,.mov,.avi,.webm" style="display: none;" onchange="handleMaterialFileChange(this)">
                         </div>
-                        <small style="color: var(--gray); display: block; margin-top: 5px;">Max 50MB. Supported: PDF, DOC, PPT, Images, Videos (MP4, MOV, AVI, WEBM), ZIP</small>
+                        <small style="color: var(--gray); display: block; margin-top: 8px; line-height: 1.5;">
+                            <i class="fas fa-info-circle"></i> Max 50MB. Supported formats: PDF, DOC/DOCX, PPT/PPTX, Images (JPG, PNG, GIF), Videos (MP4, MOV, AVI, WEBM), ZIP archives
+                        </small>
                     </div>
                     <div class="form-group" id="link-input-group" style="display: none;">
-                        <label>Link URL</label>
-                        <input type="url" name="link_url" id="material_link_url" placeholder="https://...">
+                        <label>Link URL *</label>
+                        <input type="url" name="link_url" id="material_link_url" placeholder="https://example.com/resource" style="padding: 12px;">
+                        <small style="color: var(--gray); display: block; margin-top: 5px;">Enter a valid URL for the external resource</small>
                     </div>
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-upload"></i> Add Material
-                    </button>
+                    <div style="display: flex; gap: 15px; margin-top: 25px;">
+                        <button type="submit" class="btn-primary" style="flex: 1; padding: 14px 24px; font-size: 1rem; font-weight: 600;">
+                            <i class="fas fa-upload"></i> Add Shared Material
+                        </button>
+                        <button type="reset" class="btn-secondary" onclick="document.getElementById('addMaterialForm').reset(); document.getElementById('material-file-info').textContent=''; toggleMaterialInputs();" style="padding: 14px 24px;">
+                            <i class="fas fa-redo"></i> Clear
+                        </button>
+                    </div>
                 </form>
             </div>
 
-            <h2 style="margin-top: 30px;">All Shared Materials</h2>
+            <div style="margin-top: 30px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <h2 style="margin: 0;">All Shared Materials</h2>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <select id="material-category-filter" onchange="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;">
+                            <option value="">All Categories</option>
+                            <option value="general">General</option>
+                            <option value="kids">Kids Classes</option>
+                            <option value="adults">Adult Classes</option>
+                            <option value="coding">English for Coding</option>
+                        </select>
+                        <input type="text" id="material-search" placeholder="Search materials..." onkeyup="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; min-width: 200px;">
+                    </div>
+                </div>
+            </div>
             <div id="materials-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
                 <!-- Materials will be loaded here via JavaScript -->
             </div>
@@ -1527,9 +1701,66 @@ function toggleMaterialInputs() {
     }
 }
 
-// Load materials
+// Enhanced drag-and-drop functionality
+function setupMaterialDropzone() {
+    const dropzone = document.getElementById('material-dropzone');
+    const fileInput = document.getElementById('material_file');
+    const progressBar = document.getElementById('dropzone-progress');
+    
+    if (!dropzone || !fileInput) return;
+    
+    // Click to browse
+    dropzone.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.style.borderColor = '#0b6cf5';
+        dropzone.style.background = '#f0f7ff';
+        dropzone.style.boxShadow = '0 4px 15px rgba(11, 108, 245, 0.3)';
+        if (progressBar) progressBar.style.opacity = '1';
+    });
+    
+    dropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropzone.style.borderColor = 'var(--primary-light)';
+        dropzone.style.background = '#ffffff';
+        dropzone.style.boxShadow = 'none';
+        if (progressBar) progressBar.style.opacity = '0';
+    });
+    
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.style.borderColor = 'var(--primary-light)';
+        dropzone.style.background = '#ffffff';
+        dropzone.style.boxShadow = 'none';
+        if (progressBar) progressBar.style.opacity = '0';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleMaterialFileChange(fileInput);
+        }
+    });
+}
+
+// Initialize dropzone on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setupMaterialDropzone();
+});
+
+// Load materials with optional filters
 function loadMaterials() {
-    fetch('api/materials.php?action=list')
+    const category = document.getElementById('material-category-filter')?.value || '';
+    const search = document.getElementById('material-search')?.value || '';
+    
+    let url = 'api/materials.php?action=list';
+    if (category) url += '&category=' + encodeURIComponent(category);
+    if (search) url += '&search=' + encodeURIComponent(search);
+    
+    fetch(url)
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -1537,6 +1768,15 @@ function loadMaterials() {
             }
         })
         .catch(err => console.error('Error loading materials:', err));
+}
+
+// Filter materials (with debounce for search)
+let filterTimeout;
+function filterMaterials() {
+    clearTimeout(filterTimeout);
+    filterTimeout = setTimeout(() => {
+        loadMaterials();
+    }, 300); // Wait 300ms after user stops typing
 }
 
 // Display materials
@@ -1556,16 +1796,43 @@ function displayMaterials(materials) {
         const uploadedBy = material.uploaded_by_name || 'Unknown';
         const date = new Date(material.created_at).toLocaleDateString();
         
+        const categoryColors = {
+            'general': '#6c757d',
+            'kids': '#ff6b6b',
+            'adults': '#4ecdc4',
+            'coding': '#45b7d1'
+        };
+        const categoryLabels = {
+            'general': 'General',
+            'kids': 'Kids',
+            'adults': 'Adults',
+            'coding': 'Coding'
+        };
+        const categoryColor = categoryColors[material.category] || '#6c757d';
+        const categoryLabel = categoryLabels[material.category] || 'General';
+        const tags = material.tags ? material.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+        
         return `
-            <div class="card" style="margin: 0;">
-                <div class="material-icon" style="margin-bottom: 10px;">
-                    <i class="fas ${icon}"></i>
+            <div class="card" style="margin: 0; border-left: 4px solid ${categoryColor};">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <div class="material-icon" style="margin: 0;">
+                        <i class="fas ${icon}" style="color: ${categoryColor};"></i>
+                    </div>
+                    <span style="background: ${categoryColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                        ${categoryLabel}
+                    </span>
                 </div>
-                <h3 style="border: none; padding: 0; font-size: 1rem; margin-bottom: 8px;">${escapeHtml(material.title)}</h3>
-                ${material.description ? `<p style="font-size: 0.9rem; color: var(--gray); margin: 10px 0;">${escapeHtml(material.description)}</p>` : ''}
-                <div style="font-size: 0.8rem; color: var(--gray); margin-bottom: 10px;">
+                <h3 style="border: none; padding: 0; font-size: 1rem; margin-bottom: 8px; color: #333;">${escapeHtml(material.title)}</h3>
+                ${material.description ? `<p style="font-size: 0.9rem; color: var(--gray); margin: 10px 0; line-height: 1.5;">${escapeHtml(material.description)}</p>` : ''}
+                ${tags.length > 0 ? `
+                    <div style="margin: 10px 0; display: flex; flex-wrap: wrap; gap: 5px;">
+                        ${tags.map(tag => `<span style="background: #f0f0f0; padding: 3px 8px; border-radius: 10px; font-size: 0.75rem; color: #666;">#${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
+                <div style="font-size: 0.8rem; color: var(--gray); margin-bottom: 10px; padding-top: 10px; border-top: 1px solid #eee;">
                     <i class="fas fa-user"></i> ${escapeHtml(uploadedBy)}<br>
                     <i class="fas fa-calendar"></i> ${date}
+                    ${material.usage_count > 0 ? `<br><i class="fas fa-chart-line"></i> Used ${material.usage_count} time${material.usage_count > 1 ? 's' : ''}` : ''}
                 </div>
                 <button onclick="openMaterialViewer(${material.id})" class="btn-primary btn-sm" style="width: 100%; margin-top: 10px;">
                     <i class="fas fa-eye"></i> View for Screen Share
@@ -1757,32 +2024,87 @@ async function loadSlotRequests() {
         if (data.success && data.requests && data.requests.length > 0) {
             let html = '';
             data.requests.forEach(request => {
-                const requestDate = new Date(request.requested_date + 'T00:00:00');
-                const requestTime = request.requested_time.substring(0, 5);
-                const endTimeObj = new Date(request.requested_date + 'T' + request.requested_time);
-                endTimeObj.setMinutes(endTimeObj.getMinutes() + (request.duration_minutes || 60));
-                const endTime = endTimeObj.toTimeString().substring(0, 5);
+                // Parse date and time correctly
+                const requestDateStr = request.requested_date;
+                const requestTimeStr = request.requested_time;
+                
+                // Create date objects for proper formatting
+                const requestDate = new Date(requestDateStr + 'T00:00:00');
+                const requestDateTime = new Date(requestDateStr + 'T' + requestTimeStr);
+                
+                // Format times in 12-hour format
+                const requestTime = requestDateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                
+                // Calculate end time
+                const durationMinutes = request.duration_minutes || 60;
+                const endTimeObj = new Date(requestDateTime);
+                endTimeObj.setMinutes(endTimeObj.getMinutes() + durationMinutes);
+                const endTime = endTimeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                
+                const requestDateFormatted = requestDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                const requestTimeFormatted = new Date(request.requested_date + 'T' + request.requested_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                const endTimeFormatted = endTimeObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                 
                 html += `
-                    <div class="card" style="margin-bottom: 20px; border-left: 4px solid #0b6cf5;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
-                            <div style="flex: 1; min-width: 250px;">
-                                <h3 style="margin-top: 0; border: none; padding: 0; color: #004080;">
-                                    <i class="fas fa-calendar-check"></i> Time Slot Request
-                                </h3>
-                                <div style="margin-top: 15px;">
-                                    <p style="margin: 8px 0;"><strong><i class="fas fa-user-shield"></i> Requested by:</strong> ${escapeHtml(request.admin_name)}</p>
-                                    <p style="margin: 8px 0;"><strong><i class="fas fa-calendar"></i> Date:</strong> ${requestDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
-                                    <p style="margin: 8px 0;"><strong><i class="fas fa-clock"></i> Time:</strong> ${requestTime} - ${endTime} (${request.duration_minutes || 60} minutes)</p>
-                                    ${request.message ? `<p style="margin: 8px 0;"><strong><i class="fas fa-comment"></i> Message:</strong> ${escapeHtml(request.message)}</p>` : ''}
-                                    <p style="margin: 8px 0; color: #666; font-size: 0.9rem;"><strong><i class="fas fa-history"></i> Requested:</strong> ${new Date(request.created_at).toLocaleString('en-US')}</p>
+                    <div class="card" style="margin-bottom: 25px; border-left: 5px solid #0b6cf5; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: all 0.3s; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: linear-gradient(135deg, rgba(11, 108, 245, 0.1) 0%, transparent 100%); border-radius: 0 0 0 100%; pointer-events: none;"></div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px; position: relative;">
+                            <div style="flex: 1; min-width: 280px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                                    <div style="width: 45px; height: 45px; border-radius: 10px; background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.3rem;">
+                                        <i class="fas fa-calendar-check"></i>
+                                    </div>
+                                    <h3 style="margin: 0; border: none; padding: 0; color: #004080; font-size: 1.3rem;">
+                                        Time Slot Request
+                                    </h3>
+                                </div>
+                                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 15px;">
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                            <i class="fas fa-user-shield" style="color: #0b6cf5; margin-top: 3px; font-size: 1.1rem;"></i>
+                                            <div>
+                                                <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">Requested By</div>
+                                                <div style="font-weight: 600; color: #333; font-size: 1rem;">${escapeHtml(request.admin_name)}</div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                            <i class="fas fa-calendar" style="color: #28a745; margin-top: 3px; font-size: 1.1rem;"></i>
+                                            <div>
+                                                <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">Date</div>
+                                                <div style="font-weight: 600; color: #333; font-size: 1rem;">${requestDateFormatted}</div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                            <i class="fas fa-clock" style="color: #ff9800; margin-top: 3px; font-size: 1.1rem;"></i>
+                                            <div>
+                                                <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">Time</div>
+                                                <div style="font-weight: 600; color: #333; font-size: 1rem;">${requestTime} - ${endTime}</div>
+                                                <div style="font-size: 0.8rem; color: #999; margin-top: 2px;">${request.duration_minutes || 60} minutes</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    ${request.message ? `
+                                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                                            <div style="display: flex; align-items: flex-start; gap: 10px;">
+                                                <i class="fas fa-comment" style="color: #9c27b0; margin-top: 3px;"></i>
+                                                <div style="flex: 1;">
+                                                    <div style="font-size: 0.85rem; color: #666; margin-bottom: 5px;">Admin Message</div>
+                                                    <div style="color: #333; line-height: 1.5; background: white; padding: 12px; border-radius: 6px; border-left: 3px solid #9c27b0;">${escapeHtml(request.message)}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; color: #666; font-size: 0.9rem;">
+                                    <i class="fas fa-history"></i>
+                                    <span>Requested ${new Date(request.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 10px; align-items: flex-start;">
-                                <button onclick="acceptSlotRequest(${request.id})" class="btn-success" style="white-space: nowrap;">
+                            <div style="display: flex; flex-direction: column; gap: 12px; min-width: 150px;">
+                                <button onclick="acceptSlotRequest(${request.id})" class="btn-success" style="white-space: nowrap; padding: 14px 24px; font-size: 1rem; font-weight: 600; border-radius: 8px; box-shadow: 0 2px 6px rgba(40, 167, 69, 0.3); transition: all 0.2s; border: none; cursor: pointer;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(40, 167, 69, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 6px rgba(40, 167, 69, 0.3)'">
                                     <i class="fas fa-check"></i> Accept
                                 </button>
-                                <button onclick="rejectSlotRequest(${request.id})" class="btn-danger" style="white-space: nowrap;">
+                                <button onclick="rejectSlotRequest(${request.id})" class="btn-danger" style="white-space: nowrap; padding: 14px 24px; font-size: 1rem; font-weight: 600; border-radius: 8px; box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3); transition: all 0.2s; border: none; cursor: pointer;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(220, 53, 69, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 6px rgba(220, 53, 69, 0.3)'">
                                     <i class="fas fa-times"></i> Reject
                                 </button>
                             </div>
@@ -1793,10 +2115,12 @@ async function loadSlotRequests() {
             container.innerHTML = html;
         } else {
             container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-calendar-check" style="color: #28a745;"></i>
-                    <h3>No Pending Requests</h3>
-                    <p>You have no pending slot requests from administrators at this time.</p>
+                <div class="empty-state" style="padding: 60px 40px; text-align: center; background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-radius: 12px; border: 2px dashed #dee2e6;">
+                    <div style="width: 80px; height: 80px; margin: 0 auto 25px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2.5rem; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <h3 style="color: #155724; margin-bottom: 10px; font-size: 1.5rem;">All Caught Up!</h3>
+                    <p style="color: #666; font-size: 1.1rem; max-width: 500px; margin: 0 auto; line-height: 1.6;">You have no pending slot requests from administrators at this time. New requests will appear here when admins request time slots from you.</p>
                 </div>
             `;
         }
@@ -1811,14 +2135,23 @@ async function loadSlotRequests() {
 }
 
 async function acceptSlotRequest(requestId) {
-    if (typeof toast !== 'undefined') {
-        const confirmed = await toast.confirm('Accept this slot request? The time slot will be immediately added to your calendar.', 'Accept Slot Request');
-        if (!confirmed) return;
+    // Show confirmation dialog
+    const confirmMessage = 'Accept this slot request? The time slot will be immediately added to your calendar and available for students to book.';
+    let confirmed = false;
+    
+    if (typeof toast !== 'undefined' && toast.confirm) {
+        confirmed = await toast.confirm(confirmMessage, 'Accept Slot Request');
     } else {
-        if (!confirm('Accept this slot request? The time slot will be immediately added to your calendar.')) {
-            return;
-        }
+        confirmed = confirm(confirmMessage);
     }
+    
+    if (!confirmed) return;
+    
+    // Disable buttons during processing
+    const acceptBtn = event?.target?.closest('.btn-success');
+    const rejectBtn = event?.target?.closest('.card')?.querySelector('.btn-danger');
+    if (acceptBtn) acceptBtn.disabled = true;
+    if (rejectBtn) rejectBtn.disabled = true;
     
     try {
         const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
@@ -1831,84 +2164,136 @@ async function acceptSlotRequest(requestId) {
         const data = await response.json();
         
         if (data.success) {
-            if (typeof toast !== 'undefined') {
-                toast.success('Slot request accepted! The time slot has been added to your calendar.');
+            if (typeof toast !== 'undefined' && toast.success) {
+                toast.success('Slot request accepted! The time slot has been added to your calendar and is now available for booking.');
             } else {
-                alert('Slot request accepted! The time slot has been added to your calendar.');
+                alert('✓ Slot request accepted! The time slot has been added to your calendar.');
             }
             // Reload requests
             loadSlotRequests();
-            // If calendar is visible, refresh it
-            if (window.TeacherCalendar && typeof window.TeacherCalendar.prototype.loadAvailability === 'function') {
-                // Trigger calendar refresh if available
-                setTimeout(() => {
-                    if (window.location.hash === '#calendar-setup' || window.location.pathname.includes('teacher-calendar-setup')) {
-                        window.location.reload();
-                    }
-                }, 1000);
-            }
+            // Refresh calendar if on calendar page
+            setTimeout(() => {
+                if (window.location.pathname.includes('teacher-calendar-setup')) {
+                    window.location.reload();
+                } else if (window.location.pathname.includes('schedule')) {
+                    window.location.reload();
+                }
+            }, 500);
         } else {
-            if (typeof toast !== 'undefined') {
+            if (typeof toast !== 'undefined' && toast.error) {
                 toast.error(data.error || 'Failed to accept slot request');
             } else {
                 alert('Error: ' + (data.error || 'Failed to accept slot request'));
             }
+            if (acceptBtn) acceptBtn.disabled = false;
+            if (rejectBtn) rejectBtn.disabled = false;
         }
     } catch (error) {
         console.error('Failed to accept slot request:', error);
-        if (typeof toast !== 'undefined') {
+        if (typeof toast !== 'undefined' && toast.error) {
             toast.error('An error occurred. Please try again.');
         } else {
             alert('An error occurred. Please try again.');
         }
+        if (acceptBtn) acceptBtn.disabled = false;
+        if (rejectBtn) rejectBtn.disabled = false;
     }
 }
 
 async function rejectSlotRequest(requestId) {
-    const reason = prompt('Please provide a reason for rejecting this request (optional):');
+    // Show modal for rejection reason instead of prompt
+    const modal = document.createElement('div');
+    modal.className = 'action-selection-modal-overlay';
+    modal.innerHTML = `
+        <div class="action-selection-modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Reject Slot Request</h3>
+                <button class="modal-close-btn" onclick="this.closest('.action-selection-modal-overlay').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div style="padding: 20px 0;">
+                <p style="color: #666; margin-bottom: 15px;">Are you sure you want to reject this slot request? You can optionally provide a reason.</p>
+                <div class="form-group">
+                    <label>Reason (optional):</label>
+                    <textarea id="rejectReason" rows="4" class="form-control" placeholder="e.g., Time conflict, Unavailable, etc."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-danger" id="confirmReject">
+                    <i class="fas fa-times"></i> Reject Request
+                </button>
+                <button class="btn-secondary" onclick="this.closest('.action-selection-modal-overlay').remove()">Cancel</button>
+            </div>
+        </div>
+    `;
     
-    try {
-        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-        const response = await fetch(basePath + '/api/slot-requests.php?action=reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                request_id: requestId,
-                reason: reason || null
-            })
-        });
+    document.body.appendChild(modal);
+    
+    modal.querySelector('#confirmReject').addEventListener('click', async () => {
+        const reason = modal.querySelector('#rejectReason').value.trim();
+        modal.remove();
         
-        const data = await response.json();
+        // Disable buttons during processing
+        const rejectBtn = event?.target?.closest('.btn-danger');
+        const acceptBtn = event?.target?.closest('.card')?.querySelector('.btn-success');
+        if (rejectBtn) rejectBtn.disabled = true;
+        if (acceptBtn) acceptBtn.disabled = true;
         
-        if (data.success) {
-            if (typeof toast !== 'undefined') {
-                toast.success('Slot request rejected.');
+        try {
+            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const response = await fetch(basePath + '/api/slot-requests.php?action=reject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    request_id: requestId,
+                    reason: reason || null
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                if (typeof toast !== 'undefined' && toast.success) {
+                    toast.success('Slot request rejected.');
+                } else {
+                    alert('Slot request rejected.');
+                }
+                // Reload requests
+                loadSlotRequests();
             } else {
-                alert('Slot request rejected.');
+                if (typeof toast !== 'undefined' && toast.error) {
+                    toast.error(data.error || 'Failed to reject slot request');
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to reject slot request'));
+                }
+                if (rejectBtn) rejectBtn.disabled = false;
+                if (acceptBtn) acceptBtn.disabled = false;
             }
-            // Reload requests
-            loadSlotRequests();
-        } else {
-            if (typeof toast !== 'undefined') {
-                toast.error(data.error || 'Failed to reject slot request');
+        } catch (error) {
+            console.error('Failed to reject slot request:', error);
+            if (typeof toast !== 'undefined' && toast.error) {
+                toast.error('An error occurred. Please try again.');
             } else {
-                alert('Error: ' + (data.error || 'Failed to reject slot request'));
+                alert('An error occurred. Please try again.');
             }
+            if (rejectBtn) rejectBtn.disabled = false;
+            if (acceptBtn) acceptBtn.disabled = false;
         }
-    } catch (error) {
-        console.error('Failed to reject slot request:', error);
-        if (typeof toast !== 'undefined') {
-            toast.error('An error occurred. Please try again.');
-        } else {
-            alert('An error occurred. Please try again.');
+    });
+    
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
         }
-    }
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    });
+    
+    // Focus on textarea
+    setTimeout(() => {
+        const textarea = document.getElementById('rejectReason');
+        if (textarea) textarea.focus();
+    }, 100);
 }
 
 // Handle material form submission and tab switching
@@ -2246,6 +2631,29 @@ function setupMaterialDragDrop() {
 
 // Handle material file change
 function handleMaterialFileChange(input) {
+    const fileInfo = document.getElementById('material-file-info');
+    const dropzone = document.getElementById('material-dropzone');
+    
+    if (!input || !input.files || input.files.length === 0) {
+        if (fileInfo) fileInfo.textContent = '';
+        return;
+    }
+    
+    const file = input.files[0];
+    const fileSize = (file.size / (1024 * 1024)).toFixed(2); // Size in MB
+    
+    if (fileInfo) {
+        fileInfo.innerHTML = `
+            <i class="fas fa-check-circle" style="color: var(--success); margin-right: 8px;"></i>
+            <strong>${escapeHtml(file.name)}</strong> (${fileSize} MB)
+        `;
+    }
+    
+    if (dropzone) {
+        dropzone.style.borderColor = '#28a745';
+        dropzone.style.background = '#f0fff4';
+    }
+}
     // Handle both normal file selection and drag-drop fallback
     const file = input.files && input.files[0] ? input.files[0] : 
                  (input._droppedFiles && input._droppedFiles[0] ? input._droppedFiles[0] : null);
@@ -2286,3 +2694,4 @@ if (ob_get_level() > 0) {
 
 </body>
 </html>
+

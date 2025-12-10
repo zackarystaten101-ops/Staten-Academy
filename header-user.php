@@ -255,6 +255,8 @@ if (in_array($current_page, $sidebar_pages)) {
         if (!$has_sidebar):
         ?>
             <a href="index.php">Home</a>
+            <a href="about.php">About Us</a>
+            <a href="how-we-work.php">How We Work</a>
             <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
                 <a href="schedule.php">Schedule</a>
                 <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>">View Profile</a>
