@@ -362,6 +362,26 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('students'); } return false;" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
                 <i class="fas fa-user-graduate"></i> Students
             </a>
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('messages'); } return false;" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
+                <i class="fas fa-comments"></i> Messages
+                <?php 
+                $admin_unread = 0;
+                if (isset($conn) && isset($user_id)) {
+                    $admin_unread_stmt = $conn->prepare("SELECT COUNT(*) as c FROM messages m WHERE m.receiver_id = ? AND m.is_read = 0 AND m.message_type = 'direct'");
+                    if ($admin_unread_stmt) {
+                        $admin_unread_stmt->bind_param("i", $user_id);
+                        $admin_unread_stmt->execute();
+                        $result = $admin_unread_stmt->get_result();
+                        if ($result) {
+                            $admin_unread = $result->fetch_assoc()['c'] ?? 0;
+                        }
+                        $admin_unread_stmt->close();
+                    }
+                }
+                if ($admin_unread > 0): ?>
+                    <span class="sidebar-badge alert"><?php echo $admin_unread; ?></span>
+                <?php endif; ?>
+            </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('support'); } return false;" class="<?php echo $active_tab === 'support' ? 'active' : ''; ?>">
                 <i class="fas fa-headset"></i> Support
                 <?php 
@@ -419,6 +439,26 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
             <a href="admin-dashboard.php#students" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
                 <i class="fas fa-user-graduate"></i> Students
+            </a>
+            <a href="admin-dashboard.php#messages" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
+                <i class="fas fa-comments"></i> Messages
+                <?php 
+                $admin_unread = 0;
+                if (isset($conn) && isset($user_id)) {
+                    $admin_unread_stmt = $conn->prepare("SELECT COUNT(*) as c FROM messages m WHERE m.receiver_id = ? AND m.is_read = 0 AND m.message_type = 'direct'");
+                    if ($admin_unread_stmt) {
+                        $admin_unread_stmt->bind_param("i", $user_id);
+                        $admin_unread_stmt->execute();
+                        $result = $admin_unread_stmt->get_result();
+                        if ($result) {
+                            $admin_unread = $result->fetch_assoc()['c'] ?? 0;
+                        }
+                        $admin_unread_stmt->close();
+                    }
+                }
+                if ($admin_unread > 0): ?>
+                    <span class="sidebar-badge alert"><?php echo $admin_unread; ?></span>
+                <?php endif; ?>
             </a>
             <a href="admin-dashboard.php#support" class="<?php echo $active_tab === 'support' ? 'active' : ''; ?>">
                 <i class="fas fa-headset"></i> Support

@@ -63,8 +63,12 @@ if ($other_user_id > 0) {
     }
     
     // Check message permissions
+    // Admins can message anyone, anyone can message admin
+    if ($user_role === 'admin' || $other_user['role'] === 'admin') {
+        $can_message = true; // Admins can always message, and anyone can message admin
+    }
     // Teachers can ONLY reply to messages from students (including new_student)
-    if ($user_role === 'teacher' && ($other_user['role'] === 'student' || $other_user['role'] === 'new_student')) {
+    elseif ($user_role === 'teacher' && ($other_user['role'] === 'student' || $other_user['role'] === 'new_student')) {
         $check = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct'");
         $check->bind_param("ii", $other_user_id, $user_id);
         $check->execute();

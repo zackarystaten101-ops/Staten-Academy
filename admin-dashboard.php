@@ -212,6 +212,24 @@ if (!$inactive_students) {
 
 $unread_support = $admin_stats['open_support'];
 $active_tab = 'dashboard';
+
+// Get all users for admin chat
+$all_users_stmt = $conn->prepare("
+    SELECT DISTINCT u.id, u.name, u.email, u.role, u.profile_pic,
+           COALESCE((SELECT COUNT(*) FROM messages m WHERE m.receiver_id = ? AND m.sender_id = u.id AND m.is_read = 0 AND m.message_type = 'direct'), 0) as unread_count,
+           (SELECT MAX(sent_at) FROM messages m WHERE ((m.sender_id = ? AND m.receiver_id = u.id) OR (m.sender_id = u.id AND m.receiver_id = ?)) AND m.message_type = 'direct') as last_message_time
+    FROM users u
+    WHERE u.id != ? AND u.role != 'admin'
+    ORDER BY last_message_time IS NULL, last_message_time DESC, u.name ASC
+");
+$all_users_stmt->bind_param("iiiii", $admin_id, $admin_id, $admin_id, $admin_id);
+$all_users_stmt->execute();
+$all_users_result = $all_users_stmt->get_result();
+$all_users = [];
+while ($row = $all_users_result->fetch_assoc()) {
+    $all_users[] = $row;
+}
+$all_users_stmt->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -725,6 +743,57 @@ $active_tab = 'dashboard';
                     <?php endwhile; ?>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Messages Tab -->
+        <div id="messages" class="tab-content">
+            <h1><i class="fas fa-comments"></i> Chat with Users</h1>
+            <p style="color: #666; margin-bottom: 20px;">Start a conversation with any user or continue existing conversations.</p>
+            
+            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; height: 600px;">
+                <!-- Users List -->
+                <div style="background: white; border-radius: 8px; padding: 15px; overflow-y: auto; border: 1px solid #ddd;">
+                    <h3 style="margin-top: 0; font-size: 1.1rem; color: #004080;">All Users</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <?php if (count($all_users) > 0): ?>
+                            <?php foreach ($all_users as $chat_user): ?>
+                                <a href="message_threads.php?user_id=<?php echo $chat_user['id']; ?>" 
+                                   style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; text-decoration: none; color: inherit; transition: all 0.2s;"
+                                   onmouseover="this.style.background='#f0f7ff'; this.style.transform='translateX(5px)';"
+                                   onmouseout="this.style.background='#f8f9fa'; this.style.transform='translateX(0)';">
+                                    <img src="<?php echo h($chat_user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                         alt="" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;"
+                                         onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            <?php echo h($chat_user['name']); ?>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: #666;">
+                                            <span class="tag <?php echo $chat_user['role']; ?>" style="font-size: 0.75rem; padding: 2px 8px;">
+                                                <?php echo ucfirst($chat_user['role']); ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <?php if ($chat_user['unread_count'] > 0): ?>
+                                        <span style="background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold;">
+                                            <?php echo $chat_user['unread_count']; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </a>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p style="color: #999; text-align: center; padding: 20px;">No users found</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <!-- Chat Area Placeholder -->
+                <div style="background: white; border-radius: 8px; padding: 20px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #999;">
+                    <i class="fas fa-comments" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.3;"></i>
+                    <p style="font-size: 1.1rem; margin: 0;">Select a user from the list to start chatting</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px;">Or click on a user to open the full chat interface</p>
+                </div>
+            </div>
         </div>
 
         <!-- Support Tab -->

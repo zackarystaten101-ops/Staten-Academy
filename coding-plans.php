@@ -274,7 +274,14 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <div class="page-header">
         <h1><i class="fas fa-code"></i> English for Coding</h1>
         <p>Specialized English training for developers. Technical vocabulary, interview prep, and developer communication.</p>
-        <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Tracks</a>
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px;">
+            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Tracks</a>
+            <?php if (isset($_SESSION['user_id'])): ?>
+                <a href="#" onclick="startAdminChat(event)" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
+                    <i class="fas fa-headset"></i> Contact Admin
+                </a>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Video Introduction Section -->
@@ -345,6 +352,25 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         <p>&copy; <?php echo date('Y'); ?> Staten Academy. All rights reserved.</p>
     </footer>
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
+    <script>
+    async function startAdminChat(event) {
+        if (event) event.preventDefault();
+        
+        try {
+            const response = await fetch('api/start-admin-chat.php');
+            const data = await response.json();
+            
+            if (data.success) {
+                window.location.href = data.redirect_url;
+            } else {
+                alert('Error: ' + (data.error || 'Failed to start chat'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        }
+    }
+    </script>
 </body>
 </html>
 

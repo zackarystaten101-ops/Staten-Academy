@@ -773,12 +773,16 @@ $active_tab = 'overview';
                         <i class="fas fa-calendar-plus"></i>
                         <span>Book Lesson</span>
                     </a>
-                    <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); position: relative;">
                         <i class="fas fa-comments"></i>
                         <span>Messages</span>
                         <?php if ($unread_messages > 0): ?>
                             <span class="notification-badge" style="position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;"><?php echo $unread_messages; ?></span>
                         <?php endif; ?>
+                    </a>
+                    <a href="#" onclick="startAdminChat(event)" class="quick-action-btn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                        <i class="fas fa-headset"></i>
+                        <span>Contact Admin</span>
                     </a>
                     <a href="classroom.php" class="quick-action-btn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                         <i class="fas fa-book-open"></i>
@@ -1744,6 +1748,32 @@ function submitConfirmation(event) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
     });
+}
+
+async function startAdminChat(event) {
+    if (event) event.preventDefault();
+    
+    try {
+        const response = await fetch('api/start-admin-chat.php');
+        const data = await response.json();
+        
+        if (data.success) {
+            window.location.href = data.redirect_url;
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.error || 'Failed to start chat');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to start chat'));
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+    }
 }
 </script>
 

@@ -148,7 +148,12 @@ $active_tab = 'overview';
             <div class="upgrade-banner">
                 <h2>Start Your English Learning Journey</h2>
                 <p>Upgrade to a student account to access full courses, book classes with teachers, and track your progress!</p>
-                <a href="payment.php" class="btn-upgrade">View Plans & Upgrade</a>
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px;">
+                    <a href="payment.php" class="btn-upgrade">View Plans & Upgrade</a>
+                    <a href="#" onclick="startAdminChat(event)" style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 12px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: transform 0.2s; border: 2px solid rgba(255,255,255,0.3);">
+                        <i class="fas fa-headset"></i> Contact Admin
+                    </a>
+                </div>
             </div>
             
             <div class="stats-grid">
@@ -377,6 +382,24 @@ window.addEventListener('hashchange', function() {
         switchTab(hash);
     }
 });
+
+async function startAdminChat(event) {
+    if (event) event.preventDefault();
+    
+    try {
+        const response = await fetch('api/start-admin-chat.php');
+        const data = await response.json();
+        
+        if (data.success) {
+            window.location.href = data.redirect_url;
+        } else {
+            alert('Error: ' + (data.error || 'Failed to start chat'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    }
+}
 </script>
 
 </body>
