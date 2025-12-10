@@ -466,8 +466,11 @@ body.dashboard-layout {
     border-bottom: 1px solid rgba(255,255,255,0.1);
     flex-shrink: 0;
     min-height: 60px;
+    max-height: 80px;
     display: flex;
     align-items: center;
+    position: relative;
+    z-index: 1;
 }
 
 .sidebar-header h3 {
@@ -486,12 +489,29 @@ body.dashboard-layout {
     opacity: 0.8;
 }
 
+.sidebar-header a {
+    display: block;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-header a h3 {
+    margin: 0;
+}
+
 .sidebar-menu {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 15px 0;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 2;
+    margin-top: 0;
 }
 
 .sidebar-menu a {
