@@ -489,16 +489,25 @@ body.dashboard-layout {
     opacity: 0.8;
 }
 
-.sidebar-header a {
+.sidebar-header a,
+.sidebar-header-link {
     display: block;
     width: 100%;
     text-decoration: none;
     color: inherit;
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0;
+    transition: background 0.2s;
 }
 
-.sidebar-header a h3 {
+.sidebar-header a:hover,
+.sidebar-header-link:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.sidebar-header a h3,
+.sidebar-header-link h3 {
     margin: 0;
 }
 

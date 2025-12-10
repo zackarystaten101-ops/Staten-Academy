@@ -48,9 +48,9 @@ if (isset($admin_stats_for_sidebar)) {
     <div class="sidebar-header">
         <?php if ($user_role === 'visitor'): ?>
             <?php if ($is_dashboard_page): ?>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='visitor-dashboard.php#overview'; } return false;" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='visitor-dashboard.php#overview'; } return false;" class="sidebar-header-link">
             <?php else: ?>
-            <a href="visitor-dashboard.php#overview" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="visitor-dashboard.php#overview" class="sidebar-header-link">
             <?php endif; ?>
                 <h3 style="margin: 0; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                     <i class="fas fa-user-circle"></i> Visitor Portal
@@ -58,9 +58,9 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
         <?php elseif ($user_role === 'student' || $user_role === 'new_student'): ?>
             <?php if ($is_dashboard_page): ?>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='student-dashboard.php#overview'; } return false;" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='student-dashboard.php#overview'; } return false;" class="sidebar-header-link">
             <?php else: ?>
-            <a href="student-dashboard.php#overview" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="student-dashboard.php#overview" class="sidebar-header-link">
             <?php endif; ?>
                 <h3 style="margin: 0; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                     <i class="fas fa-graduation-cap"></i> <?php echo $user_role === 'new_student' ? 'New Student' : 'Student'; ?> Portal
@@ -68,9 +68,9 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
         <?php elseif ($user_role === 'teacher'): ?>
             <?php if ($is_dashboard_page): ?>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='teacher-dashboard.php#overview'; } return false;" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } else { window.location.href='teacher-dashboard.php#overview'; } return false;" class="sidebar-header-link">
             <?php else: ?>
-            <a href="teacher-dashboard.php#overview" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="teacher-dashboard.php#overview" class="sidebar-header-link">
             <?php endif; ?>
                 <h3 style="margin: 0; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                     <i class="fas fa-chalkboard-teacher"></i> Teacher Portal
@@ -78,9 +78,9 @@ if (isset($admin_stats_for_sidebar)) {
             </a>
         <?php elseif ($user_role === 'admin'): ?>
             <?php if ($is_dashboard_page): ?>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('dashboard'); } else { window.location.href='admin-dashboard.php#dashboard'; } return false;" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('dashboard'); } else { window.location.href='admin-dashboard.php#dashboard'; } return false;" class="sidebar-header-link">
             <?php else: ?>
-            <a href="admin-dashboard.php#dashboard" style="text-decoration: none; color: inherit; display: block; padding: 10px; border-radius: 5px; transition: background 0.2s; margin-bottom: 10px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            <a href="admin-dashboard.php#dashboard" class="sidebar-header-link">
             <?php endif; ?>
                 <h3 style="margin: 0; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                     <i class="fas fa-shield-alt"></i> Admin Panel
