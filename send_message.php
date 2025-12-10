@@ -106,16 +106,51 @@ if (!$thread_id) {
     exit();
 }
 
-// Insert message
+// Verify thread exists (for foreign key constraint)
+$verify_thread = $conn->prepare("SELECT id FROM message_threads WHERE id = ?");
+$verify_thread->bind_param("i", $thread_id);
+$verify_thread->execute();
+$verify_result = $verify_thread->get_result();
+if ($verify_result->num_rows === 0) {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'message' => 'Thread not found. Please try again.']);
+    $verify_thread->close();
+    $conn->close();
+    exit();
+}
+$verify_thread->close();
+
+// Insert message with thread_id
 $insert_msg = $conn->prepare("INSERT INTO messages (thread_id, sender_id, receiver_id, message, message_type, sent_at) VALUES (?, ?, ?, ?, 'direct', NOW())");
+if (!$insert_msg) {
+    header('Content-Type: application/json');
+    $error_detail = defined('APP_DEBUG') && APP_DEBUG ? $conn->error : 'Database error';
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $error_detail]);
+    $conn->close();
+    exit();
+}
+
 $insert_msg->bind_param("iiss", $thread_id, $sender_id, $receiver_id, $message);
 
 if ($insert_msg->execute()) {
+    // Update thread's last_message_at timestamp
+    $update_thread = $conn->prepare("UPDATE message_threads SET last_message_at = NOW() WHERE id = ?");
+    if ($update_thread) {
+        $update_thread->bind_param("i", $thread_id);
+        $update_thread->execute();
+        $update_thread->close();
+    }
+    
     header('Content-Type: application/json');
     echo json_encode(['success' => true, 'message' => 'Message sent']);
 } else {
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Error sending message']);
+    $error_msg = 'Error sending message';
+    // Log detailed error for debugging (only in development)
+    if (defined('APP_DEBUG') && APP_DEBUG === true) {
+        $error_msg .= ': ' . $insert_msg->error . ' (SQL: ' . $conn->error . ')';
+    }
+    echo json_encode(['success' => false, 'message' => $error_msg]);
 }
 
 $insert_msg->close();
