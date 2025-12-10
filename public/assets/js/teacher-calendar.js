@@ -477,10 +477,16 @@
                     // If user clicked without moving, ensure endCell is set
                     if (!endCell && startCell) {
                         endCell = startCell;
-                        this.dragEnd = { ...this.dragStart };
+                        // If just clicking (not dragging), use the start cell as end
+                        this.dragEnd = {
+                            date: startCell.dataset.date,
+                            hour: parseInt(startCell.dataset.hour),
+                            minute: parseInt(startCell.dataset.minute)
+                        };
                     }
 
-                    if (isDragging && startCell && endCell) {
+                    if (isDragging && startCell && endCell && this.dragStart && this.dragEnd) {
+                        // Only proceed if we have valid drag start and end
                         this.handleSlotCreation();
                     }
                     isDragging = false;
@@ -499,20 +505,60 @@
         }
         
         handleSlotCreation() {
-            if (!this.dragStart || !this.dragEnd) return;
+            if (!this.dragStart || !this.dragEnd) {
+                console.log('Cannot create slot: missing drag start or end');
+                return;
+            }
+            
+            // Validate that drag start and end are in the same day
+            if (this.dragStart.date !== this.dragEnd.date) {
+                alert('Please select a time range within a single day.');
+                return;
+            }
             
             // Show modal with 3 options: Open Slot, Book Lesson, Book Time Off
             this.showActionSelectionModal();
         }
         
         showActionSelectionModal() {
-            // Calculate time range
-            const startTime = this.formatTime(this.dragStart.hour, this.dragStart.minute);
-            const endTime = this.formatTime(this.dragEnd.hour, this.dragEnd.minute);
+            // Calculate time range - ensure end time is at the END of the selected slot
+            let startHour = this.dragStart.hour;
+            let startMinute = this.dragStart.minute;
+            let endHour = this.dragEnd.hour;
+            let endMinute = this.dragEnd.minute;
+            
+            // If dragging backwards, swap start and end
+            const startMinutes = startHour * 60 + startMinute;
+            const endMinutes = endHour * 60 + endMinute;
+            
+            if (endMinutes < startMinutes) {
+                // Swap them
+                [startHour, startMinute, endHour, endMinute] = [endHour, endMinute, startHour, startMinute];
+            }
+            
+            // Add slot duration to end time to get the actual end (since we select to the end of the slot)
+            endMinute += this.options.slotDuration;
+            if (endMinute >= 60) {
+                endHour += Math.floor(endMinute / 60);
+                endMinute = endMinute % 60;
+            }
+            
+            // Ensure end doesn't go past 24:00
+            if (endHour >= 24) {
+                endHour = 23;
+                endMinute = 59;
+            }
+            
+            const startTime = this.formatTime(startHour, startMinute);
+            const endTime = this.formatTime(endHour, endMinute);
             const dateStr = this.dragStart.date;
             const dateObj = new Date(dateStr + 'T00:00:00');
             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
             const dateDisplay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            // Store corrected values
+            this.correctedDragStart = { hour: startHour, minute: startMinute, date: dateStr };
+            this.correctedDragEnd = { hour: endHour, minute: endMinute, date: dateStr };
             
             const modal = document.createElement('div');
             modal.className = 'action-selection-modal-overlay';
@@ -571,9 +617,13 @@
         }
         
         async handleSelectedAction(action) {
-            const startTime = this.formatTime(this.dragStart.hour, this.dragStart.minute);
-            const endTime = this.formatTime(this.dragEnd.hour, this.dragEnd.minute);
-            const dateStr = this.dragStart.date;
+            // Use corrected drag times
+            const dragStart = this.correctedDragStart || this.dragStart;
+            const dragEnd = this.correctedDragEnd || this.dragEnd;
+            
+            const startTime = this.formatTime(dragStart.hour, dragStart.minute);
+            const endTime = this.formatTime(dragEnd.hour, dragEnd.minute);
+            const dateStr = dragStart.date;
             
             switch(action) {
                 case 'open-slot':
@@ -589,15 +639,72 @@
         }
         
         handleOpenSlot(dateStr, startTime, endTime) {
-            // Ask if weekly or one-time
-            const isWeekly = confirm('Create as weekly recurring slot? (Click OK for weekly, Cancel for one-time)');
+            // Show better modal for choosing slot type
+            const modal = document.createElement('div');
+            modal.className = 'action-selection-modal-overlay';
+            modal.innerHTML = `
+                <div class="action-selection-modal" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>Create Open Slot</h3>
+                        <button class="modal-close-btn" onclick="this.closest('.action-selection-modal-overlay').remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-time-info">
+                        <p><strong>Date:</strong> ${new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                        <p><strong>Time:</strong> ${startTime.substring(0, 5)} - ${endTime.substring(0, 5)}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Slot Type</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                            <label style="display: flex; align-items: center; gap: 10px; padding: 15px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; transition: all 0.2s;" 
+                                   onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';"
+                                   onmouseout="this.style.borderColor='#dee2e6'; this.style.background='white';">
+                                <input type="radio" name="slot_type" value="weekly" checked style="width: auto; margin: 0;">
+                                <div>
+                                    <strong>Weekly Recurring Slot</strong>
+                                    <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">Available every week on this day and time</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; padding: 15px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                   onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';"
+                                   onmouseout="this.style.borderColor='#dee2e6'; this.style.background='white';">
+                                <input type="radio" name="slot_type" value="onetime" style="width: auto; margin: 0;">
+                                <div>
+                                    <strong>One-Time Slot</strong>
+                                    <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">Available only for this specific date and time</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn-primary" id="confirm-slot-type">Create Slot</button>
+                        <button class="btn-secondary" onclick="this.closest('.action-selection-modal-overlay').remove()">Cancel</button>
+                    </div>
+                </div>
+            `;
             
-            if (isWeekly) {
-                const dayOfWeek = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
-                this.createWeeklySlot(dayOfWeek, startTime, endTime);
-            } else {
-                this.createOneTimeSlot(dateStr, startTime, endTime);
-            }
+            document.body.appendChild(modal);
+            
+            // Handle confirmation
+            modal.querySelector('#confirm-slot-type').addEventListener('click', () => {
+                const slotType = modal.querySelector('input[name="slot_type"]:checked').value;
+                modal.remove();
+                
+                if (slotType === 'weekly') {
+                    const dayOfWeek = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+                    this.createWeeklySlot(dayOfWeek, startTime, endTime);
+                } else {
+                    this.createOneTimeSlot(dateStr, startTime, endTime);
+                }
+            });
+            
+            // Close on overlay click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
         }
         
         async handleBookLesson(dateStr, startTime, endTime) {
@@ -1083,6 +1190,32 @@
                 }
             } catch (error) {
                 console.error('Failed to load lessons:', error);
+            }
+        }
+        
+        async loadTimeOffs() {
+            if (!this.options.teacherId) return;
+            
+            const weekDays = this.getWeekDays();
+            const dateFrom = this.formatDate(weekDays[0]);
+            const dateTo = this.formatDate(weekDays[6]);
+            
+            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+            const apiPath = basePath + '/api/calendar.php';
+            
+            try {
+                const response = await fetch(
+                    `${apiPath}?action=get-timeoff&date_from=${dateFrom}&date_to=${dateTo}`
+                );
+                const data = await response.json();
+                if (data.success && data.timeoffs) {
+                    this.timeOffs = data.timeoffs;
+                } else {
+                    this.timeOffs = [];
+                }
+            } catch (error) {
+                console.error('Failed to load time offs:', error);
+                this.timeOffs = [];
             }
         }
     }

@@ -341,9 +341,20 @@ $all_users_stmt->close();
             </div>
         </div>
 
-        <!-- Analytics Tab -->
-        <div id="analytics" class="tab-content">
-            <h1>Analytics & Reports</h1>
+        <!-- Reports & Analytics Tab (Combined) -->
+        <div id="reports" class="tab-content">
+            <h1>Reports & Analytics</h1>
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchReportsSubTab('analytics')" class="btn-outline" id="rep-analytics-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-chart-line"></i> Analytics
+                </button>
+                <button onclick="switchReportsSubTab('reports')" class="btn-outline" id="rep-reports-btn">
+                    <i class="fas fa-file-alt"></i> Reports
+                </button>
+            </div>
+            
+            <div id="reports-analytics" class="reports-subtab active">
+                <h2>Analytics</h2>
             
             <div class="earnings-summary">
                 <div class="earnings-card primary">
@@ -423,6 +434,73 @@ $all_users_stmt->close();
                 <p style="color: var(--gray); text-align: center; padding: 20px;">No inactive students found!</p>
                 <?php endif; ?>
             </div>
+            </div>
+            
+            <div id="reports-reports" class="reports-subtab" style="display: none;">
+                <div class="card">
+                    <h2><i class="fas fa-file-export"></i> Export Data</h2>
+                    <div class="quick-actions">
+                        <a href="api/export.php?type=students" class="quick-action-btn">
+                            <i class="fas fa-users"></i>
+                            <span>Export Students</span>
+                        </a>
+                        <a href="api/export.php?type=teachers" class="quick-action-btn">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Export Teachers</span>
+                        </a>
+                        <a href="api/export.php?type=bookings" class="quick-action-btn">
+                            <i class="fas fa-calendar"></i>
+                            <span>Export Bookings</span>
+                        </a>
+                        <a href="api/export.php?type=earnings" class="quick-action-btn">
+                            <i class="fas fa-dollar-sign"></i>
+                            <span>Export Earnings</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-chart-bar"></i> Summary Statistics</h2>
+                    <table class="data-table">
+                        <tr>
+                            <td><strong>Total Students</strong></td>
+                            <td><?php echo $admin_stats['students']; ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Teachers</strong></td>
+                            <td><?php echo $admin_stats['teachers']; ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Bookings</strong></td>
+                            <td><?php echo $admin_stats['total_bookings']; ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Revenue</strong></td>
+                            <td><?php echo formatCurrency($total_revenue); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Pending Applications</strong></td>
+                            <td><?php echo $admin_stats['pending_apps']; ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Open Support Tickets</strong></td>
+                            <td><?php echo $unread_support; ?></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab (legacy - redirects to reports) -->
+        <div id="analytics" class="tab-content">
+            <script>
+                if (window.location.hash === '#analytics') {
+                    window.location.hash = '#reports';
+                    if (typeof switchTab === 'function') switchTab('reports');
+                    if (typeof switchReportsSubTab === 'function') switchReportsSubTab('analytics');
+                }
+            </script>
+            <p>Redirecting to Reports & Analytics tab...</p>
         </div>
 
         <!-- Unified Pending Requests Tab -->
@@ -665,9 +743,20 @@ $all_users_stmt->close();
             <?php endif; ?>
         </div>
 
-        <!-- Teachers Tab -->
-        <div id="teachers" class="tab-content">
-            <h1>Teacher Management</h1>
+        <!-- Users Tab (Combined Teachers & Students) -->
+        <div id="users" class="tab-content">
+            <h1>User Management</h1>
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchUsersSubTab('teachers')" class="btn-outline" id="usr-teachers-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-chalkboard-teacher"></i> Teachers
+                </button>
+                <button onclick="switchUsersSubTab('students')" class="btn-outline" id="usr-students-btn">
+                    <i class="fas fa-user-graduate"></i> Students
+                </button>
+            </div>
+            
+            <div id="users-teachers" class="users-subtab active">
+                <h2>Teacher Management</h2>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -706,12 +795,11 @@ $all_users_stmt->close();
                     <?php endwhile; ?>
                 </tbody>
             </table>
-        </div>
-
-        <!-- Students Tab -->
-        <div id="students" class="tab-content">
-            <h1>Student Management</h1>
-            <table class="data-table">
+            </div>
+            
+            <div id="users-students" class="users-subtab" style="display: none;">
+                <h2>Student Management</h2>
+                <table class="data-table">
                 <thead>
                     <tr>
                         <th>Student</th>
@@ -742,7 +830,32 @@ $all_users_stmt->close();
                     </tr>
                     <?php endwhile; ?>
                 </tbody>
-            </table>
+                </table>
+            </div>
+        </div>
+
+        <!-- Teachers Tab (legacy - redirects to users) -->
+        <div id="teachers" class="tab-content">
+            <script>
+                if (window.location.hash === '#teachers') {
+                    window.location.hash = '#users';
+                    if (typeof switchTab === 'function') switchTab('users');
+                    if (typeof switchUsersSubTab === 'function') switchUsersSubTab('teachers');
+                }
+            </script>
+            <p>Redirecting to Users tab...</p>
+        </div>
+
+        <!-- Students Tab (legacy - redirects to users) -->
+        <div id="students" class="tab-content">
+            <script>
+                if (window.location.hash === '#students') {
+                    window.location.hash = '#users';
+                    if (typeof switchTab === 'function') switchTab('users');
+                    if (typeof switchUsersSubTab === 'function') switchUsersSubTab('students');
+                }
+            </script>
+            <p>Redirecting to Users tab...</p>
         </div>
 
         <!-- Messages Tab -->
@@ -844,7 +957,7 @@ $all_users_stmt->close();
                             </span>
                         </td>
                         <td>
-                            <button onclick="viewMessage(<?php echo $sm['id']; ?>, '<?php echo h(addslashes($sm['sender_name'])); ?>', '<?php echo h(addslashes($sm['subject'])); ?>', '<?php echo h(addslashes($sm['message'])); ?>')" class="btn-outline btn-sm">View</button>
+                            <button onclick="viewSupportMessage(<?php echo $sm['id']; ?>, <?php echo $sm['sender_id']; ?>, '<?php echo h(addslashes($sm['sender_name'])); ?>', '<?php echo h(addslashes($sm['subject'])); ?>', '<?php echo h(addslashes($sm['message'])); ?>', '<?php echo h(addslashes($sm['sender_role'])); ?>')" class="btn-outline btn-sm">View & Reply</button>
                             <?php if ($sm['status'] === 'open'): ?>
                             <form action="admin-actions.php" method="POST" style="display: inline;">
                                 <input type="hidden" name="support_id" value="<?php echo $sm['id']; ?>">
@@ -1018,66 +1131,32 @@ $all_users_stmt->close();
             <?php endif; ?>
         </div>
 
-        <!-- Reports Tab -->
-        <div id="reports" class="tab-content">
-            <h1>Reports</h1>
-            
-            <div class="card">
-                <h2><i class="fas fa-file-export"></i> Export Data</h2>
-                <div class="quick-actions">
-                    <a href="api/export.php?type=students" class="quick-action-btn">
-                        <i class="fas fa-users"></i>
-                        <span>Export Students</span>
-                    </a>
-                    <a href="api/export.php?type=teachers" class="quick-action-btn">
-                        <i class="fas fa-chalkboard-teacher"></i>
-                        <span>Export Teachers</span>
-                    </a>
-                    <a href="api/export.php?type=bookings" class="quick-action-btn">
-                        <i class="fas fa-calendar"></i>
-                        <span>Export Bookings</span>
-                    </a>
-                    <a href="api/export.php?type=earnings" class="quick-action-btn">
-                        <i class="fas fa-dollar-sign"></i>
-                        <span>Export Earnings</span>
-                    </a>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2><i class="fas fa-chart-bar"></i> Summary Statistics</h2>
-                <table class="data-table">
-                    <tr>
-                        <td><strong>Total Students</strong></td>
-                        <td><?php echo $admin_stats['students']; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Total Teachers</strong></td>
-                        <td><?php echo $admin_stats['teachers']; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Total Bookings</strong></td>
-                        <td><?php echo $admin_stats['total_bookings']; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Total Revenue</strong></td>
-                        <td><?php echo formatCurrency($total_revenue); ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Pending Applications</strong></td>
-                        <td><?php echo $admin_stats['pending_apps']; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Open Support Tickets</strong></td>
-                        <td><?php echo $unread_support; ?></td>
-                    </tr>
-                </table>
-            </div>
+        <!-- Reports Tab (legacy - redirects to reports) -->
+        <div id="reports-old" class="tab-content" style="display: none;">
+            <script>
+                if (window.location.hash === '#reports' && !document.getElementById('reports').classList.contains('active')) {
+                    // This is handled by the consolidated reports tab
+                }
+            </script>
         </div>
 
-        <!-- My Profile Tab -->
-        <div id="my-profile" class="tab-content">
-            <h1>My Profile</h1>
+        <!-- Settings Tab (Combined My Profile, Security, Classroom) -->
+        <div id="settings" class="tab-content">
+            <h1>Settings</h1>
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchAdminSettingsSubTab('profile')" class="btn-outline" id="adm-set-profile-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-user-edit"></i> Profile
+                </button>
+                <button onclick="switchAdminSettingsSubTab('security')" class="btn-outline" id="adm-set-security-btn">
+                    <i class="fas fa-lock"></i> Security
+                </button>
+                <button onclick="switchAdminSettingsSubTab('classroom')" class="btn-outline" id="adm-set-classroom-btn">
+                    <i class="fas fa-book-open"></i> Classroom
+                </button>
+            </div>
+            
+            <div id="settings-profile" class="admin-settings-subtab active">
+                <h2>My Profile</h2>
             <div class="card">
                 <form method="POST" enctype="multipart/form-data">
                     <div style="display: flex; gap: 30px; margin-bottom: 25px; align-items: flex-start;">
@@ -1135,11 +1214,15 @@ $all_users_stmt->close();
                     </button>
                 </form>
             </div>
-        </div>
-
-        <!-- Classroom Tab -->
-        <div id="classroom" class="tab-content">
-            <h1>Classroom Materials</h1>
+            </div>
+            
+            <div id="settings-security" class="admin-settings-subtab" style="display: none;">
+                <h2>Security Settings</h2>
+                <?php include __DIR__ . '/app/Views/components/password-change-form.php'; ?>
+            </div>
+            
+            <div id="settings-classroom" class="admin-settings-subtab" style="display: none;">
+                <h2>Classroom Materials</h2>
             
             <div class="card">
                 <h2><i class="fas fa-plus-circle"></i> Add Material</h2>
@@ -1248,10 +1331,216 @@ function viewSlotRequest(id) {
     alert('Slot request details view - ID: ' + id);
 }
 
+function viewSupportMessage(supportId, senderId, senderName, subject, message, senderRole) {
+    // Create modal for viewing and replying to support message
+    const modal = document.createElement('div');
+    modal.className = 'action-selection-modal-overlay';
+    modal.id = 'supportMessageModal';
+    modal.innerHTML = `
+        <div class="action-selection-modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Support Message</h3>
+                <button class="modal-close-btn" onclick="document.getElementById('supportMessageModal').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="margin-bottom: 20px;">
+                    <p><strong>From:</strong> ${escapeHtml(senderName)} (${escapeHtml(senderRole)})</p>
+                    <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
+                    <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+                </div>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #0b6cf5;">
+                    <strong>Message:</strong>
+                    <div style="margin-top: 10px; white-space: pre-wrap;">${escapeHtml(message)}</div>
+                </div>
+                <div class="form-group">
+                    <label><strong>Reply:</strong></label>
+                    <textarea id="supportReplyMessage" rows="5" class="form-control" placeholder="Type your reply here..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="sendSupportReply(${supportId}, ${senderId}, '${escapeHtml(senderName)}')">
+                    <i class="fas fa-paper-plane"></i> Send Reply
+                </button>
+                <button class="btn-secondary" onclick="document.getElementById('supportMessageModal').remove()">Close</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // Focus on textarea
+    setTimeout(() => {
+        const textarea = document.getElementById('supportReplyMessage');
+        if (textarea) textarea.focus();
+    }, 100);
+}
+
+async function sendSupportReply(supportId, receiverId, receiverName) {
+    const messageText = document.getElementById('supportReplyMessage').value.trim();
+    
+    if (!messageText) {
+        alert('Please enter a reply message.');
+        return;
+    }
+    
+    const sendBtn = event.target;
+    const originalHTML = sendBtn.innerHTML;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('receiver_id', receiverId);
+        formData.append('message', messageText);
+        
+        const response = await fetch('send_message.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Mark support message as read
+            const markReadForm = new FormData();
+            markReadForm.append('action', 'mark_support_read');
+            markReadForm.append('support_id', supportId);
+            
+            await fetch('admin-actions.php', {
+                method: 'POST',
+                body: markReadForm
+            });
+            
+            if (typeof toast !== 'undefined') {
+                toast.success('Reply sent successfully!');
+            } else {
+                alert('Reply sent successfully!');
+            }
+            
+            document.getElementById('supportMessageModal').remove();
+            // Refresh the page to update the message list
+            window.location.reload();
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.message || 'Failed to send reply');
+            } else {
+                alert('Error: ' + (data.message || 'Failed to send reply'));
+            }
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalHTML;
+        }
+    } catch (error) {
+        console.error('Error sending reply:', error);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalHTML;
+    }
+}
+
+// Make escapeHtml available globally if not already defined
+if (typeof window.escapeHtml === 'undefined') {
+    window.escapeHtml = function(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+}
+
+function escapeHtml(text) {
+    return window.escapeHtml(text);
+}
+
+function filterSupport(role) {
+    const rows = document.querySelectorAll('.support-row');
+    rows.forEach(row => {
+        if (role === 'all' || row.dataset.role === role) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Sub-tab switching functions for admin dashboard
+function switchReportsSubTab(subTab) {
+    document.querySelectorAll('.reports-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#rep-analytics-btn, #rep-reports-btn').forEach(btn => {
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('reports-' + subTab);
+    const targetBtn = document.getElementById('rep-' + subTab + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+}
+
+function switchUsersSubTab(subTab) {
+    document.querySelectorAll('.users-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#usr-teachers-btn, #usr-students-btn').forEach(btn => {
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('users-' + subTab);
+    const targetBtn = document.getElementById('usr-' + subTab + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+}
+
+function switchAdminSettingsSubTab(subTab) {
+    document.querySelectorAll('.admin-settings-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#adm-set-profile-btn, #adm-set-security-btn, #adm-set-classroom-btn').forEach(btn => {
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('settings-' + subTab);
+    const targetBtn = document.getElementById('adm-set-' + subTab + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+}
+
 function switchTab(id) {
     if (event) event.preventDefault();
     
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    
+    // Handle sub-tab navigation
+    if (id === 'reports') {
+        const hashParts = window.location.hash.split('-');
+        if (hashParts.length > 1 && (hashParts[1] === 'analytics' || hashParts[1] === 'reports')) {
+            switchReportsSubTab(hashParts[1]);
+        } else {
+            switchReportsSubTab('analytics'); // Default to analytics
+        }
+    }
+    if (id === 'users') {
+        const hashParts = window.location.hash.split('-');
+        if (hashParts.length > 1 && (hashParts[1] === 'teachers' || hashParts[1] === 'students')) {
+            switchUsersSubTab(hashParts[1]);
+        } else {
+            switchUsersSubTab('teachers'); // Default to teachers
+        }
+    }
+    if (id === 'settings') {
+        const hashParts = window.location.hash.split('-');
+        if (hashParts.length > 1 && (hashParts[1] === 'profile' || hashParts[1] === 'security' || hashParts[1] === 'classroom')) {
+            switchAdminSettingsSubTab(hashParts[1]);
+        } else {
+            switchAdminSettingsSubTab('profile'); // Default to profile
+        }
+    }
     const targetTab = document.getElementById(id);
     if (targetTab) {
         targetTab.classList.add('active');

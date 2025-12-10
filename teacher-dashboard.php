@@ -815,9 +815,20 @@ $active_tab = 'overview';
             <?php endif; ?>
         </div>
 
-        <!-- Earnings Tab -->
-        <div id="earnings" class="tab-content">
-            <h1>Earnings</h1>
+        <!-- Performance Tab (Combined Earnings & Reviews) -->
+        <div id="performance" class="tab-content">
+            <h1>Performance</h1>
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchPerformanceSubTab('earnings')" class="btn-outline" id="perf-earnings-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-dollar-sign"></i> Earnings
+                </button>
+                <button onclick="switchPerformanceSubTab('reviews')" class="btn-outline" id="perf-reviews-btn">
+                    <i class="fas fa-star"></i> Reviews
+                </button>
+            </div>
+            
+            <div id="performance-earnings" class="performance-subtab active">
+                <h2>Earnings</h2>
             
             <div class="earnings-summary">
                 <div class="earnings-card primary">
@@ -1043,9 +1054,11 @@ $active_tab = 'overview';
             <?php endif; ?>
         </div>
 
-        <!-- Reviews Tab -->
-        <div id="reviews" class="tab-content">
-            <h1>Reviews</h1>
+                </div>
+            </div>
+            
+            <div id="performance-reviews" class="performance-subtab" style="display: none;">
+                <h2>Reviews</h2>
             
             <div class="card" style="margin-bottom: 30px;">
                 <div style="display: flex; align-items: center; gap: 30px;">
@@ -1101,6 +1114,19 @@ $active_tab = 'overview';
                     <p>Reviews from your students will appear here.</p>
                 </div>
             <?php endif; ?>
+        </div>
+
+        <!-- Slot Requests Tab -->
+        <div id="slot-requests" class="tab-content">
+            <h1><i class="fas fa-calendar-plus"></i> Slot Requests</h1>
+            <p style="color: var(--gray); margin-bottom: 20px;">Review and respond to admin requests for opening specific time slots. When you accept, the slot will be immediately added to your calendar.</p>
+            
+            <div id="slot-requests-container">
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
+                    <p style="margin-top: 15px; color: #666;">Loading slot requests...</p>
+                </div>
+            </div>
         </div>
 
         <!-- Resources Tab -->
@@ -1167,11 +1193,10 @@ $active_tab = 'overview';
                     <p>Upload teaching materials to share with your students.</p>
                 </div>
             <?php endif; ?>
-        </div>
-
-        <!-- Shared Materials Tab -->
-        <div id="shared-materials" class="tab-content">
-            <h1>Shared Materials Library</h1>
+            </div>
+            
+            <div id="materials-shared-materials" class="materials-subtab" style="display: none;">
+                <h2>Shared Materials Library</h2>
             <p style="color: var(--gray); margin-bottom: 20px;">
                 All teachers can add materials here. All materials are visible to all teachers for use during lessons.
             </p>
@@ -1227,16 +1252,50 @@ $active_tab = 'overview';
             </div>
         </div>
 
-        <!-- Profile Tab -->
-        <div id="profile" class="tab-content">
-            <h1>Edit Profile</h1>
-            <?php if (isset($msg) && !empty($msg)): ?>
-                <div class="alert-success" style="margin-bottom: 20px;"><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($msg); ?></div>
-            <?php endif; ?>
-            <?php if (isset($upload_error) && !empty($upload_error)): ?>
-                <div class="alert-error" style="margin-bottom: 20px;"><i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($upload_error); ?></div>
-            <?php endif; ?>
-            <div class="card">
+        <!-- Resources Tab (legacy - redirects to materials) -->
+        <div id="resources" class="tab-content">
+            <script>
+                if (window.location.hash === '#resources') {
+                    window.location.hash = '#materials';
+                    if (typeof switchTab === 'function') switchTab('materials');
+                    if (typeof switchMaterialsSubTab === 'function') switchMaterialsSubTab('resources');
+                }
+            </script>
+            <p>Redirecting to Materials tab...</p>
+        </div>
+
+        <!-- Shared Materials Tab (legacy - redirects to materials) -->
+        <div id="shared-materials" class="tab-content">
+            <script>
+                if (window.location.hash === '#shared-materials') {
+                    window.location.hash = '#materials';
+                    if (typeof switchTab === 'function') switchTab('materials');
+                    if (typeof switchMaterialsSubTab === 'function') switchMaterialsSubTab('shared-materials');
+                }
+            </script>
+            <p>Redirecting to Materials tab...</p>
+        </div>
+
+        <!-- Settings Tab (Combined Profile & Security) -->
+        <div id="settings" class="tab-content">
+            <h1>Settings</h1>
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchSettingsSubTab('profile')" class="btn-outline" id="set-profile-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-user-edit"></i> Profile
+                </button>
+                <button onclick="switchSettingsSubTab('security')" class="btn-outline" id="set-security-btn">
+                    <i class="fas fa-lock"></i> Security
+                </button>
+            </div>
+            
+            <div id="settings-profile" class="settings-subtab active">
+                <?php if (isset($msg) && !empty($msg)): ?>
+                    <div class="alert-success" style="margin-bottom: 20px;"><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($msg); ?></div>
+                <?php endif; ?>
+                <?php if (isset($upload_error) && !empty($upload_error)): ?>
+                    <div class="alert-error" style="margin-bottom: 20px;"><i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($upload_error); ?></div>
+                <?php endif; ?>
+                <div class="card">
                 <form method="POST" enctype="multipart/form-data" id="profile-form">
                     <div style="display: flex; gap: 30px; margin-bottom: 25px; align-items: flex-start;">
                         <div style="text-align: center;">
@@ -1316,13 +1375,37 @@ $active_tab = 'overview';
                         <i class="fas fa-save"></i> Submit Changes
                     </button>
                 </form>
+                </div>
+            </div>
+            
+            <div id="settings-security" class="settings-subtab" style="display: none;">
+                <h2>Security Settings</h2>
+                <?php include __DIR__ . '/app/Views/components/password-change-form.php'; ?>
             </div>
         </div>
 
-        <!-- Security Tab -->
+        <!-- Profile Tab (legacy - redirects to settings) -->
+        <div id="profile" class="tab-content">
+            <script>
+                if (window.location.hash === '#profile') {
+                    window.location.hash = '#settings';
+                    if (typeof switchTab === 'function') switchTab('settings');
+                    if (typeof switchSettingsSubTab === 'function') switchSettingsSubTab('profile');
+                }
+            </script>
+            <p>Redirecting to Settings tab...</p>
+        </div>
+
+        <!-- Security Tab (legacy - redirects to settings) -->
         <div id="security" class="tab-content">
-            <h1>Security Settings</h1>
-            <?php include __DIR__ . '/app/Views/components/password-change-form.php'; ?>
+            <script>
+                if (window.location.hash === '#security') {
+                    window.location.hash = '#settings';
+                    if (typeof switchTab === 'function') switchTab('settings');
+                    if (typeof switchSettingsSubTab === 'function') switchSettingsSubTab('security');
+                }
+            </script>
+            <p>Redirecting to Settings tab...</p>
         </div>
 
     </div>
@@ -1614,6 +1697,220 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Sub-tab switching functions
+function switchPerformanceSubTab(subTab) {
+    document.querySelectorAll('.performance-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#performance-earnings, #performance-reviews').forEach(el => {
+        const btn = document.getElementById('perf-' + (el.id === 'performance-earnings' ? 'earnings' : 'reviews') + '-btn');
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('performance-' + subTab);
+    const targetBtn = document.getElementById('perf-' + subTab + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+}
+
+function switchMaterialsSubTab(subTab) {
+    document.querySelectorAll('.materials-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#materials-resources, #materials-shared-materials').forEach(el => {
+        const btn = document.getElementById('mat-' + (el.id === 'materials-resources' ? 'resources' : 'shared') + '-btn');
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('materials-' + (subTab === 'shared-materials' ? 'shared-materials' : subTab));
+    const targetBtn = document.getElementById('mat-' + (subTab === 'shared-materials' ? 'shared' : subTab) + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+    
+    // Load shared materials if switching to that tab
+    if (subTab === 'shared-materials') {
+        loadMaterials();
+    }
+}
+
+function switchSettingsSubTab(subTab) {
+    document.querySelectorAll('.settings-subtab').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#settings-profile, #settings-security').forEach(el => {
+        const btn = document.getElementById('set-' + (el.id === 'settings-profile' ? 'profile' : 'security') + '-btn');
+        if (btn) btn.style.borderBottom = 'none';
+    });
+    
+    const targetTab = document.getElementById('settings-' + subTab);
+    const targetBtn = document.getElementById('set-' + subTab + '-btn');
+    if (targetTab) targetTab.style.display = 'block';
+    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+}
+
+// Slot Requests Functions
+async function loadSlotRequests() {
+    const container = document.getElementById('slot-requests-container');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i><p style="margin-top: 15px; color: #666;">Loading slot requests...</p></div>';
+    
+    try {
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        const response = await fetch(basePath + '/api/slot-requests.php?action=get-pending');
+        const data = await response.json();
+        
+        if (data.success && data.requests && data.requests.length > 0) {
+            let html = '';
+            data.requests.forEach(request => {
+                const requestDate = new Date(request.requested_date + 'T00:00:00');
+                const requestTime = request.requested_time.substring(0, 5);
+                const endTimeObj = new Date(request.requested_date + 'T' + request.requested_time);
+                endTimeObj.setMinutes(endTimeObj.getMinutes() + (request.duration_minutes || 60));
+                const endTime = endTimeObj.toTimeString().substring(0, 5);
+                
+                html += `
+                    <div class="card" style="margin-bottom: 20px; border-left: 4px solid #0b6cf5;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <h3 style="margin-top: 0; border: none; padding: 0; color: #004080;">
+                                    <i class="fas fa-calendar-check"></i> Time Slot Request
+                                </h3>
+                                <div style="margin-top: 15px;">
+                                    <p style="margin: 8px 0;"><strong><i class="fas fa-user-shield"></i> Requested by:</strong> ${escapeHtml(request.admin_name)}</p>
+                                    <p style="margin: 8px 0;"><strong><i class="fas fa-calendar"></i> Date:</strong> ${requestDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                                    <p style="margin: 8px 0;"><strong><i class="fas fa-clock"></i> Time:</strong> ${requestTime} - ${endTime} (${request.duration_minutes || 60} minutes)</p>
+                                    ${request.message ? `<p style="margin: 8px 0;"><strong><i class="fas fa-comment"></i> Message:</strong> ${escapeHtml(request.message)}</p>` : ''}
+                                    <p style="margin: 8px 0; color: #666; font-size: 0.9rem;"><strong><i class="fas fa-history"></i> Requested:</strong> ${new Date(request.created_at).toLocaleString('en-US')}</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                                <button onclick="acceptSlotRequest(${request.id})" class="btn-success" style="white-space: nowrap;">
+                                    <i class="fas fa-check"></i> Accept
+                                </button>
+                                <button onclick="rejectSlotRequest(${request.id})" class="btn-danger" style="white-space: nowrap;">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-check" style="color: #28a745;"></i>
+                    <h3>No Pending Requests</h3>
+                    <p>You have no pending slot requests from administrators at this time.</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Failed to load slot requests:', error);
+        container.innerHTML = `
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i> Failed to load slot requests. Please try again later.
+            </div>
+        `;
+    }
+}
+
+async function acceptSlotRequest(requestId) {
+    if (typeof toast !== 'undefined') {
+        const confirmed = await toast.confirm('Accept this slot request? The time slot will be immediately added to your calendar.', 'Accept Slot Request');
+        if (!confirmed) return;
+    } else {
+        if (!confirm('Accept this slot request? The time slot will be immediately added to your calendar.')) {
+            return;
+        }
+    }
+    
+    try {
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        const response = await fetch(basePath + '/api/slot-requests.php?action=accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ request_id: requestId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (typeof toast !== 'undefined') {
+                toast.success('Slot request accepted! The time slot has been added to your calendar.');
+            } else {
+                alert('Slot request accepted! The time slot has been added to your calendar.');
+            }
+            // Reload requests
+            loadSlotRequests();
+            // If calendar is visible, refresh it
+            if (window.TeacherCalendar && typeof window.TeacherCalendar.prototype.loadAvailability === 'function') {
+                // Trigger calendar refresh if available
+                setTimeout(() => {
+                    if (window.location.hash === '#calendar-setup' || window.location.pathname.includes('teacher-calendar-setup')) {
+                        window.location.reload();
+                    }
+                }, 1000);
+            }
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.error || 'Failed to accept slot request');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to accept slot request'));
+            }
+        }
+    } catch (error) {
+        console.error('Failed to accept slot request:', error);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+    }
+}
+
+async function rejectSlotRequest(requestId) {
+    const reason = prompt('Please provide a reason for rejecting this request (optional):');
+    
+    try {
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        const response = await fetch(basePath + '/api/slot-requests.php?action=reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                request_id: requestId,
+                reason: reason || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (typeof toast !== 'undefined') {
+                toast.success('Slot request rejected.');
+            } else {
+                alert('Slot request rejected.');
+            }
+            // Reload requests
+            loadSlotRequests();
+        } else {
+            if (typeof toast !== 'undefined') {
+                toast.error(data.error || 'Failed to reject slot request');
+            } else {
+                alert('Error: ' + (data.error || 'Failed to reject slot request'));
+            }
+        }
+    } catch (error) {
+        console.error('Failed to reject slot request:', error);
+        if (typeof toast !== 'undefined') {
+            toast.error('An error occurred. Please try again.');
+        } else {
+            alert('An error occurred. Please try again.');
+        }
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Handle material form submission and tab switching
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('addMaterialForm');
@@ -1693,12 +1990,47 @@ document.addEventListener('DOMContentLoaded', function() {
         if (id === 'shared-materials') {
             loadMaterials();
         }
+        
+        if (id === 'slot-requests') {
+            loadSlotRequests();
+        }
+        
+        // Handle sub-tab navigation
+        if (id === 'performance') {
+            const hashParts = window.location.hash.split('-');
+            if (hashParts.length > 1 && (hashParts[1] === 'earnings' || hashParts[1] === 'reviews')) {
+                switchPerformanceSubTab(hashParts[1]);
+            } else {
+                switchPerformanceSubTab('earnings'); // Default to earnings
+            }
+        }
+        if (id === 'materials') {
+            const hashParts = window.location.hash.split('-');
+            if (hashParts.length > 1 && (hashParts[1] === 'resources' || hashParts[1] === 'shared')) {
+                switchMaterialsSubTab(hashParts[1] === 'shared' ? 'shared-materials' : 'resources');
+            } else {
+                switchMaterialsSubTab('resources'); // Default to resources
+            }
+        }
+        if (id === 'settings') {
+            const hashParts = window.location.hash.split('-');
+            if (hashParts.length > 1 && (hashParts[1] === 'profile' || hashParts[1] === 'security')) {
+                switchSettingsSubTab(hashParts[1]);
+            } else {
+                switchSettingsSubTab('profile'); // Default to profile
+            }
+        }
     };
     
     // Load materials if already on shared-materials tab
     const hash = window.location.hash.substring(1);
     if (hash === 'shared-materials') {
         loadMaterials();
+    }
+    
+    // Load slot requests if already on slot-requests tab
+    if (hash === 'slot-requests') {
+        loadSlotRequests();
     }
     
     // Drag and drop for profile picture

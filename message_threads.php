@@ -747,8 +747,8 @@ if ($conv_result) {
         }
     }
     
-    // Helper function to escape HTML
-    function escapeHtml(text) {
+    // Helper function to escape HTML (make it available globally)
+    window.escapeHtml = function(text) {
         const map = {
             '&': '&amp;',
             '<': '&lt;',
@@ -757,6 +757,11 @@ if ($conv_result) {
             "'": '&#039;'
         };
         return text.replace(/[&<>"']/g, m => map[m]);
+    };
+    
+    // Keep local reference for backwards compatibility
+    function escapeHtml(text) {
+        return window.escapeHtml(text);
     }
     
     // Fetch new messages every 3 seconds (SILENT - no page reload)

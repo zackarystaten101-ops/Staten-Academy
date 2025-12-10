@@ -257,8 +257,8 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('overview'); } return false;" class="<?php echo $active_tab === 'overview' ? 'active' : ''; ?>">
                 <i class="fas fa-home"></i> Overview
             </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('earnings'); } return false;" class="<?php echo $active_tab === 'earnings' ? 'active' : ''; ?>">
-                <i class="fas fa-dollar-sign"></i> Earnings
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('performance'); } return false;" class="<?php echo in_array($active_tab, ['performance', 'earnings', 'reviews']) ? 'active' : ''; ?>">
+                <i class="fas fa-chart-line"></i> Performance
             </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('students'); } return false;" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
                 <i class="fas fa-users"></i> My Students
@@ -269,28 +269,44 @@ if (isset($admin_stats_for_sidebar)) {
                     <span class="sidebar-badge"><?php echo $pending_assignments; ?></span>
                 <?php endif; ?>
             </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reviews'); } return false;" class="<?php echo $active_tab === 'reviews' ? 'active' : ''; ?>">
-                <i class="fas fa-star"></i> Reviews
+            <?php
+            // Get pending slot requests count for badge
+            $pending_slot_requests_count = 0;
+            if (isset($conn) && isset($user_id) && $user_role === 'teacher') {
+                $slot_req_stmt = $conn->prepare("SELECT COUNT(*) as c FROM admin_slot_requests WHERE teacher_id = ? AND status = 'pending'");
+                if ($slot_req_stmt) {
+                    $slot_req_stmt->bind_param("i", $user_id);
+                    $slot_req_stmt->execute();
+                    $slot_req_result = $slot_req_stmt->get_result();
+                    if ($slot_req_result) {
+                        $pending_slot_requests_count = $slot_req_result->fetch_assoc()['c'] ?? 0;
+                    }
+                    $slot_req_stmt->close();
+                }
+            }
+            ?>
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('slot-requests'); } return false;" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
+                <i class="fas fa-calendar-plus"></i> Slot Requests
+                <?php if ($pending_slot_requests_count > 0): ?>
+                    <span class="sidebar-badge" style="background: #dc3545;"><?php echo $pending_slot_requests_count; ?></span>
+                <?php endif; ?>
             </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('group-classes'); } return false;" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">
                 <i class="fas fa-users"></i> Group Classes
             </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('resources'); } return false;" class="<?php echo $active_tab === 'resources' ? 'active' : ''; ?>">
-                <i class="fas fa-folder-open"></i> Resources
-            </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('shared-materials'); } return false;" class="<?php echo $active_tab === 'shared-materials' ? 'active' : ''; ?>">
-                <i class="fas fa-share-alt"></i> Shared Materials
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('materials'); } return false;" class="<?php echo in_array($active_tab, ['materials', 'resources', 'shared-materials']) ? 'active' : ''; ?>">
+                <i class="fas fa-folder-open"></i> Materials
             </a>
             <hr>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('profile'); } return false;" class="<?php echo $active_tab === 'profile' ? 'active' : ''; ?>">
-                <i class="fas fa-user-edit"></i> Edit Profile
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('settings'); } return false;" class="<?php echo in_array($active_tab, ['settings', 'profile', 'security']) ? 'active' : ''; ?>">
+                <i class="fas fa-cog"></i> Settings
             </a>
             <?php else: ?>
             <a href="teacher-dashboard.php#overview" class="<?php echo $active_tab === 'overview' ? 'active' : ''; ?>">
                 <i class="fas fa-home"></i> Overview
             </a>
-            <a href="teacher-dashboard.php#earnings" class="<?php echo $active_tab === 'earnings' ? 'active' : ''; ?>">
-                <i class="fas fa-dollar-sign"></i> Earnings
+            <a href="teacher-dashboard.php#performance" class="<?php echo in_array($active_tab, ['performance', 'earnings', 'reviews']) ? 'active' : ''; ?>">
+                <i class="fas fa-chart-line"></i> Performance
             </a>
             <a href="teacher-dashboard.php#students" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
                 <i class="fas fa-users"></i> My Students
@@ -301,21 +317,39 @@ if (isset($admin_stats_for_sidebar)) {
                     <span class="sidebar-badge"><?php echo $pending_assignments; ?></span>
                 <?php endif; ?>
             </a>
-            <a href="teacher-dashboard.php#reviews" class="<?php echo $active_tab === 'reviews' ? 'active' : ''; ?>">
-                <i class="fas fa-star"></i> Reviews
+            <?php
+            // Get pending slot requests count for badge (non-dashboard page)
+            if (!isset($pending_slot_requests_count)) {
+                $pending_slot_requests_count = 0;
+                if (isset($conn) && isset($user_id) && $user_role === 'teacher') {
+                    $slot_req_stmt = $conn->prepare("SELECT COUNT(*) as c FROM admin_slot_requests WHERE teacher_id = ? AND status = 'pending'");
+                    if ($slot_req_stmt) {
+                        $slot_req_stmt->bind_param("i", $user_id);
+                        $slot_req_stmt->execute();
+                        $slot_req_result = $slot_req_stmt->get_result();
+                        if ($slot_req_result) {
+                            $pending_slot_requests_count = $slot_req_result->fetch_assoc()['c'] ?? 0;
+                        }
+                        $slot_req_stmt->close();
+                    }
+                }
+            }
+            ?>
+            <a href="teacher-dashboard.php#slot-requests" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
+                <i class="fas fa-calendar-plus"></i> Slot Requests
+                <?php if ($pending_slot_requests_count > 0): ?>
+                    <span class="sidebar-badge" style="background: #dc3545;"><?php echo $pending_slot_requests_count; ?></span>
+                <?php endif; ?>
             </a>
             <a href="teacher-dashboard.php#group-classes" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">
                 <i class="fas fa-users"></i> Group Classes
             </a>
-            <a href="teacher-dashboard.php#resources" class="<?php echo $active_tab === 'resources' ? 'active' : ''; ?>">
-                <i class="fas fa-folder-open"></i> Resources
-            </a>
-            <a href="teacher-dashboard.php#shared-materials" class="<?php echo $active_tab === 'shared-materials' ? 'active' : ''; ?>">
-                <i class="fas fa-share-alt"></i> Shared Materials
+            <a href="teacher-dashboard.php#materials" class="<?php echo in_array($active_tab, ['materials', 'resources', 'shared-materials']) ? 'active' : ''; ?>">
+                <i class="fas fa-folder-open"></i> Materials
             </a>
             <hr>
-            <a href="teacher-dashboard.php#profile" class="<?php echo $active_tab === 'profile' ? 'active' : ''; ?>">
-                <i class="fas fa-user-edit"></i> Edit Profile
+            <a href="teacher-dashboard.php#settings" class="<?php echo in_array($active_tab, ['settings', 'profile', 'security']) ? 'active' : ''; ?>">
+                <i class="fas fa-cog"></i> Settings
             </a>
             <?php endif; ?>
             <a href="teacher-calendar-setup.php" class="<?php echo ($active_tab === 'calendar-setup' || basename($_SERVER['PHP_SELF']) === 'teacher-calendar-setup.php') ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> Calendar Setup</a>
@@ -328,15 +362,6 @@ if (isset($admin_stats_for_sidebar)) {
                 <?php endif; ?>
             </a>
             <a href="classroom.php" class="<?php echo (basename($_SERVER['PHP_SELF']) === 'classroom.php' || $active_tab === 'classroom') ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Classroom</a>
-            <?php if ($is_dashboard_page): ?>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('security'); } return false;" class="<?php echo $active_tab === 'security' ? 'active' : ''; ?>">
-                <i class="fas fa-lock"></i> Security
-            </a>
-            <?php else: ?>
-            <a href="teacher-dashboard.php#security" class="<?php echo $active_tab === 'security' ? 'active' : ''; ?>">
-                <i class="fas fa-lock"></i> Security
-            </a>
-            <?php endif; ?>
             <a href="support_contact.php" class="support-link"><i class="fas fa-headset"></i> Support</a>
             
         <?php elseif ($user_role === 'admin'): ?>
@@ -344,9 +369,6 @@ if (isset($admin_stats_for_sidebar)) {
             <?php if ($is_dashboard_page): ?>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('dashboard'); } return false;" class="<?php echo $active_tab === 'dashboard' ? 'active' : ''; ?>">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
-            </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('analytics'); } return false;" class="<?php echo $active_tab === 'analytics' ? 'active' : ''; ?>">
-                <i class="fas fa-chart-line"></i> Analytics
             </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('pending-requests'); } return false;" class="<?php echo $active_tab === 'pending-requests' ? 'active' : ''; ?>">
                 <i class="fas fa-exclamation-circle"></i> Pending Requests
@@ -356,11 +378,8 @@ if (isset($admin_stats_for_sidebar)) {
                     <span class="sidebar-badge" style="background: #dc3545;"><?php echo $total_pending; ?></span>
                 <?php endif; ?>
             </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('teachers'); } return false;" class="<?php echo $active_tab === 'teachers' ? 'active' : ''; ?>">
-                <i class="fas fa-chalkboard-teacher"></i> Teachers
-            </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('students'); } return false;" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
-                <i class="fas fa-user-graduate"></i> Students
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('users'); } return false;" class="<?php echo in_array($active_tab, ['users', 'teachers', 'students']) ? 'active' : ''; ?>">
+                <i class="fas fa-users"></i> Users
             </a>
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('messages'); } return false;" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
                 <i class="fas fa-comments"></i> Messages
@@ -406,25 +425,16 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('slot-requests'); } return false;" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                 <i class="fas fa-calendar-plus"></i> Slot Requests
             </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reports'); } return false;" class="<?php echo $active_tab === 'reports' ? 'active' : ''; ?>">
-                <i class="fas fa-file-alt"></i> Reports
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reports'); } return false;" class="<?php echo in_array($active_tab, ['reports', 'analytics']) ? 'active' : ''; ?>">
+                <i class="fas fa-file-alt"></i> Reports & Analytics
             </a>
             <hr>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('my-profile'); } return false;" class="<?php echo $active_tab === 'my-profile' ? 'active' : ''; ?>">
-                <i class="fas fa-user-edit"></i> My Profile
-            </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('classroom'); } return false;" class="<?php echo $active_tab === 'classroom' ? 'active' : ''; ?>">
-                <i class="fas fa-book-open"></i> Classroom
-            </a>
-            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('my-security'); } return false;" class="<?php echo $active_tab === 'my-security' ? 'active' : ''; ?>">
-                <i class="fas fa-lock"></i> Security
+            <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('settings'); } return false;" class="<?php echo in_array($active_tab, ['settings', 'my-profile', 'my-security', 'classroom']) ? 'active' : ''; ?>">
+                <i class="fas fa-cog"></i> Settings
             </a>
             <?php else: ?>
             <a href="admin-dashboard.php#dashboard" class="<?php echo $active_tab === 'dashboard' ? 'active' : ''; ?>">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
-            </a>
-            <a href="admin-dashboard.php#analytics" class="<?php echo $active_tab === 'analytics' ? 'active' : ''; ?>">
-                <i class="fas fa-chart-line"></i> Analytics
             </a>
             <a href="admin-dashboard.php#pending-requests" class="<?php echo $active_tab === 'pending-requests' ? 'active' : ''; ?>">
                 <i class="fas fa-exclamation-circle"></i> Pending Requests
@@ -434,11 +444,8 @@ if (isset($admin_stats_for_sidebar)) {
                     <span class="sidebar-badge" style="background: #dc3545;"><?php echo $total_pending; ?></span>
                 <?php endif; ?>
             </a>
-            <a href="admin-dashboard.php#teachers" class="<?php echo $active_tab === 'teachers' ? 'active' : ''; ?>">
-                <i class="fas fa-chalkboard-teacher"></i> Teachers
-            </a>
-            <a href="admin-dashboard.php#students" class="<?php echo $active_tab === 'students' ? 'active' : ''; ?>">
-                <i class="fas fa-user-graduate"></i> Students
+            <a href="admin-dashboard.php#users" class="<?php echo in_array($active_tab, ['users', 'teachers', 'students']) ? 'active' : ''; ?>">
+                <i class="fas fa-users"></i> Users
             </a>
             <a href="admin-dashboard.php#messages" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
                 <i class="fas fa-comments"></i> Messages
@@ -484,18 +491,12 @@ if (isset($admin_stats_for_sidebar)) {
             <a href="admin-dashboard.php#slot-requests" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                 <i class="fas fa-calendar-plus"></i> Slot Requests
             </a>
-            <a href="admin-dashboard.php#reports" class="<?php echo $active_tab === 'reports' ? 'active' : ''; ?>">
-                <i class="fas fa-file-alt"></i> Reports
+            <a href="admin-dashboard.php#reports" class="<?php echo in_array($active_tab, ['reports', 'analytics']) ? 'active' : ''; ?>">
+                <i class="fas fa-file-alt"></i> Reports & Analytics
             </a>
             <hr>
-            <a href="admin-dashboard.php#my-profile" class="<?php echo $active_tab === 'my-profile' ? 'active' : ''; ?>">
-                <i class="fas fa-user-edit"></i> My Profile
-            </a>
-            <a href="admin-dashboard.php#classroom" class="<?php echo $active_tab === 'classroom' ? 'active' : ''; ?>">
-                <i class="fas fa-book-open"></i> Classroom
-            </a>
-            <a href="admin-dashboard.php#my-security" class="<?php echo $active_tab === 'my-security' ? 'active' : ''; ?>">
-                <i class="fas fa-lock"></i> Security
+            <a href="admin-dashboard.php#settings" class="<?php echo in_array($active_tab, ['settings', 'my-profile', 'my-security', 'classroom']) ? 'active' : ''; ?>">
+                <i class="fas fa-cog"></i> Settings
             </a>
             <?php endif; ?>
             <a href="admin-schedule-view.php"><i class="fas fa-calendar-check"></i> Schedules</a>

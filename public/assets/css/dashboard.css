@@ -1089,6 +1089,22 @@ body.dashboard-layout {
     font-size: 0.85rem;
 }
 
+/* Sub-tab buttons */
+.performance-subtab, .materials-subtab, .settings-subtab,
+.reports-subtab, .users-subtab, .admin-settings-subtab {
+    display: none;
+}
+
+.performance-subtab.active, .materials-subtab.active, .settings-subtab.active,
+.reports-subtab.active, .users-subtab.active, .admin-settings-subtab.active {
+    display: block;
+}
+
+.btn-outline.active {
+    background: var(--primary);
+    color: white;
+}
+
 /* ===========================================
    Tab Content
    =========================================== */
