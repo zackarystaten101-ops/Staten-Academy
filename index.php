@@ -788,7 +788,26 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     const toggleCenterY = toggleRect.top + (toggleRect.height / 2);
                     const verticalOffset = Math.abs(headerCenterY - toggleCenterY);
                     const toggleStyles = window.getComputedStyle(menuToggle);
-                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Hamburger centering',data:{headerHeight:headerRect.height,headerCenterY:headerCenterY,toggleHeight:toggleRect.height,toggleCenterY:toggleCenterY,verticalOffset:verticalOffset,computedTop:toggleStyles.top,computedTransform:toggleStyles.transform,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    const hamburgerIcon = menuToggle.querySelector('.hamburger');
+                    let iconData = {};
+                    if (hamburgerIcon) {
+                        const iconRect = hamburgerIcon.getBoundingClientRect();
+                        const iconStyles = window.getComputedStyle(hamburgerIcon);
+                        const buttonCenterY = toggleRect.top + (toggleRect.height / 2);
+                        const iconCenterY = iconRect.top + (iconRect.height / 2);
+                        const iconVerticalOffset = Math.abs(buttonCenterY - iconCenterY);
+                        iconData = {
+                            iconWidth: iconRect.width,
+                            iconHeight: iconRect.height,
+                            iconTop: iconRect.top,
+                            iconCenterY: iconCenterY,
+                            buttonCenterY: buttonCenterY,
+                            iconVerticalOffset: iconVerticalOffset,
+                            computedMargin: iconStyles.margin,
+                            computedPosition: iconStyles.position
+                        };
+                    }
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Hamburger centering',data:{headerHeight:headerRect.height,headerCenterY:headerCenterY,toggleHeight:toggleRect.height,toggleCenterY:toggleCenterY,verticalOffset:verticalOffset,computedTop:toggleStyles.top,computedTransform:toggleStyles.transform,computedPadding:toggleStyles.padding,computedDisplay:toggleStyles.display,computedAlignItems:toggleStyles.alignItems,computedJustifyContent:toggleStyles.justifyContent,viewportWidth:window.innerWidth,...iconData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
                 }
                 
                 // Check header balance

@@ -14,14 +14,17 @@
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  padding: 10px;
+  padding: 0;
   cursor: pointer;
   z-index: 60;
+  width: 44px; /* Fixed width for perfect centering */
+  height: 44px; /* Fixed height for perfect centering */
   min-width: 44px; /* Touch-friendly size */
   min-height: 44px;
   border-radius: 6px;
   transition: all 0.2s ease;
   margin: 0;
+  box-sizing: border-box;
 }
 
 .menu-toggle:hover,
@@ -32,10 +35,10 @@
 @media (max-width: 768px) {
   .menu-toggle {
     right: 16px;
-    padding: 10px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     z-index: 70;
-    min-width: 44px;
-    min-height: 44px;
     top: 50%;
     transform: translateY(-50%);
   }
@@ -44,9 +47,9 @@
 @media (max-width: 480px) {
   .menu-toggle {
     right: 14px;
-    padding: 10px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
     z-index: 70;
     top: 50%;
     transform: translateY(-50%);
@@ -66,6 +69,10 @@
   background: #ffffff; /* White to match header text color */
   position: relative;
   margin: 0 auto;
+  top: 0;
+  left: 0;
+  right: 0;
+  flex-shrink: 0;
 }
 
 /* Ensure hamburger is visible against header background */
@@ -87,10 +94,12 @@
 }
 
 .menu-toggle .hamburger::before { 
-  top: -7px; 
+  top: -7px;
+  left: 0;
 }
 .menu-toggle .hamburger::after { 
-  top: 7px; 
+  top: 7px;
+  left: 0;
 }
 
 
