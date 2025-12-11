@@ -732,6 +732,58 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         </div>
     </footer>
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
+    <script>
+    // #region agent log - Debug header overlap
+    (function() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runHeaderDebug);
+        } else {
+            runHeaderDebug();
+        }
+        
+        function runHeaderDebug() {
+            setTimeout(function() {
+                const header = document.querySelector('header.site-header');
+                const headerCenter = document.querySelector('.header-center');
+                const menuToggle = document.querySelector('.menu-toggle');
+                const headerLeft = document.querySelector('.header-left');
+                
+                if (header) {
+                    const headerStyles = window.getComputedStyle(header);
+                    const headerRect = header.getBoundingClientRect();
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Header layout',data:{width:headerRect.width,left:headerRect.left,right:headerRect.right,computedPadding:headerStyles.padding,computedPaddingRight:headerStyles.paddingRight,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                }
+                
+                if (headerCenter) {
+                    const centerStyles = window.getComputedStyle(headerCenter);
+                    const centerRect = headerCenter.getBoundingClientRect();
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Header center layout',data:{width:centerRect.width,left:centerRect.left,right:centerRect.right,computedWidth:centerStyles.width,computedMaxWidth:centerStyles.maxWidth,computedLeft:centerStyles.left,computedTransform:centerStyles.transform,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                }
+                
+                if (menuToggle) {
+                    const toggleStyles = window.getComputedStyle(menuToggle);
+                    const toggleRect = menuToggle.getBoundingClientRect();
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Menu toggle layout',data:{width:toggleRect.width,left:toggleRect.left,right:toggleRect.right,computedRight:toggleStyles.right,computedPosition:toggleStyles.position,computedZIndex:toggleStyles.zIndex,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                }
+                
+                if (headerLeft) {
+                    const leftStyles = window.getComputedStyle(headerLeft);
+                    const leftRect = headerLeft.getBoundingClientRect();
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Header left layout',data:{width:leftRect.width,left:leftRect.left,right:leftRect.right,computedWidth:leftStyles.width,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                }
+                
+                // Check for overlap
+                if (headerCenter && menuToggle) {
+                    const centerRect = headerCenter.getBoundingClientRect();
+                    const toggleRect = menuToggle.getBoundingClientRect();
+                    const overlap = centerRect.right > toggleRect.left;
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Overlap detection',data:{overlap:overlap,centerRight:centerRect.right,toggleLeft:toggleRect.left,gap:toggleRect.left - centerRect.right,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                }
+            }, 500);
+        }
+    })();
+    // #endregion
+    </script>
 </div>
 </body>
 </html>

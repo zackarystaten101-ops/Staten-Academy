@@ -366,26 +366,32 @@ header.site-header {
     top: 50%;
     transform: translate(-50%, -50%);
     width: auto;
-    max-width: calc(100% - 140px); /* Account for logo (60px) + hamburger (60px) + padding */
+    max-width: calc(50vw - 90px); /* Half viewport minus space for hamburger (60px) + padding (30px) */
     pointer-events: none;
     padding: 0 8px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    box-sizing: border-box;
+    z-index: 20; /* Lower than hamburger */
   }
   
   .header-center .branding {
     width: 100%;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
   .header-center .branding h1 {
-    font-size: 1rem;
+    font-size: 0.95rem;
     line-height: 1.2;
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
   }
   
   .header-center .branding p {
@@ -428,24 +434,30 @@ header.site-header {
     top: 50%;
     transform: translate(-50%, -50%);
     width: auto;
-    max-width: calc(100% - 120px); /* Account for logo (48px) + hamburger (56px) + padding */
+    max-width: calc(50vw - 75px); /* Half viewport minus space for hamburger (50px) + padding (25px) */
     pointer-events: none;
     padding: 0 6px;
     overflow: hidden;
+    box-sizing: border-box;
+    z-index: 20; /* Lower than hamburger */
   }
   
   .header-center .branding {
     width: 100%;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
   .header-center .branding h1 {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     line-height: 1.2;
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
   }
   
   .header-center .branding p {
