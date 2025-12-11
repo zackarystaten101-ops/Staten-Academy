@@ -377,12 +377,13 @@ header.site-header {
 
 @media (max-width: 768px) {
   header.site-header {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     min-height: 64px;
-    padding: 10px 14px;
-    padding-right: 60px; /* Make room for hamburger menu */
+    padding: 12px 16px;
+    padding-right: 70px; /* Make room for hamburger menu (44px + 16px padding + 10px gap) */
     position: relative;
   }
   
@@ -390,6 +391,8 @@ header.site-header {
     flex: 0 0 auto;
     z-index: 35;
     min-width: 0;
+    display: flex;
+    align-items: center;
   }
   
   /* Hide user section on homepage mobile to prevent overlap */
@@ -407,26 +410,30 @@ header.site-header {
   }
   
   .site-logo {
-    width: 56px;
-    max-height: 44px;
+    width: 52px;
+    max-height: 40px;
+    object-fit: contain;
   }
 }
 
 /* Responsive: very small screens - stack layout */
 @media (max-width: 480px) {
   header.site-header {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     min-height: 56px;
-    padding: 8px 12px;
-    padding-right: 56px; /* Make room for hamburger menu */
-    gap: 8px;
+    padding: 10px 14px;
+    padding-right: 64px; /* Make room for hamburger menu (44px + 14px padding + 6px gap) */
+    position: relative;
   }
   
   .header-left {
     flex: 0 0 auto;
     min-width: 0;
+    display: flex;
+    align-items: center;
   }
   
   /* Hide user section on homepage mobile to prevent overlap */
@@ -441,7 +448,8 @@ header.site-header {
   
   .site-logo {
     width: 48px;
-    max-height: 40px;
+    max-height: 36px;
+    object-fit: contain;
   }
 }
 

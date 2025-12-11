@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: center;
   position: absolute;
-  right: 12px; /* Reduced from 20px for better spacing on mobile */
+  right: 16px;
   top: 50%;
   transform: translateY(-50%);
   background: transparent;
@@ -19,8 +19,9 @@
   z-index: 60;
   min-width: 44px; /* Touch-friendly size */
   min-height: 44px;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin: 0;
 }
 
 .menu-toggle:hover,
@@ -30,29 +31,25 @@
 
 @media (max-width: 768px) {
   .menu-toggle {
-    right: 14px;
-    padding: 8px;
-    z-index: 70; /* Higher than header-center and user section */
-  }
-  
-  /* Ensure hamburger is always visible and accessible */
-  body.homepage .menu-toggle {
-    right: 14px;
+    right: 16px;
+    padding: 10px;
+    z-index: 70;
+    min-width: 44px;
+    min-height: 44px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 }
 
 @media (max-width: 480px) {
   .menu-toggle {
-    right: 12px;
-    padding: 6px;
-    min-width: 40px;
-    min-height: 40px;
-    z-index: 70; /* Higher than header-center and user section */
-  }
-  
-  /* Ensure hamburger is always visible and accessible */
-  body.homepage .menu-toggle {
-    right: 12px;
+    right: 14px;
+    padding: 10px;
+    min-width: 44px;
+    min-height: 44px;
+    z-index: 70;
+    top: 50%;
+    transform: translateY(-50%);
   }
 }
 
@@ -64,10 +61,11 @@
 
 .menu-toggle .hamburger {
   display: block;
-  width: 24px;
+  width: 22px;
   height: 2px;
   background: #ffffff; /* White to match header text color */
   position: relative;
+  margin: 0 auto;
 }
 
 /* Ensure hamburger is visible against header background */
@@ -82,14 +80,18 @@
   content: '';
   position: absolute;
   left: 0;
-  width: 24px;
+  width: 22px;
   height: 2px;
   background: inherit;
   transition: transform 180ms ease, opacity 180ms ease;
 }
 
-.menu-toggle .hamburger::before { top: -8px; }
-.menu-toggle .hamburger::after { top: 8px; }
+.menu-toggle .hamburger::before { 
+  top: -7px; 
+}
+.menu-toggle .hamburger::after { 
+  top: 7px; 
+}
 
 
 /* 2. Slide-out Drawer (Always enabled) */

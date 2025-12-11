@@ -779,6 +779,28 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                     const overlap = centerRect.right > toggleRect.left;
                     fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Overlap detection',data:{overlap:overlap,centerRight:centerRect.right,toggleLeft:toggleRect.left,gap:toggleRect.left - centerRect.right,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
                 }
+                
+                // Check hamburger vertical centering
+                if (header && menuToggle) {
+                    const headerRect = header.getBoundingClientRect();
+                    const toggleRect = menuToggle.getBoundingClientRect();
+                    const headerCenterY = headerRect.top + (headerRect.height / 2);
+                    const toggleCenterY = toggleRect.top + (toggleRect.height / 2);
+                    const verticalOffset = Math.abs(headerCenterY - toggleCenterY);
+                    const toggleStyles = window.getComputedStyle(menuToggle);
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Hamburger centering',data:{headerHeight:headerRect.height,headerCenterY:headerCenterY,toggleHeight:toggleRect.height,toggleCenterY:toggleCenterY,verticalOffset:verticalOffset,computedTop:toggleStyles.top,computedTransform:toggleStyles.transform,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                }
+                
+                // Check header balance
+                if (header && headerLeft && menuToggle) {
+                    const headerRect = header.getBoundingClientRect();
+                    const leftRect = headerLeft.getBoundingClientRect();
+                    const toggleRect = menuToggle.getBoundingClientRect();
+                    const leftSpace = leftRect.width + (leftRect.left - headerRect.left);
+                    const rightSpace = headerRect.right - toggleRect.right;
+                    const balance = Math.abs(leftSpace - rightSpace);
+                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:header-debug',message:'Header balance',data:{leftSpace:leftSpace,rightSpace:rightSpace,balance:balance,headerWidth:headerRect.width,logoWidth:leftRect.width,hamburgerWidth:toggleRect.width,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+                }
             }, 500);
         }
     })();
