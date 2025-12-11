@@ -67,10 +67,24 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <link rel="stylesheet" href="<?php echo getAssetPath('css/tracks.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Prevent horizontal scroll */
-        html, body {
+        /* Prevent horizontal scroll and remove body padding for homepage */
+        html {
             overflow-x: hidden;
-            max-width: 100%;
+            max-width: 100vw;
+        }
+        
+        body.homepage {
+            padding: 0 !important;
+            margin: 0;
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+        
+        /* Wrapper to contain content with proper padding */
+        .homepage-wrapper {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
         }
         
         .hero-section {
@@ -78,9 +92,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             color: white;
             padding: 80px 20px;
             text-align: center;
-            margin-left: -20px;
-            margin-right: -20px;
-            width: calc(100% + 40px);
+            width: 100%;
             position: relative;
         }
         .hero-section h1 {
@@ -100,9 +112,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             padding: 0 20px;
             position: relative;
             z-index: 10;
-            margin-left: -20px;
-            margin-right: -20px;
-            width: calc(100% + 40px);
+            width: 100%;
         }
         .tracks-grid {
             display: grid;
@@ -253,9 +263,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         @media (max-width: 768px) {
             .hero-section {
                 padding: 50px 15px;
-                margin-left: -12px;
-                margin-right: -12px;
-                width: calc(100% + 24px);
             }
             .hero-section h1 {
                 font-size: 1.8rem;
@@ -270,9 +277,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             .tracks-container {
                 margin: -40px auto 50px;
                 padding: 0 15px;
-                margin-left: -12px;
-                margin-right: -12px;
-                width: calc(100% + 24px);
             }
             .tracks-grid {
                 grid-template-columns: 1fr;
@@ -339,9 +343,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         @media (max-width: 480px) {
             .hero-section {
                 padding: 40px 12px;
-                margin-left: -8px;
-                margin-right: -8px;
-                width: calc(100% + 16px);
             }
             .hero-section h1 {
                 font-size: 1.5rem;
@@ -354,9 +355,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             .tracks-container {
                 margin: -30px auto 40px;
                 padding: 0 12px;
-                margin-left: -8px;
-                margin-right: -8px;
-                width: calc(100% + 16px);
             }
             .tracks-grid {
                 gap: 15px;
@@ -430,7 +428,8 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         }
     </style>
 </head>
-<body>
+<body class="homepage">
+<div class="homepage-wrapper">
     <header class="site-header" role="banner">
         <div class="header-left">
             <a href="index.php" style="text-decoration: none; display: flex; align-items: center;">
@@ -773,5 +772,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     })();
     // #endregion
     </script>
+</div>
 </body>
 </html>
