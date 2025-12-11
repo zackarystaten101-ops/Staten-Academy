@@ -11,6 +11,33 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// #region agent log helper
+if (!function_exists('agent_debug_log')) {
+    function agent_debug_log($hypothesisId, $location, $message, $data = []) {
+        $payload = [
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => round(microtime(true) * 1000),
+        ];
+        $line = json_encode($payload);
+        if ($line) {
+            @file_put_contents(__DIR__ . '/../.cursor/debug.log', $line . PHP_EOL, FILE_APPEND);
+        }
+    }
+}
+// #endregion
+
+agent_debug_log('H2', 'api/slot-requests.php:entry', 'slot request api entry', [
+    'method' => $_SERVER['REQUEST_METHOD'] ?? null,
+    'action' => $_GET['action'] ?? null,
+    'user_id' => $_SESSION['user_id'] ?? null,
+    'user_role' => $_SESSION['user_role'] ?? null,
+]);
+
 // Load environment configuration if not already loaded
 if (!defined('DB_HOST')) {
     require_once __DIR__ . '/../env.php';

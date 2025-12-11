@@ -5,6 +5,31 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 
+// #region agent log helper
+if (!function_exists('agent_debug_log')) {
+    function agent_debug_log($hypothesisId, $location, $message, $data = []) {
+        $payload = [
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => round(microtime(true) * 1000),
+        ];
+        $line = json_encode($payload);
+        if ($line) {
+            @file_put_contents(__DIR__ . '/.cursor/debug.log', $line . PHP_EOL, FILE_APPEND);
+        }
+    }
+}
+// #endregion
+
+agent_debug_log('H1', 'teacher-dashboard.php:session', 'teacher dashboard entry', [
+    'user_id' => $_SESSION['user_id'] ?? null,
+    'user_role' => $_SESSION['user_role'] ?? null,
+]);
+
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'teacher') {
     ob_end_clean();
     header("Location: login.php");

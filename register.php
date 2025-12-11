@@ -12,6 +12,26 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// #region agent log helper
+if (!function_exists('agent_debug_log')) {
+    function agent_debug_log($hypothesisId, $location, $message, $data = []) {
+        $payload = [
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => round(microtime(true) * 1000),
+        ];
+        $line = json_encode($payload);
+        if ($line) {
+            @file_put_contents(__DIR__ . '/.cursor/debug.log', $line . PHP_EOL, FILE_APPEND);
+        }
+    }
+}
+// #endregion
+
 // Enable error reporting based on APP_DEBUG (after session start)
 if (defined('APP_DEBUG') && APP_DEBUG === true) {
     error_reporting(E_ALL);
@@ -111,6 +131,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $_SESSION['user_name'] = $name;
             $_SESSION['user_role'] = 'new_student'; // New users start as new_student, become student after purchase
             $_SESSION['profile_pic'] = getAssetPath('images/placeholder-teacher.svg');
+
+            agent_debug_log('H3', 'register.php:success', 'registration success', [
+                'user_id' => $newUserId,
+                'track' => $track,
+                'plan_id' => $plan_id,
+            ]);
+
             $stmt->close();
             // Clear output buffer before redirect
             ob_end_clean();

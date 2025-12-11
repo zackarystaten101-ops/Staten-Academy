@@ -1895,15 +1895,21 @@ body.dashboard-layout {
     }
 }
 
+/* ===========================================
+   Mobile Optimizations (768px and below)
+   =========================================== */
 @media (max-width: 768px) {
+    /* Sidebar Mobile Behavior */
     .sidebar {
         position: fixed;
         left: -280px;
         top: 0;
         bottom: 0;
-        z-index: 100; /* Above header when active */
+        z-index: 100;
         width: 280px;
+        max-width: 85vw;
         transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        touch-action: pan-y; /* Allow vertical scrolling */
     }
     
     .sidebar.active {
@@ -1911,34 +1917,77 @@ body.dashboard-layout {
     }
     
     .sidebar-overlay {
-        z-index: 95; /* Below sidebar but above header */
+        z-index: 95;
+        touch-action: none; /* Prevent scrolling when overlay is active */
     }
     
+    .sidebar-overlay.active {
+        backdrop-filter: blur(2px);
+    }
+    
+    /* Header Bar Mobile */
     .header-bar {
-        z-index: 90; /* Below sidebar overlay */
+        z-index: 90;
+        padding: 10px 15px;
+        min-height: 56px;
     }
     
     .content-wrapper {
-        margin-left: 0; /* No space needed when sidebar is hidden */
+        margin-left: 0;
     }
     
+    /* Mobile Menu Toggle */
     .mobile-menu-toggle {
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 101; /* Above sidebar */
+        z-index: 101;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation; /* Prevent double-tap zoom */
     }
     
+    /* Stats Grid - 2 columns on tablet */
     .stats-grid {
         grid-template-columns: 1fr 1fr;
         gap: 15px;
     }
     
+    .stat-card {
+        padding: 20px;
+        min-height: auto;
+    }
+    
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 1.3rem;
+        margin-right: 15px;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.6rem;
+    }
+    
+    .stat-info p {
+        font-size: 0.85rem;
+    }
+    
+    /* Main Content Area */
     .main {
         padding: 20px 15px;
         width: 100%;
+        -webkit-overflow-scrolling: touch;
+        overflow-scrolling: touch;
     }
     
+    .main h1 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+        line-height: 1.3;
+    }
+    
+    /* Header Elements */
     .header-bar-info {
         display: none;
     }
@@ -1948,14 +1997,18 @@ body.dashboard-layout {
     }
     
     .header-home-btn {
-        padding: 6px 10px;
+        padding: 8px 12px;
         font-size: 0.85rem;
+        min-height: 44px;
+        min-width: 44px;
+        touch-action: manipulation;
     }
     
     .header-home-btn span {
-        display: none; /* Hide text on mobile, show only icon */
+        display: none;
     }
     
+    /* Quick Actions */
     .quick-actions {
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
@@ -1964,13 +2017,15 @@ body.dashboard-layout {
     .quick-action-btn {
         padding: 14px 12px;
         font-size: 0.9rem;
+        min-height: 48px;
+        touch-action: manipulation;
     }
     
     .quick-action-btn span {
         font-size: 0.85rem;
     }
     
-    /* Ensure header buttons don't overflow */
+    /* Header Layout */
     .header-bar-left {
         gap: 8px;
         overflow: hidden;
@@ -1980,6 +2035,7 @@ body.dashboard-layout {
     
     .header-logo-link {
         flex-shrink: 0;
+        touch-action: manipulation;
     }
     
     .header-logo {
@@ -1991,16 +2047,189 @@ body.dashboard-layout {
         gap: 12px;
         flex-shrink: 0;
     }
+    
+    .header-notification,
+    .header-messages {
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+    
+    .header-bar-profile {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+    
+    /* Cards */
+    .card {
+        padding: 20px;
+        margin-bottom: 18px;
+    }
+    
+    .card h2 {
+        font-size: 1.2rem;
+        margin-bottom: 18px;
+    }
+    
+    .card h3 {
+        font-size: 1.1rem;
+        padding-bottom: 8px;
+    }
+    
+    /* Forms */
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        font-size: 0.95rem;
+        margin-bottom: 10px;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px; /* Prevents iOS zoom */
+        min-height: 44px;
+        padding: 12px 15px;
+    }
+    
+    .form-group textarea {
+        min-height: 120px;
+    }
+    
+    /* Buttons */
+    .btn-primary,
+    .btn-secondary,
+    .btn-success,
+    .btn-danger,
+    .btn-outline {
+        min-height: 44px;
+        padding: 12px 20px;
+        font-size: 0.95rem;
+        touch-action: manipulation;
+    }
+    
+    /* Tables - Start responsive behavior */
+    .data-table {
+        font-size: 0.9rem;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 12px 10px;
+    }
+    
+    /* Modals */
+    .modal {
+        max-width: 95%;
+        margin: 10px;
+    }
+    
+    .modal-header {
+        padding: 18px 20px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.2rem;
+    }
+    
+    /* Dropdowns */
+    .notification-dropdown {
+        width: calc(100vw - 20px);
+        max-width: 360px;
+        right: 10px;
+        left: auto;
+    }
+    
+    .profile-dropdown {
+        width: calc(100vw - 20px);
+        max-width: 280px;
+        right: 10px;
+        left: auto;
+    }
+    
+    /* Sidebar Menu */
+    .sidebar-menu a {
+        min-height: 48px;
+        padding: 14px 24px;
+        touch-action: manipulation;
+    }
+    
+    .sidebar-menu a i {
+        width: 22px;
+        font-size: 1.05rem;
+    }
+    
+    /* Booking Items & List Items */
+    .booking-item,
+    .material-item,
+    .lesson-item,
+    .teacher-item,
+    .assignment-item {
+        padding: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .booking-pic,
+    .teacher-pic {
+        width: 48px;
+        height: 48px;
+    }
+    
+    /* Earnings Summary */
+    .earnings-summary {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .earnings-card {
+        padding: 20px;
+    }
+    
+    /* Review Cards */
+    .review-card {
+        padding: 18px;
+    }
+    
+    .review-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    /* Goal Cards */
+    .goal-card {
+        padding: 16px;
+    }
+    
+    /* Empty States */
+    .empty-state {
+        padding: 40px 20px;
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+    }
+    
+    .empty-state h3 {
+        font-size: 1.2rem;
+    }
 }
 
+/* ===========================================
+   Mobile Small (576px and below)
+   =========================================== */
 @media (max-width: 576px) {
+    /* Header Bar */
     .header-bar {
         padding: 10px 12px;
+        min-height: 52px;
     }
     
     .header-bar-left h2 {
         font-size: 1rem;
-        display: none; /* Hide text on very small screens */
+        display: none;
     }
     
     .header-logo {
@@ -2015,19 +2244,44 @@ body.dashboard-layout {
     
     .header-notification,
     .header-messages {
-        padding: 6px;
+        padding: 8px;
         font-size: 1rem;
+        min-width: 44px;
+        min-height: 44px;
     }
     
+    /* Stats Grid - Single Column */
     .stats-grid {
         grid-template-columns: 1fr;
         gap: 12px;
     }
     
+    .stat-card {
+        padding: 18px;
+    }
+    
+    .stat-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 1.2rem;
+        margin-right: 12px;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.5rem;
+    }
+    
+    /* Main Content */
     .main {
         padding: 15px 12px;
     }
     
+    .main h1 {
+        font-size: 1.3rem;
+        margin-bottom: 18px;
+    }
+    
+    /* Cards */
     .card {
         padding: 18px;
         margin-bottom: 15px;
@@ -2036,8 +2290,14 @@ body.dashboard-layout {
     
     .card h2 {
         font-size: 1.1rem;
+        margin-bottom: 15px;
     }
     
+    .card h3 {
+        font-size: 1rem;
+    }
+    
+    /* Quick Actions - Single Column */
     .quick-actions {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -2045,6 +2305,8 @@ body.dashboard-layout {
     
     .quick-action-btn {
         padding: 16px 12px;
+        min-height: 52px;
+        width: 100%;
     }
     
     .quick-action-btn i {
@@ -2055,30 +2317,74 @@ body.dashboard-layout {
         font-size: 0.9rem;
     }
     
+    /* Sidebar */
     .sidebar {
         width: 100%;
         max-width: 320px;
+    }
+    
+    .sidebar-header {
+        padding: 12px 16px;
+        min-height: 48px;
     }
     
     .sidebar-header h3 {
         font-size: 0.95rem;
     }
     
-    .sidebar-menu a {
-        padding: 12px 18px;
-        font-size: 0.9rem;
+    .sidebar-menu {
+        padding: 8px 0;
     }
     
-    /* Convert tables to cards on mobile */
+    .sidebar-menu a {
+        padding: 14px 20px;
+        font-size: 0.9rem;
+        min-height: 48px;
+    }
+    
+    .sidebar-menu a i {
+        width: 20px;
+        font-size: 1rem;
+    }
+    
+    .sidebar-section-title {
+        padding: 8px 20px 6px 20px;
+        font-size: 0.65rem;
+    }
+    
+    .sidebar-section {
+        margin-bottom: 12px;
+    }
+    
+    /* Tables - Convert to Card Layout */
     .data-table {
         display: block;
         width: 100%;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    
+    .data-table::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .data-table::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .data-table::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    
+    .data-table::-webkit-scrollbar-thumb:hover {
+        background: #555;
     }
     
     .data-table thead {
-        display: none; /* Hide table headers on mobile */
+        display: none;
     }
     
     .data-table tbody {
@@ -2087,37 +2393,71 @@ body.dashboard-layout {
     
     .data-table tr {
         display: block;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         background: white;
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        padding: 15px;
+        padding: 16px;
         box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+    
+    .data-table tr:active {
+        transform: scale(0.98);
+        box-shadow: var(--shadow);
     }
     
     .data-table td {
-        display: block;
-        padding: 8px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 10px 0;
         text-align: left !important;
         border: none;
         font-size: 0.9rem;
+        min-height: 36px;
     }
     
     .data-table td:before {
-        content: attr(data-label) ": ";
+        content: attr(data-label);
         font-weight: 600;
         color: var(--gray);
         display: inline-block;
         min-width: 100px;
-        margin-right: 10px;
+        margin-right: 12px;
+        flex-shrink: 0;
     }
     
-    .data-table th,
-    .data-table td {
-        padding: 12px;
-        font-size: 0.85rem;
+    .data-table td:last-child {
+        border-bottom: none;
     }
     
+    /* Table Responsive Wrapper */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        -ms-overflow-style: -ms-autohiding-scrollbar;
+        position: relative;
+    }
+    
+    .table-responsive::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 20px;
+        background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    
+    .table-responsive.scrollable::after {
+        opacity: 1;
+    }
+    
+    /* Dropdowns - Full Width */
     .notification-dropdown,
     .profile-dropdown {
         position: fixed;
@@ -2126,10 +2466,14 @@ body.dashboard-layout {
         right: 10px;
         width: auto;
         max-width: calc(100vw - 20px);
-        z-index: 1000; /* Above everything on mobile */
+        z-index: 1000;
     }
     
-    /* Touch-friendly form elements */
+    .notification-dropdown {
+        max-height: calc(100vh - 80px);
+    }
+    
+    /* Forms - Enhanced Touch Targets */
     input[type="text"],
     input[type="email"],
     input[type="password"],
@@ -2137,18 +2481,39 @@ body.dashboard-layout {
     input[type="date"],
     input[type="time"],
     input[type="url"],
+    input[type="tel"],
     select,
     textarea {
         font-size: 16px; /* Prevents iOS zoom on focus */
-        min-height: 44px;
-        padding: 12px;
+        min-height: 48px;
+        padding: 12px 15px;
         width: 100%;
         box-sizing: border-box;
+        -webkit-appearance: none;
+        appearance: none;
+        touch-action: manipulation;
     }
     
-    /* Ensure form groups stack properly */
+    select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 15px center;
+        padding-right: 40px;
+    }
+    
     .form-group {
         margin-bottom: 18px;
+    }
+    
+    .form-group label {
+        font-size: 0.95rem;
+        margin-bottom: 10px;
+        display: block;
+    }
+    
+    .form-group textarea {
+        min-height: 120px;
+        resize: vertical;
     }
     
     .form-row {
@@ -2156,51 +2521,145 @@ body.dashboard-layout {
         gap: 18px;
     }
     
-    /* Profile grid stacks on mobile */
+    /* Profile Grid */
     .profile-grid {
         grid-template-columns: 1fr;
         gap: 15px;
     }
     
-    /* Better button spacing on mobile */
+    /* Buttons - Full Width */
     .btn-primary,
     .btn-secondary,
+    .btn-success,
+    .btn-danger,
     .btn-outline {
         width: 100%;
         margin-bottom: 12px;
         justify-content: center;
-        min-height: 48px; /* Larger touch target */
+        min-height: 48px;
         font-size: 16px;
+        touch-action: manipulation;
     }
     
-    /* Ensure tables are scrollable on mobile */
-    .table-responsive {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        -ms-overflow-style: -ms-autohiding-scrollbar;
+    .btn-sm {
+        min-height: 44px;
+        padding: 10px 16px;
     }
     
-    /* Improve sidebar menu item spacing on mobile */
-    .sidebar-menu {
-        padding: 10px 0;
+    /* List Items */
+    .booking-item,
+    .material-item,
+    .lesson-item,
+    .teacher-item,
+    .assignment-item {
+        padding: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
     }
     
-    .sidebar-menu a {
-        margin: 2px 0;
+    .booking-pic,
+    .teacher-pic {
+        width: 50px;
+        height: 50px;
+        align-self: flex-start;
+    }
+    
+    .material-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+    }
+    
+    /* Modals - Full Screen */
+    .modal-overlay {
+        padding: 0;
+    }
+    
+    .modal {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        margin: 0;
         border-radius: 0;
-        padding: 12px 20px;
+        display: flex;
+        flex-direction: column;
     }
     
-    .sidebar-section-title {
-        padding: 6px 20px 4px 20px;
-        font-size: 0.65rem;
+    .modal-header {
+        padding: 16px 18px;
+        flex-shrink: 0;
     }
     
-    .sidebar-section {
+    .modal-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .modal-close {
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+    
+    /* Earnings Cards */
+    .earnings-summary {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .earnings-card {
+        padding: 18px;
+    }
+    
+    .earnings-amount {
+        font-size: 1.8rem;
+    }
+    
+    /* Review Cards */
+    .review-card {
+        padding: 16px;
+    }
+    
+    .review-header {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .review-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    /* Goal Cards */
+    .goal-card {
+        padding: 14px;
+    }
+    
+    .goal-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    /* Empty States */
+    .empty-state {
+        padding: 30px 15px;
+    }
+    
+    .empty-state i {
+        font-size: 2.5rem;
         margin-bottom: 15px;
     }
     
-    /* Ensure header doesn't cover content */
+    .empty-state h3 {
+        font-size: 1.1rem;
+    }
+    
+    .empty-state p {
+        font-size: 0.9rem;
+    }
+    
+    /* Body Layout */
     body.dashboard-layout {
         padding-top: 0;
     }
@@ -2208,9 +2667,22 @@ body.dashboard-layout {
     .content-wrapper {
         padding-top: 0;
     }
+    
+    /* Password Input Wrapper */
+    .password-input-wrapper {
+        position: relative;
+    }
+    
+    .password-toggle {
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
+    }
 }
 
-/* Additional tablet-specific improvements */
+/* ===========================================
+   Tablet Optimizations (577px - 992px)
+   =========================================== */
 @media (max-width: 992px) and (min-width: 577px) {
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -2227,50 +2699,253 @@ body.dashboard-layout {
     .card {
         padding: 22px;
     }
+    
+    .earnings-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
-/* Ensure proper spacing on all screen sizes */
+/* ===========================================
+   Tablet and Below (1024px and below)
+   =========================================== */
 @media (max-width: 1024px) {
     .sidebar-menu hr {
         margin: 12px 15px;
     }
     
     .sidebar-header {
-        padding: 10px 12px 8px 12px;
-        min-height: 40px;
-        max-height: 48px;
+        padding: 12px 16px;
+        min-height: 48px;
+    }
+    
+    .profile-grid {
+        grid-template-columns: 1fr;
     }
 }
 
-/* Additional tablet-specific improvements */
-@media (max-width: 992px) and (min-width: 577px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+/* ===========================================
+   Very Small Mobile (480px and below)
+   =========================================== */
+@media (max-width: 480px) {
+    .header-bar {
+        padding: 8px 10px;
+        min-height: 50px;
     }
     
-    .quick-actions {
-        grid-template-columns: repeat(2, 1fr);
+    .header-logo {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .header-bar-profile-pic {
+        width: 28px;
+        height: 28px;
     }
     
     .main {
-        padding: 20px;
+        padding: 12px 10px;
+    }
+    
+    .main h1 {
+        font-size: 1.2rem;
+        margin-bottom: 15px;
     }
     
     .card {
-        padding: 22px;
+        padding: 16px;
+        margin-bottom: 12px;
     }
-}
-
-/* Ensure proper spacing on all screen sizes */
-@media (max-width: 1024px) {
-    .sidebar-menu hr {
-        margin: 12px 15px;
+    
+    .card h2 {
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+    
+    .stat-card {
+        padding: 16px;
+    }
+    
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.1rem;
+        margin-right: 10px;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.4rem;
+    }
+    
+    .stat-info p {
+        font-size: 0.8rem;
+    }
+    
+    .sidebar {
+        max-width: 280px;
     }
     
     .sidebar-header {
-        padding: 10px 12px 8px 12px;
-        min-height: 40px;
-        max-height: 48px;
+        padding: 10px 14px;
+    }
+    
+    .sidebar-header h3 {
+        font-size: 0.9rem;
+    }
+    
+    .sidebar-menu a {
+        padding: 12px 16px;
+        font-size: 0.85rem;
+    }
+    
+    .quick-action-btn {
+        padding: 14px 10px;
+        font-size: 0.85rem;
+    }
+    
+    .quick-action-btn i {
+        font-size: 1.1rem;
+    }
+    
+    .btn-primary,
+    .btn-secondary,
+    .btn-success,
+    .btn-danger,
+    .btn-outline {
+        padding: 12px 16px;
+        font-size: 15px;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 10px 12px;
+        font-size: 16px;
+    }
+    
+    .data-table tr {
+        padding: 12px;
+    }
+    
+    .data-table td {
+        padding: 8px 0;
+        font-size: 0.85rem;
+    }
+    
+    .data-table td:before {
+        min-width: 80px;
+        font-size: 0.8rem;
+    }
+    
+    .modal-header {
+        padding: 14px 16px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+    
+    .notification-dropdown,
+    .profile-dropdown {
+        left: 5px;
+        right: 5px;
+        max-width: calc(100vw - 10px);
+    }
+    
+    .booking-item,
+    .material-item,
+    .lesson-item,
+    .teacher-item,
+    .assignment-item {
+        padding: 12px;
+    }
+    
+    .review-card {
+        padding: 14px;
+    }
+    
+    .goal-card {
+        padding: 12px;
+    }
+    
+    .empty-state {
+        padding: 25px 12px;
+    }
+    
+    .empty-state i {
+        font-size: 2rem;
+    }
+}
+
+/* ===========================================
+   Extra Small Mobile (360px and below)
+   =========================================== */
+@media (max-width: 360px) {
+    .header-bar {
+        padding: 6px 8px;
+    }
+    
+    .header-logo {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .header-bar-profile-pic {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .main {
+        padding: 10px 8px;
+    }
+    
+    .main h1 {
+        font-size: 1.1rem;
+    }
+    
+    .card {
+        padding: 14px;
+    }
+    
+    .card h2 {
+        font-size: 0.95rem;
+    }
+    
+    .stat-card {
+        padding: 14px;
+    }
+    
+    .stat-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+    
+    .stat-info h3 {
+        font-size: 1.3rem;
+    }
+    
+    .sidebar {
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .sidebar-menu a {
+        padding: 12px 14px;
+        font-size: 0.85rem;
+    }
+    
+    .btn-primary,
+    .btn-secondary,
+    .btn-success,
+    .btn-danger,
+    .btn-outline {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    .data-table td:before {
+        min-width: 70px;
+        font-size: 0.75rem;
     }
 }
 
@@ -2404,9 +3079,375 @@ body.dashboard-layout {
 }
 
 /* ===========================================
-   Print Styles
+   Mobile-Specific Enhancements
    =========================================== */
-/* Additional accessibility improvements */
+
+/* Touch Action Optimizations */
+button,
+a,
+input,
+select,
+textarea,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger,
+.btn-outline,
+.quick-action-btn,
+.sidebar-menu a,
+.header-notification,
+.header-messages,
+.header-bar-profile,
+.mobile-menu-toggle,
+.modal-close,
+.password-toggle {
+    touch-action: manipulation; /* Prevent double-tap zoom */
+    -webkit-tap-highlight-color: rgba(11, 108, 245, 0.1);
+}
+
+/* Prevent text selection on buttons */
+button,
+.btn,
+.quick-action-btn {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Smooth Scrolling */
+html {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+}
+
+body.dashboard-layout {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+}
+
+.main {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+}
+
+/* Sidebar Swipe Gesture Support */
+@media (max-width: 768px) {
+    .sidebar {
+        will-change: transform;
+    }
+    
+    .sidebar-overlay {
+        will-change: opacity;
+    }
+}
+
+/* Modal Full Screen on Mobile */
+@media (max-width: 576px) {
+    .modal-overlay {
+        align-items: flex-end; /* Slide up from bottom */
+    }
+    
+    .modal {
+        border-radius: 16px 16px 0 0;
+        max-height: 90vh;
+        animation: modalSlideUp 0.3s ease-out;
+    }
+    
+    @keyframes modalSlideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+}
+
+/* Improved Dropdown Positioning */
+@media (max-width: 576px) {
+    .notification-dropdown {
+        top: 56px;
+        max-height: calc(100vh - 70px);
+    }
+    
+    .profile-dropdown {
+        top: 56px;
+    }
+    
+    .notification-list {
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Table Scroll Indicator */
+@media (max-width: 576px) {
+    .table-responsive {
+        position: relative;
+    }
+    
+    .table-responsive::before {
+        content: '← Scroll →';
+        position: absolute;
+        top: -25px;
+        right: 0;
+        font-size: 0.75rem;
+        color: var(--gray);
+        opacity: 0.6;
+        pointer-events: none;
+        transition: opacity 0.3s;
+    }
+    
+    .table-responsive:not(.has-scroll)::before {
+        display: none;
+    }
+    
+    .table-responsive.scrolling::before {
+        opacity: 0.3;
+    }
+    
+    .table-responsive.has-scroll {
+        padding-bottom: 5px;
+    }
+}
+
+/* Loading States for Mobile */
+.loading-spinner {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Image Optimization for Mobile */
+@media (max-width: 768px) {
+    img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+    }
+    
+    .header-bar-profile-pic,
+    .booking-pic,
+    .teacher-pic,
+    .review-avatar {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+    
+    /* Lazy loading support */
+    img[loading="lazy"] {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    
+    img[loading="lazy"].loaded {
+        opacity: 1;
+    }
+}
+
+/* Better Link Styling on Mobile */
+@media (max-width: 768px) {
+    a {
+        -webkit-tap-highlight-color: rgba(11, 108, 245, 0.1);
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+    
+    /* Ensure links in cards are tappable */
+    .card a,
+    .stat-card a,
+    .goal-card a {
+        min-height: 44px;
+        padding: 4px 0;
+    }
+}
+
+/* Better Focus States for Mobile */
+@media (max-width: 768px) {
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+        outline: 3px solid #0b6cf5;
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+    
+    /* Remove focus outline for mouse users, keep for keyboard */
+    @media (hover: hover) and (pointer: fine) {
+        button:focus:not(:focus-visible),
+        a:focus:not(:focus-visible),
+        input:focus:not(:focus-visible),
+        select:focus:not(:focus-visible),
+        textarea:focus:not(:focus-visible) {
+            outline: none;
+        }
+    }
+}
+
+/* Prevent Layout Shift on Mobile */
+@media (max-width: 768px) {
+    .header-bar {
+        position: sticky;
+        top: 0;
+        z-index: 90;
+        will-change: transform;
+    }
+    
+    .content-wrapper {
+        min-height: calc(100vh - 56px);
+    }
+    
+    /* Smooth header transitions */
+    .header-bar {
+        transition: transform 0.3s ease;
+    }
+    
+    /* Hide header on scroll down, show on scroll up (optional enhancement) */
+    body.scrolling-down .header-bar {
+        transform: translateY(-100%);
+    }
+    
+    body.scrolling-up .header-bar {
+        transform: translateY(0);
+    }
+}
+
+/* Improved Card Interactions */
+@media (max-width: 768px) {
+    .card,
+    .stat-card,
+    .goal-card,
+    .review-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .card:active,
+    .stat-card:active,
+    .goal-card:active,
+    .review-card:active {
+        transform: scale(0.98);
+    }
+}
+
+/* Better Spacing for Touch Targets */
+@media (max-width: 768px) {
+    .sidebar-menu a + a {
+        margin-top: 2px;
+    }
+    
+    .quick-actions .quick-action-btn + .quick-action-btn {
+        margin-top: 0;
+    }
+    
+    .btn-primary + .btn-secondary,
+    .btn-secondary + .btn-primary {
+        margin-top: 12px;
+    }
+}
+
+/* Form Field Improvements */
+@media (max-width: 576px) {
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        border-width: 2px;
+        box-shadow: 0 0 0 4px rgba(11, 108, 245, 0.15);
+    }
+    
+    .form-group input:invalid:not(:focus):not(:placeholder-shown),
+    .form-group select:invalid:not(:focus),
+    .form-group textarea:invalid:not(:focus):not(:placeholder-shown) {
+        border-color: var(--danger);
+    }
+}
+
+/* Star Rating Mobile Optimization */
+@media (max-width: 576px) {
+    .star-rating-input label {
+        font-size: 1.8rem;
+        padding: 8px;
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* Progress Bar Mobile */
+@media (max-width: 576px) {
+    .progress-bar-container {
+        height: 10px;
+    }
+    
+    .progress-text {
+        font-size: 0.8rem;
+    }
+}
+
+/* Badge Mobile Sizing */
+@media (max-width: 576px) {
+    .sidebar-badge {
+        min-width: 20px;
+        width: 20px;
+        height: 20px;
+        font-size: 0.65rem;
+    }
+    
+    .notification-badge {
+        min-width: 18px;
+        height: 18px;
+        font-size: 0.7rem;
+    }
+}
+
+/* Tag Mobile Sizing */
+@media (max-width: 576px) {
+    .tag {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+    }
+}
+
+/* Assignment Status Mobile */
+@media (max-width: 576px) {
+    .assignment-status {
+        padding: 3px 8px;
+        font-size: 0.7rem;
+    }
+}
+
+/* Material Viewer Mobile Optimization */
+@media (max-width: 768px) {
+    #materialViewerModal .modal {
+        border-radius: 0;
+    }
+    
+    #materialViewerModal .modal-header {
+        padding: 12px 16px;
+        min-height: 48px;
+    }
+    
+    #materialViewerModal .modal-close {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    #materialViewerContent {
+        padding: 15px;
+        height: calc(100vh - 60px);
+    }
+}
+
+/* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -2415,7 +3456,19 @@ body.dashboard-layout {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+    
+    .sidebar {
+        transition: none !important;
+    }
+    
+    .modal {
+        animation: none !important;
+    }
 }
+
+/* ===========================================
+   Print Styles
+   =========================================== */
 
 /* Focus indicators for accessibility */
 button:focus-visible,

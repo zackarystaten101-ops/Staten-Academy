@@ -190,6 +190,13 @@ function markAllNotificationsRead() {
 function toggleMobileSidebar() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.querySelector('.sidebar-overlay');
+    
+    // Safety check: ensure sidebar exists
+    if (!sidebar) {
+        console.warn('Sidebar element not found');
+        return;
+    }
+    
     sidebar.classList.toggle('active');
     if (!overlay) {
         const newOverlay = document.createElement('div');
@@ -198,7 +205,75 @@ function toggleMobileSidebar() {
         document.body.appendChild(newOverlay);
     }
     document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+    
+    // Prevent body scroll when sidebar is open on mobile
+    if (window.innerWidth <= 768) {
+        if (sidebar.classList.contains('active')) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+    }
 }
+
+// Close sidebar when clicking menu items on mobile
+if (window.innerWidth <= 768) {
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarLinks = document.querySelectorAll('.sidebar-menu a');
+        sidebarLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                // Close sidebar after a short delay to allow navigation
+                setTimeout(() => {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar && sidebar.classList.contains('active')) {
+                        toggleMobileSidebar();
+                    }
+                }, 300);
+            });
+        });
+    });
+}
+
+// Swipe gesture support for sidebar (mobile)
+(function() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+    const minSwipeDistance = 50;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', function(e) {
+        if (window.innerWidth > 768) return; // Only on mobile
+        
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        
+        // Check if it's a horizontal swipe (not vertical scroll)
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+            const sidebar = document.querySelector('.sidebar');
+            
+            // Swipe right to open (from left edge)
+            if (deltaX > 0 && touchStartX < 20 && sidebar && !sidebar.classList.contains('active')) {
+                toggleMobileSidebar();
+            }
+            // Swipe left to close (when sidebar is open)
+            else if (deltaX < 0 && sidebar && sidebar.classList.contains('active')) {
+                // Only close if swiping from sidebar area
+                if (touchStartX < 300) {
+                    toggleMobileSidebar();
+                }
+            }
+        }
+    }, { passive: true });
+})();
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', function(e) {
@@ -212,9 +287,11 @@ document.addEventListener('click', function(e) {
 
 // Make switchTab function available globally for header home button
 if (typeof switchTab === 'undefined') {
-    window.switchTab = function(id) {
-        // Prevent any page navigation
-        if (event) event.preventDefault();
+    window.switchTab = function(id, event) {
+        // Prevent any page navigation if event is provided
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
         
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         const targetTab = document.getElementById(id);
@@ -255,6 +332,108 @@ if (typeof switchTab === 'undefined') {
         const hash = window.location.hash.substring(1);
         if (hash && document.getElementById(hash)) {
             window.switchTab(hash);
+        }
+        
+        // Table scroll detection for mobile
+        if (window.innerWidth <= 576) {
+            const tableResponsive = document.querySelectorAll('.table-responsive');
+            tableResponsive.forEach(table => {
+                function checkScroll() {
+                    if (table.scrollWidth > table.clientWidth) {
+                        table.classList.add('has-scroll');
+                    } else {
+                        table.classList.remove('has-scroll');
+                    }
+                }
+                
+                checkScroll();
+                window.addEventListener('resize', checkScroll);
+                table.addEventListener('scroll', function() {
+                    // Update scroll indicator
+                    if (table.scrollLeft > 0) {
+                        table.classList.add('scrolling');
+                    } else {
+                        table.classList.remove('scrolling');
+                    }
+                }, { passive: true });
+            });
+        }
+        
+        // Close sidebar when clicking overlay
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    toggleMobileSidebar();
+                }
+            });
+        }
+        
+        // Prevent body scroll when sidebar is open
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const sidebar = document.querySelector('.sidebar');
+                    if (window.innerWidth <= 768) {
+                        if (sidebar && sidebar.classList.contains('active')) {
+                            document.body.style.overflow = 'hidden';
+                        } else {
+                            document.body.style.overflow = '';
+                        }
+                    }
+                }
+            });
+        });
+        
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+            observer.observe(sidebar, { attributes: true });
+        }
+        
+        // Improve form input focus on mobile
+        if (window.innerWidth <= 576) {
+            const inputs = document.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    // Scroll input into view with some offset
+                    setTimeout(() => {
+                        const rect = input.getBoundingClientRect();
+                        const offset = 100; // Offset from top
+                        if (rect.top < offset || rect.bottom > window.innerHeight - offset) {
+                            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 300); // Delay to allow keyboard to appear
+                });
+            });
+        }
+        
+        // Improve dropdown positioning on mobile
+        if (window.innerWidth <= 576) {
+            const notificationBtn = document.querySelector('.header-notification');
+            const profileBtn = document.querySelector('.header-bar-profile');
+            
+            if (notificationBtn) {
+                notificationBtn.addEventListener('click', function() {
+                    const dropdown = document.getElementById('notificationDropdown');
+                    if (dropdown) {
+                        // Ensure dropdown is visible
+                        setTimeout(() => {
+                            dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 100);
+                    }
+                });
+            }
+            
+            if (profileBtn) {
+                profileBtn.addEventListener('click', function() {
+                    const dropdown = document.getElementById('profileDropdown');
+                    if (dropdown) {
+                        setTimeout(() => {
+                            dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 100);
+                    }
+                });
+            }
         }
     });
 }
