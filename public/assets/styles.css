@@ -345,20 +345,23 @@ header.site-header {
 
 @media (max-width: 768px) {
   header.site-header {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     min-height: 64px;
     padding: 10px 14px;
-    padding-right: 70px; /* Make room for hamburger menu (60px) + user section (10px) */
+    padding-left: 14px;
+    padding-right: 60px; /* Make room for hamburger menu */
     position: relative;
   }
   
   .header-left {
     flex: 0 0 auto;
     z-index: 35;
-    min-width: 0; /* Allow shrinking */
-    max-width: 60px; /* Limit logo width */
+    min-width: 0;
+    max-width: 50px; /* Limit logo width */
+    flex-shrink: 0;
   }
   
   /* Hide user section on homepage mobile to prevent overlap */
@@ -368,37 +371,40 @@ header.site-header {
   
   .header-center {
     position: absolute;
-    left: 50%;
+    left: 0;
+    right: 0;
     top: 50%;
-    transform: translate(-50%, -50%);
-    width: auto;
-    max-width: calc(50vw - 100px); /* Half viewport minus space for logo (60px) + hamburger (60px) + padding (40px) */
+    transform: translateY(-50%);
+    width: 100%;
+    max-width: 100%;
     pointer-events: none;
-    padding: 0 8px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding: 0 70px; /* Padding on both sides: left for logo (50px + 20px), right for hamburger (60px + 10px) */
     box-sizing: border-box;
-    z-index: 20; /* Lower than hamburger */
+    z-index: 20;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   
   .header-center .branding {
     width: 100%;
+    max-width: 100%;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
+    text-align: center;
   }
   
   .header-center .branding h1 {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     line-height: 1.2;
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
-    padding: 0 4px;
+    width: 100%;
   }
   
   .header-center .branding p {
@@ -421,19 +427,22 @@ header.site-header {
 /* Responsive: very small screens - stack layout */
 @media (max-width: 480px) {
   header.site-header {
+    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     min-height: 56px;
     padding: 8px 12px;
-    padding-right: 60px; /* Make room for hamburger menu */
+    padding-left: 12px;
+    padding-right: 56px; /* Make room for hamburger menu */
     gap: 8px;
   }
   
   .header-left {
     flex: 0 0 auto;
     min-width: 0;
-    max-width: 50px; /* Limit logo width */
+    max-width: 45px; /* Limit logo width */
+    flex-shrink: 0;
   }
   
   /* Hide user section on homepage mobile to prevent overlap */
@@ -443,34 +452,40 @@ header.site-header {
   
   .header-center {
     position: absolute;
-    left: 50%;
+    left: 0;
+    right: 0;
     top: 50%;
-    transform: translate(-50%, -50%);
-    width: auto;
-    max-width: calc(50vw - 80px); /* Half viewport minus space for logo (50px) + hamburger (50px) + padding (30px) */
+    transform: translateY(-50%);
+    width: 100%;
+    max-width: 100%;
     pointer-events: none;
-    padding: 0 6px;
-    overflow: hidden;
+    padding: 0 65px; /* Padding on both sides: left for logo (45px + 20px), right for hamburger (56px + 9px) */
     box-sizing: border-box;
-    z-index: 20; /* Lower than hamburger */
+    z-index: 20;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
   
   .header-center .branding {
     width: 100%;
+    max-width: 100%;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
+    text-align: center;
   }
   
   .header-center .branding h1 {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     line-height: 1.2;
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+    width: 100%;
   }
   
   .header-center .branding p {
