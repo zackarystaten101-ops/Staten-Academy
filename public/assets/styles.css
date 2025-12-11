@@ -343,57 +343,22 @@ header.site-header {
   }
 }
 
-@media (max-width: 768px) {
-  header.site-header {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 64px;
-    padding: 10px 14px;
-    padding-left: 14px;
-    padding-right: 60px; /* Make room for hamburger menu */
-    position: relative;
-  }
-  
-  .header-left {
-    flex: 0 0 auto;
-    z-index: 35;
-    min-width: 0;
-    max-width: 50px; /* Limit logo width */
-    flex-shrink: 0;
-  }
-  
-  /* Hide user section on homepage mobile to prevent overlap */
-  body.homepage .header-user-section {
-    display: none !important;
-  }
-  
+/* Show header-center on tablets (481px-768px) with proper spacing */
+@media (max-width: 768px) and (min-width: 481px) {
   .header-center {
+    display: block !important;
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 50%;
     top: 50%;
-    transform: translateY(-50%);
-    width: 100%;
-    max-width: 100%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    max-width: calc(100% - 120px); /* Account for logo and hamburger */
     pointer-events: none;
-    padding: 0 70px; /* Padding on both sides: left for logo (50px + 20px), right for hamburger (60px + 10px) */
-    box-sizing: border-box;
-    z-index: 20;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
-  .header-center .branding {
-    width: 100%;
-    max-width: 100%;
+    padding: 0 10px;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    z-index: 20;
   }
   
   .header-center .branding h1 {
@@ -403,46 +368,28 @@ header.site-header {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 100%;
-    width: 100%;
   }
   
   .header-center .branding p {
-    font-size: 0.7rem;
-    display: none; /* Hide tagline on mobile */
-    margin: 0;
-  }
-  
-  .site-nav {
-    display: none; /* Hide nav buttons on mobile - use hamburger menu */
-  }
-  
-  .site-logo {
-    width: 48px;
-    max-height: 40px;
-    flex-shrink: 0;
+    display: none;
   }
 }
 
-/* Responsive: very small screens - stack layout */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   header.site-header {
-    display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    min-height: 56px;
-    padding: 8px 12px;
-    padding-left: 12px;
-    padding-right: 56px; /* Make room for hamburger menu */
-    gap: 8px;
+    min-height: 64px;
+    padding: 10px 14px;
+    padding-right: 60px; /* Make room for hamburger menu */
+    position: relative;
   }
   
   .header-left {
     flex: 0 0 auto;
+    z-index: 35;
     min-width: 0;
-    max-width: 45px; /* Limit logo width */
-    flex-shrink: 0;
   }
   
   /* Hide user section on homepage mobile to prevent overlap */
@@ -450,52 +397,51 @@ header.site-header {
     display: none !important;
   }
   
+  /* Hide header-center text on mobile to prevent overlap - show only logo and hamburger */
   .header-center {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 100%;
-    max-width: 100%;
-    pointer-events: none;
-    padding: 0 65px; /* Padding on both sides: left for logo (45px + 20px), right for hamburger (56px + 9px) */
-    box-sizing: border-box;
-    z-index: 20;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: none !important;
   }
   
-  .header-center .branding {
-    width: 100%;
-    max-width: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  
-  .header-center .branding h1 {
-    font-size: 0.8rem;
-    line-height: 1.2;
-    margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-    width: 100%;
-  }
-  
-  .header-center .branding p {
-    display: none; /* Hide tagline on very small screens */
+  .site-nav {
+    display: none; /* Hide nav buttons on mobile - use hamburger menu */
   }
   
   .site-logo {
-    width: 40px;
-    max-height: 36px;
-    flex-shrink: 0;
+    width: 56px;
+    max-height: 44px;
+  }
+}
+
+/* Responsive: very small screens - stack layout */
+@media (max-width: 480px) {
+  header.site-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    padding: 8px 12px;
+    padding-right: 56px; /* Make room for hamburger menu */
+    gap: 8px;
+  }
+  
+  .header-left {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  
+  /* Hide user section on homepage mobile to prevent overlap */
+  body.homepage .header-user-section {
+    display: none !important;
+  }
+  
+  /* Hide header-center text on mobile to prevent overlap */
+  .header-center {
+    display: none !important;
+  }
+  
+  .site-logo {
+    width: 48px;
+    max-height: 40px;
   }
 }
 
