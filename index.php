@@ -732,46 +732,6 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         </div>
     </footer>
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
-    <script>
-    // #region agent log - Debug layout issue
-    (function() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', runDebug);
-        } else {
-            runDebug();
-        }
-        
-        function runDebug() {
-            setTimeout(function() {
-                const heroSection = document.querySelector('.hero-section');
-                const tracksContainer = document.querySelector('.tracks-container');
-                const body = document.body;
-                const html = document.documentElement;
-                
-                if (heroSection) {
-                    const heroStyles = window.getComputedStyle(heroSection);
-                    const heroRect = heroSection.getBoundingClientRect();
-                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:debug',message:'Hero section layout',data:{width:heroRect.width,left:heroRect.left,right:heroRect.right,computedWidth:heroStyles.width,computedMarginLeft:heroStyles.marginLeft,computedMarginRight:heroStyles.marginRight,computedPaddingLeft:heroStyles.paddingLeft,computedPaddingRight:heroStyles.paddingRight,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                }
-                
-                if (tracksContainer) {
-                    const tracksStyles = window.getComputedStyle(tracksContainer);
-                    const tracksRect = tracksContainer.getBoundingClientRect();
-                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:debug',message:'Tracks container layout',data:{width:tracksRect.width,left:tracksRect.left,right:tracksRect.right,computedWidth:tracksStyles.width,computedMarginLeft:tracksStyles.marginLeft,computedMarginRight:tracksStyles.marginRight,computedPaddingLeft:tracksStyles.paddingLeft,computedPaddingRight:tracksStyles.paddingRight,viewportWidth:window.innerWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                }
-                
-                if (body) {
-                    const bodyStyles = window.getComputedStyle(body);
-                    const bodyRect = body.getBoundingClientRect();
-                    fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:debug',message:'Body layout',data:{width:bodyRect.width,left:bodyRect.left,right:bodyRect.right,computedPadding:bodyStyles.padding,computedPaddingLeft:bodyStyles.paddingLeft,computedPaddingRight:bodyStyles.paddingRight,viewportWidth:window.innerWidth,scrollWidth:body.scrollWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                }
-                
-                fetch('http://127.0.0.1:7242/ingest/19b51a8d-24f8-49a9-92f3-0619a89fb936',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.php:debug',message:'Viewport info',data:{innerWidth:window.innerWidth,innerHeight:window.innerHeight,outerWidth:window.outerWidth,devicePixelRatio:window.devicePixelRatio},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-            }, 500);
-        }
-    })();
-    // #endregion
-    </script>
 </div>
 </body>
 </html>

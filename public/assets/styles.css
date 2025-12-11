@@ -328,11 +328,13 @@ header.site-header {
 @media (max-width: 1024px) {
   header.site-header {
     padding: 14px 18px;
+    padding-right: 70px; /* Make room for hamburger menu */
     min-height: 68px;
   }
   
   .header-center {
-    width: min(85%, 800px);
+    width: min(85%, calc(100% - 160px)); /* Account for logo and hamburger */
+    max-width: 800px;
   }
   
   .site-logo {
@@ -348,12 +350,14 @@ header.site-header {
     justify-content: space-between;
     min-height: 64px;
     padding: 10px 14px;
+    padding-right: 60px; /* Make room for hamburger menu */
     position: relative;
   }
   
   .header-left {
     flex: 0 0 auto;
     z-index: 35;
+    min-width: 0; /* Allow shrinking */
   }
   
   .header-center {
@@ -362,19 +366,32 @@ header.site-header {
     top: 50%;
     transform: translate(-50%, -50%);
     width: auto;
-    max-width: 70%;
+    max-width: calc(100% - 140px); /* Account for logo (60px) + hamburger (60px) + padding */
     pointer-events: none;
-    padding: 0;
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .header-center .branding {
+    width: 100%;
+    overflow: hidden;
   }
   
   .header-center .branding h1 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1.2;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   .header-center .branding p {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     display: none; /* Hide tagline on mobile */
+    margin: 0;
   }
   
   .site-nav {
@@ -382,44 +399,63 @@ header.site-header {
   }
   
   .site-logo {
-    width: 56px;
-    max-height: 44px;
+    width: 48px;
+    max-height: 40px;
+    flex-shrink: 0;
   }
 }
 
-/* Responsive: revert to normal flow on very small screens */
+/* Responsive: very small screens - stack layout */
 @media (max-width: 480px) {
   header.site-header {
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    min-height: auto;
-    padding: 10px 12px;
+    justify-content: space-between;
+    min-height: 56px;
+    padding: 8px 12px;
+    padding-right: 56px; /* Make room for hamburger menu */
     gap: 8px;
   }
   
   .header-left {
-    width: 100%;
-    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 0;
   }
   
   .header-center {
-    position: relative;
-    left: auto;
-    top: auto;
-    transform: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    max-width: calc(100% - 120px); /* Account for logo (48px) + hamburger (56px) + padding */
+    pointer-events: none;
+    padding: 0 6px;
+    overflow: hidden;
+  }
+  
+  .header-center .branding {
     width: 100%;
-    pointer-events: auto;
-    padding: 4px 0;
-    max-width: 100%;
+    overflow: hidden;
   }
   
   .header-center .branding h1 {
-    font-size: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .header-center .branding p {
+    display: none; /* Hide tagline on very small screens */
   }
   
   .site-logo {
-    width: 48px;
-    max-height: 40px;
+    width: 40px;
+    max-height: 36px;
+    flex-shrink: 0;
   }
 }
 
