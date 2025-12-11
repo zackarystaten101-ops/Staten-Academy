@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { holdEntitlement, confirmEntitlementUse, refundEntitlement, EntitlementType } from './WalletService.js';
 import { calculateEarnings, createEarningsRecord } from './EarningsService.js';
 import { ensureUTC } from '../utils/timezone.js';
+import type pg from 'pg';
 
 export interface SlotRequest {
   id: string;
@@ -48,12 +49,13 @@ export async function requestSlot(
   teacherId: number,
   startUtc: Date | string,
   endUtc: Date | string,
-  entitlementType: EntitlementType = 'one_on_one_class'
+  entitlementType: EntitlementType = 'one_on_one_class',
+  existingClient?: pg.PoolClient
 ): Promise<{ slotRequestId: string; entitlementHoldId: string }> {
   const start = ensureUTC(startUtc);
   const end = ensureUTC(endUtc);
   
-  return transaction(async (client) => {
+  const execute = async (client: pg.PoolClient) => {
     // Check teacher availability (with SELECT FOR UPDATE to prevent double-booking)
     const availabilityCheck = await client.query(
       `SELECT id FROM availability_slots
@@ -88,7 +90,7 @@ export async function requestSlot(
     }
     
     // Hold entitlement
-    const entitlementHoldId = await holdEntitlement(studentId, entitlementType, uuidv4());
+    const entitlementHoldId = await holdEntitlement(studentId, entitlementType, uuidv4(), client);
     
     // Create slot request
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes TTL
@@ -136,7 +138,13 @@ export async function requestSlot(
     );
     
     return { slotRequestId, entitlementHoldId };
-  });
+  };
+  
+  if (existingClient) {
+    return execute(existingClient);
+  } else {
+    return transaction(execute);
+  }
 }
 
 /**
@@ -144,9 +152,10 @@ export async function requestSlot(
  */
 export async function acceptSlotRequest(
   requestId: string,
-  teacherId: number
+  teacherId: number,
+  existingClient?: pg.PoolClient
 ): Promise<{ classId: string; earningsId: string | null }> {
-  return transaction(async (client) => {
+  const execute = async (client: pg.PoolClient) => {
     // Get slot request with lock
     const requestResult = await client.query(
       `SELECT * FROM slot_requests 
@@ -169,7 +178,8 @@ export async function acceptSlotRequest(
           request.entitlement_hold_id,
           requestId,
           'Slot request expired',
-          teacherId
+          teacherId,
+          client
         );
       }
       
@@ -198,7 +208,7 @@ export async function acceptSlotRequest(
     
     // Confirm entitlement use
     if (request.entitlement_hold_id) {
-      await confirmEntitlementUse(request.entitlement_hold_id, requestId, request.student_id);
+      await confirmEntitlementUse(request.entitlement_hold_id, requestId, request.student_id, client);
     }
     
     // Update class to confirmed
@@ -247,7 +257,13 @@ export async function acceptSlotRequest(
     );
     
     return { classId, earningsId };
-  });
+  };
+  
+  if (existingClient) {
+    return execute(existingClient);
+  } else {
+    return transaction(execute);
+  }
 }
 
 /**
@@ -278,7 +294,8 @@ export async function declineSlotRequest(
         request.entitlement_hold_id,
         requestId,
         reason || 'Teacher declined',
-        teacherId
+        teacherId,
+        client
       );
     }
     
@@ -339,25 +356,25 @@ export async function cancelClass(
     const classStart = new Date(classRecord.start_at_utc);
     const hoursUntilClass = (classStart.getTime() - now.getTime()) / (1000 * 60 * 60);
     
-    let refundEntitlement = false;
+    let shouldRefundEntitlement = false;
     let teacherGetsPaid = false;
     
     if (cancelledByRole === 'teacher') {
       // Teacher cancels: try replacement, if no replacement → refund
       // For now, always refund (replacement logic can be added later)
-      refundEntitlement = true;
+      shouldRefundEntitlement = true;
       
       // Notify admin (can be added to notifications system)
     } else if (cancelledByRole === 'student') {
       // Student cancels: 24h rule
       if (hoursUntilClass >= 24) {
-        refundEntitlement = true;
+        shouldRefundEntitlement = true;
       } else {
         teacherGetsPaid = true;
       }
     } else if (cancelledByRole === 'admin') {
       // Admin cancels: typically refund (unless otherwise specified)
-      refundEntitlement = true;
+      shouldRefundEntitlement = true;
     }
     
     // Update class status
@@ -367,12 +384,13 @@ export async function cancelClass(
     );
     
     // Refund entitlement if applicable
-    if (refundEntitlement && classRecord.entitlement_id) {
+    if (shouldRefundEntitlement && classRecord.entitlement_id) {
       await refundEntitlement(
         classRecord.entitlement_id,
         classId,
         reason || 'Class cancelled',
-        cancelledBy
+        cancelledBy,
+        client
       );
     }
     
@@ -457,7 +475,8 @@ export async function markNoShow(
           classRecord.entitlement_id,
           classId,
           'Teacher no-show',
-          markedBy
+          markedBy,
+          client
         );
       }
       

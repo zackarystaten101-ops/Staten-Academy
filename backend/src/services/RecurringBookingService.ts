@@ -79,12 +79,13 @@ export async function createRecurringSeries(
           teacherId,
           startUtc,
           endUtc,
-          entitlementType
+          entitlementType,
+          client
         );
         
         // Auto-accept if teacher has auto-accept enabled (for now, create as confirmed)
         // In production, you might want to check teacher settings
-        const { classId } = await acceptSlotRequest(slotRequestId, teacherId);
+        const { classId } = await acceptSlotRequest(slotRequestId, teacherId, client);
         
         // Update class with recurrence_group_id
         await client.query(
@@ -188,10 +189,11 @@ export async function generateFutureClassesForSeries(
           group.teacher_id,
           startUtc,
           endUtc,
-          'one_on_one_class'
+          'one_on_one_class',
+          client
         );
         
-        const { classId } = await acceptSlotRequest(slotRequestId, group.teacher_id);
+        const { classId } = await acceptSlotRequest(slotRequestId, group.teacher_id, client);
         
         await client.query(
           `UPDATE classes SET recurrence_group_id = $1 WHERE id = $2`,

@@ -6,6 +6,7 @@
 
 import { query, transaction } from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
+import type pg from 'pg';
 
 export type EntitlementType = 'one_on_one_class' | 'group_class' | 'video_course_access' | 'practice_session';
 
@@ -97,9 +98,10 @@ export async function getEntitlementByType(
 export async function holdEntitlement(
   studentId: number,
   type: EntitlementType,
-  classId: string
+  classId: string,
+  existingClient?: pg.PoolClient
 ): Promise<string> {
-  return transaction(async (client) => {
+  const execute = async (client: pg.PoolClient) => {
     // Find an available entitlement
     const entitlementResult = await client.query(
       `SELECT id, quantity_remaining FROM entitlements
@@ -158,7 +160,13 @@ export async function holdEntitlement(
     );
     
     return entitlement.id;
-  });
+  };
+  
+  if (existingClient) {
+    return execute(existingClient);
+  } else {
+    return transaction(execute);
+  }
 }
 
 /**
@@ -167,9 +175,10 @@ export async function holdEntitlement(
 export async function confirmEntitlementUse(
   entitlementId: string,
   classId: string,
-  studentId: number
+  studentId: number,
+  existingClient?: pg.PoolClient
 ): Promise<void> {
-  await transaction(async (client) => {
+  const execute = async (client: pg.PoolClient) => {
     // Update wallet item status to confirmed
     await client.query(
       `UPDATE wallet_items 
@@ -200,9 +209,10 @@ export async function refundEntitlement(
   entitlementId: string,
   classId: string,
   reason: string,
-  actorId: number
+  actorId: number,
+  existingClient?: pg.PoolClient
 ): Promise<void> {
-  await transaction(async (client) => {
+  const execute = async (client: pg.PoolClient) => {
     // Increment quantity_remaining back
     await client.query(
       `UPDATE entitlements 
@@ -215,7 +225,7 @@ export async function refundEntitlement(
     // Create refund wallet item
     const walletResult = await client.query(
       `SELECT w.id FROM wallets w
-       JOIN entitlements e ON w.user_id = (SELECT student_id FROM entitlements WHERE id = $1)
+       JOIN entitlements e ON w.user_id = e.student_id
        WHERE e.id = $1`,
       [entitlementId]
     );
@@ -256,7 +266,13 @@ export async function refundEntitlement(
         JSON.stringify({ class_id: classId, reason }),
       ]
     );
-  });
+  };
+  
+  if (existingClient) {
+    await execute(existingClient);
+  } else {
+    await transaction(execute);
+  }
 }
 
 /**
