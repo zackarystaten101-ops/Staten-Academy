@@ -30,19 +30,29 @@
 
 @media (max-width: 768px) {
   .menu-toggle {
-    right: 12px;
+    right: 14px;
     padding: 8px;
-    z-index: 70; /* Higher than header-center */
+    z-index: 70; /* Higher than header-center and user section */
+  }
+  
+  /* Ensure hamburger is always visible and accessible */
+  body.homepage .menu-toggle {
+    right: 14px;
   }
 }
 
 @media (max-width: 480px) {
   .menu-toggle {
-    right: 10px;
+    right: 12px;
     padding: 6px;
     min-width: 40px;
     min-height: 40px;
-    z-index: 70; /* Higher than header-center */
+    z-index: 70; /* Higher than header-center and user section */
+  }
+  
+  /* Ensure hamburger is always visible and accessible */
+  body.homepage .menu-toggle {
+    right: 12px;
   }
 }
 
