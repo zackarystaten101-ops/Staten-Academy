@@ -40,3 +40,5 @@ class CourseCategory extends Model {
 
 
 
+
+

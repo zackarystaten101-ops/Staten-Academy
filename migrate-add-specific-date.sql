@@ -11,3 +11,5 @@ DROP INDEX unique_teacher_slot,
 ADD UNIQUE KEY unique_teacher_slot (teacher_id, day_of_week, specific_date, start_time);
 
 
+
+

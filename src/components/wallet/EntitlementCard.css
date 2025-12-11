@@ -1,0 +1,115 @@
+.entitlement-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.entitlement-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.entitlement-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.entitlement-icon {
+  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: 50%;
+}
+
+.entitlement-title h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.entitlement-period {
+  font-size: 12px;
+  color: #666;
+}
+
+.entitlement-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.entitlement-remaining {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.entitlement-number {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.entitlement-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.entitlement-total {
+  font-size: 14px;
+  color: #999;
+}
+
+.entitlement-progress {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.entitlement-progress-bar {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.entitlement-courses {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.entitlement-courses-label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.entitlement-courses-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.entitlement-course-tag {
+  padding: 4px 12px;
+  background: #e3f2fd;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #1976d2;
+  font-weight: 500;
+}
+

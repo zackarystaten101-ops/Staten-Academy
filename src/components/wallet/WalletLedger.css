@@ -1,0 +1,67 @@
+.wallet-ledger {
+  width: 100%;
+}
+
+.wallet-ledger h2 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+}
+
+.wallet-ledger-loading,
+.wallet-ledger-empty {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.wallet-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.wallet-ledger-table thead {
+  background: #f5f5f5;
+}
+
+.wallet-ledger-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.wallet-ledger-table td {
+  padding: 12px;
+  border-top: 1px solid #e0e0e0;
+  font-size: 14px;
+}
+
+.wallet-ledger-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-confirmed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+

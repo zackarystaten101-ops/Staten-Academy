@@ -1,0 +1,128 @@
+.calendar-block {
+  padding: 12px;
+  border-left: 4px solid;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.calendar-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.calendar-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.calendar-block-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.calendar-block-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.status-confirmed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-pending,
+.status-requested {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+  text-decoration: line-through;
+}
+
+.calendar-block-time {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.calendar-block-meta {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.calendar-block-earnings {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: #e8f5e9;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2e7d32;
+  display: inline-block;
+}
+
+/* Compact view */
+.calendar-block-compact {
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  margin: 2px 0;
+  font-size: 11px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-block-compact-title {
+  font-weight: 600;
+}
+
+.calendar-block-compact-time {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+/* List view */
+.calendar-block-list {
+  padding: 16px;
+  border-left: 4px solid;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.calendar-block-list:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.calendar-block-list-time {
+  min-width: 150px;
+  font-weight: 600;
+  color: #666;
+  font-size: 14px;
+}
+
+.calendar-block-list-content {
+  flex: 1;
+}
+

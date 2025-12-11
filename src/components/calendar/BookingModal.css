@@ -1,0 +1,140 @@
+.booking-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.booking-modal {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.booking-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.booking-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.booking-modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.booking-modal-close:hover {
+  color: #333;
+}
+
+.booking-modal-content {
+  padding: 20px;
+}
+
+.booking-modal-section {
+  margin-bottom: 20px;
+}
+
+.booking-modal-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+
+.booking-modal-value {
+  font-size: 16px;
+  color: #333;
+}
+
+.booking-modal-value.earnings {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.booking-modal-error {
+  padding: 10px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  color: #c33;
+  margin-top: 10px;
+}
+
+.booking-modal-actions {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.booking-modal-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.booking-modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #004080;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #003366;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+

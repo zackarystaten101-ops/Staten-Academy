@@ -12,8 +12,76 @@ if (isset($_SESSION['user_id'])) {
     $user = getUserById($conn, $_SESSION['user_id']);
 }
 
-include __DIR__ . '/app/Views/components/header-user.php';
+// Ensure getAssetPath function is available
+if (!function_exists('getAssetPath')) {
+    function getAssetPath($asset) {
+        $asset = ltrim($asset, '/');
+        if (strpos($asset, 'assets/') === 0) {
+            $assetPath = $asset;
+        } else {
+            $assetPath = 'assets/' . $asset;
+        }
+        return '/' . $assetPath;
+    }
+}
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#004080">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="<?php echo htmlspecialchars($page_description); ?>">
+    <title><?php echo htmlspecialchars($page_title); ?></title>
+    <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
+    <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+<header class="site-header" role="banner">
+    <div class="header-left">
+        <a href="index.php" style="text-decoration: none; display: flex; align-items: center;">
+            <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo">
+        </a>
+    </div>
+    <div class="header-center">
+        <div class="branding">
+            <h1 class="site-title">Staten Academy</h1>
+            <p class="site-tag">Learn English with professional teachers and flexible plans.</p>
+        </div>
+    </div>
+    <?php include __DIR__ . '/header-user.php'; ?>
+    <button id="menu-toggle" class="menu-toggle" aria-controls="mobile-menu" aria-expanded="false" aria-label="Open navigation menu">
+        <span class="hamburger" aria-hidden="true"></span>
+    </button>
+    <div id="mobile-menu" class="mobile-menu" role="menu" aria-hidden="true">
+        <button class="close-btn" id="mobile-close" aria-label="Close menu">✕</button>
+        <a class="nav-btn" href="index.php">
+            <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span class="nav-label">Home</span>
+        </a>
+        <a class="nav-btn" href="about.php">
+            <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            <span class="nav-label">About</span>
+        </a>
+        <a class="nav-btn" href="how-we-work.php">
+            <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            <span class="nav-label">How We Work</span>
+        </a>
+        <a class="nav-btn" href="payment.php">
+            <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+            <span class="nav-label">Plans</span>
+        </a>
+        <?php if (!isset($_SESSION['user_id'])): ?>
+            <a class="nav-btn" href="login.php">
+                <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M10 17l5-5-5-5v10z"/></svg>
+                <span class="nav-label">Login</span>
+            </a>
+        <?php endif; ?>
+    </div>
+</header>
 
 <main style="padding-top: 80px;">
     <!-- Hero Section -->
@@ -289,4 +357,5 @@ include __DIR__ . '/app/Views/components/header-user.php';
 </main>
 
 <?php include __DIR__ . '/app/Views/components/footer.php'; ?>
+
 
