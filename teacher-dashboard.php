@@ -313,6 +313,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_note'])) {
     exit();
 }
 
+// Handle Support Message
+$support_message = '';
+$support_error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_support'])) {
+    $subject = trim($_POST['subject'] ?? '');
+    $message_text = trim($_POST['message'] ?? '');
+    
+    if (empty($subject)) {
+        $support_error = 'Subject is required.';
+    } elseif (empty($message_text)) {
+        $support_error = 'Message is required.';
+    } else {
+        // Insert support message
+        $stmt = $conn->prepare("INSERT INTO support_messages (sender_id, sender_role, subject, message) VALUES (?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("isss", $teacher_id, $user_role, $subject, $message_text);
+            if ($stmt->execute()) {
+                $support_message = 'Your message has been sent to all admins. They will review and respond shortly.';
+                // Clear form by redirecting
+                header("Location: teacher-dashboard.php#support");
+                exit();
+            } else {
+                $support_error = 'Error sending message. Please try again.';
+            }
+            $stmt->close();
+        } else {
+            $support_error = 'Error preparing statement. Please try again.';
+        }
+    }
+}
+
 // Fetch Stats
 $rating_data = getTeacherRating($conn, $teacher_id);
 $earnings_data = getTeacherEarnings($conn, $teacher_id);
@@ -1612,6 +1643,61 @@ $active_tab = 'overview';
     </div>
 </div>
 
+        <!-- Support Tab -->
+        <div id="support" class="tab-content">
+            <div style="margin-bottom: 25px;">
+                <h1 style="margin-bottom: 10px; display: flex; align-items: center; gap: 15px;">
+                    <div style="width: 50px; height: 50px; border-radius: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <i class="fas fa-headset"></i>
+                    </div>
+                    Contact Support
+                </h1>
+                <p style="color: var(--gray); font-size: 1rem; line-height: 1.6;">
+                    Send a message to our admin team. We'll review and respond shortly.
+                </p>
+            </div>
+            
+            <div class="card" style="max-width: 700px; margin: 0 auto;">
+                <?php if (!empty($support_message)): ?>
+                    <div class="alert-success" style="margin-bottom: 20px;">
+                        <i class="fas fa-check-circle"></i> <strong>Success!</strong><br>
+                        <?php echo htmlspecialchars($support_message); ?>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($support_error)): ?>
+                    <div class="alert-error" style="margin-bottom: 20px;">
+                        <i class="fas fa-exclamation-circle"></i> <strong>Error:</strong><br>
+                        <?php echo htmlspecialchars($support_error); ?>
+                    </div>
+                <?php endif; ?>
+                
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Your Name</label>
+                        <input type="text" value="<?php echo htmlspecialchars($user['name']); ?>" disabled style="background: #f8f9fa; cursor: not-allowed;">
+                        <small style="color: #999; display: block; margin-top: 5px;">
+                            <span style="display: inline-block; background: #e1f0ff; color: #004080; padding: 4px 10px; border-radius: 3px; font-size: 0.85rem;"><?php echo ucfirst($user_role); ?></span>
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Subject <span style="color: red;">*</span></label>
+                        <input type="text" name="subject" placeholder="What is your issue about?" required value="<?php echo htmlspecialchars($_POST['subject'] ?? ''); ?>" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 1rem; box-sizing: border-box;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Message <span style="color: red;">*</span></label>
+                        <textarea name="message" placeholder="Please describe your issue in detail..." required rows="8" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 1rem; font-family: inherit; resize: vertical; box-sizing: border-box; min-height: 150px;"><?php echo htmlspecialchars($_POST['message'] ?? ''); ?></textarea>
+                    </div>
+                    
+                    <button type="submit" name="send_support" class="btn-primary" style="width: 100%; padding: 14px; font-size: 1rem; font-weight: 600; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 5px; color: white; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow='none'">
+                        <i class="fas fa-paper-plane"></i> Send Message
+                    </button>
+                </form>
+            </div>
+        </div>
+
 <script>
 function switchTab(id) {
     // Prevent any page navigation
@@ -2017,8 +2103,12 @@ async function loadSlotRequests() {
     container.innerHTML = '<div style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i><p style="margin-top: 15px; color: #666;">Loading slot requests...</p></div>';
     
     try {
-        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-        const response = await fetch(basePath + '/api/slot-requests.php?action=get-pending');
+        // Use relative path - works from root directory
+        const apiPath = 'api/slot-requests.php?action=get-pending';
+        const response = await fetch(apiPath);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         
         if (data.success && data.requests && data.requests.length > 0) {
@@ -2154,8 +2244,8 @@ async function acceptSlotRequest(requestId) {
     if (rejectBtn) rejectBtn.disabled = true;
     
     try {
-        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-        const response = await fetch(basePath + '/api/slot-requests.php?action=accept', {
+        // Use relative path - works from root directory
+        const response = await fetch('api/slot-requests.php?action=accept', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ request_id: requestId })
@@ -2241,8 +2331,8 @@ async function rejectSlotRequest(requestId) {
         if (acceptBtn) acceptBtn.disabled = true;
         
         try {
-            const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-            const response = await fetch(basePath + '/api/slot-requests.php?action=reject', {
+            // Use relative path - works from root directory
+            const response = await fetch('api/slot-requests.php?action=reject', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 

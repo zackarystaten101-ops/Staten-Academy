@@ -420,9 +420,15 @@ if ($user_role === 'teacher' && isset($conn) && isset($user_id) && $user_id > 0)
             </div>
             
             <div class="sidebar-section sidebar-section-bottom">
-                <a href="support_contact.php" class="support-link">
+                <?php if ($is_dashboard_page): ?>
+                <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('support'); } return false;" class="support-link <?php echo $active_tab === 'support' ? 'active' : ''; ?>">
                     <i class="fas fa-headset"></i> <span>Support</span>
                 </a>
+                <?php else: ?>
+                <a href="teacher-dashboard.php#support" class="support-link <?php echo $active_tab === 'support' ? 'active' : ''; ?>">
+                    <i class="fas fa-headset"></i> <span>Support</span>
+                </a>
+                <?php endif; ?>
                 <a href="index.php">
                     <i class="fas fa-home"></i> <span>Home Page</span>
                 </a>

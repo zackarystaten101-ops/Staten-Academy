@@ -714,13 +714,20 @@ body.dashboard-layout {
     background: linear-gradient(135deg, var(--primary) 0%, #0056b3 100%);
     color: white;
     font-size: 0.7rem;
-    padding: 4px 9px;
-    border-radius: 12px;
+    padding: 0;
+    border-radius: 50%;
     font-weight: 700;
-    min-width: 20px;
+    min-width: 22px;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     box-shadow: 0 2px 8px rgba(11, 108, 245, 0.4);
     animation: pulse-badge 2s ease-in-out infinite;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 @keyframes pulse-badge {
