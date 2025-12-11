@@ -57,7 +57,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <meta name="theme-color" content="#004080">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="description" content="Staten Academy - Choose your English learning track: Kids, Adults, or English for Coding">
@@ -67,17 +67,21 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <link rel="stylesheet" href="<?php echo getAssetPath('css/tracks.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        /* Prevent horizontal scroll */
+        html, body {
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+        
         .hero-section {
             background: linear-gradient(135deg, #004080 0%, #0b6cf5 100%);
             color: white;
             padding: 80px 20px;
             text-align: center;
-            width: 100vw;
+            margin-left: -20px;
+            margin-right: -20px;
+            width: calc(100% + 40px);
             position: relative;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-left: 0;
-            margin-right: 0;
         }
         .hero-section h1 {
             font-size: 3rem;
@@ -96,11 +100,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             padding: 0 20px;
             position: relative;
             z-index: 10;
-            width: 100vw;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-left: 0;
-            margin-right: 0;
+            margin-left: -20px;
+            margin-right: -20px;
+            width: calc(100% + 40px);
         }
         .tracks-grid {
             display: grid;
@@ -251,6 +253,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         @media (max-width: 768px) {
             .hero-section {
                 padding: 50px 15px;
+                margin-left: -12px;
+                margin-right: -12px;
+                width: calc(100% + 24px);
             }
             .hero-section h1 {
                 font-size: 1.8rem;
@@ -265,6 +270,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             .tracks-container {
                 margin: -40px auto 50px;
                 padding: 0 15px;
+                margin-left: -12px;
+                margin-right: -12px;
+                width: calc(100% + 24px);
             }
             .tracks-grid {
                 grid-template-columns: 1fr;
@@ -331,6 +339,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         @media (max-width: 480px) {
             .hero-section {
                 padding: 40px 12px;
+                margin-left: -8px;
+                margin-right: -8px;
+                width: calc(100% + 16px);
             }
             .hero-section h1 {
                 font-size: 1.5rem;
@@ -343,6 +354,9 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             .tracks-container {
                 margin: -30px auto 40px;
                 padding: 0 12px;
+                margin-left: -8px;
+                margin-right: -8px;
+                width: calc(100% + 16px);
             }
             .tracks-grid {
                 gap: 15px;
