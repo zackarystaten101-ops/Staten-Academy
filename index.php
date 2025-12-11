@@ -236,22 +236,171 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             color: #666;
             line-height: 1.6;
         }
+        /* Mobile Optimizations */
         @media (max-width: 768px) {
+            .hero-section {
+                padding: 50px 15px;
+            }
             .hero-section h1 {
-                font-size: 2rem;
+                font-size: 1.8rem;
+                margin-bottom: 15px;
+                line-height: 1.2;
             }
             .hero-section p {
-                font-size: 1.1rem;
+                font-size: 1rem;
+                margin-bottom: 30px;
+                padding: 0 10px;
+            }
+            .tracks-container {
+                margin: -40px auto 50px;
+                padding: 0 15px;
             }
             .tracks-grid {
                 grid-template-columns: 1fr;
                 gap: 20px;
+                margin-top: 30px;
             }
             .track-card {
-                padding: 30px;
+                padding: 25px 20px;
+                border-radius: 16px;
+            }
+            .track-icon {
+                font-size: 3rem;
+                margin-bottom: 15px;
             }
             .track-title {
+                font-size: 1.4rem;
+                margin-bottom: 12px;
+            }
+            .track-description {
+                font-size: 0.95rem;
+                margin-bottom: 20px;
+                line-height: 1.5;
+            }
+            .track-features {
+                margin: 15px 0;
+            }
+            .track-features li {
+                padding: 8px 0;
+                font-size: 0.9rem;
+            }
+            .track-features li i {
+                font-size: 1rem;
+            }
+            .track-cta {
+                padding: 12px 28px;
+                font-size: 1rem;
+                margin-top: 15px;
+                width: 100%;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 48px;
+            }
+            .features-section {
+                padding: 50px 15px;
+            }
+            .features-section h2 {
+                font-size: 1.8rem;
+                margin-bottom: 30px;
+            }
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            .feature-item {
+                padding: 25px 20px;
+            }
+            .feature-item i {
+                font-size: 2.5rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .hero-section {
+                padding: 40px 12px;
+            }
+            .hero-section h1 {
                 font-size: 1.5rem;
+                margin-bottom: 12px;
+            }
+            .hero-section p {
+                font-size: 0.95rem;
+                margin-bottom: 25px;
+            }
+            .tracks-container {
+                margin: -30px auto 40px;
+                padding: 0 12px;
+            }
+            .tracks-grid {
+                gap: 15px;
+                margin-top: 25px;
+            }
+            .track-card {
+                padding: 20px 16px;
+                border-radius: 12px;
+            }
+            .track-icon {
+                font-size: 2.5rem;
+                margin-bottom: 12px;
+            }
+            .track-title {
+                font-size: 1.25rem;
+                margin-bottom: 10px;
+            }
+            .track-description {
+                font-size: 0.9rem;
+                margin-bottom: 15px;
+            }
+            .track-features li {
+                padding: 6px 0;
+                font-size: 0.85rem;
+            }
+            .track-cta {
+                padding: 14px 24px;
+                font-size: 0.95rem;
+                margin-top: 12px;
+            }
+            .features-section {
+                padding: 40px 12px;
+            }
+            .features-section h2 {
+                font-size: 1.5rem;
+                margin-bottom: 25px;
+            }
+            .feature-item {
+                padding: 20px 16px;
+            }
+            .feature-item i {
+                font-size: 2rem;
+            }
+        }
+        
+        @media (max-width: 360px) {
+            .hero-section {
+                padding: 35px 10px;
+            }
+            .hero-section h1 {
+                font-size: 1.3rem;
+            }
+            .hero-section p {
+                font-size: 0.9rem;
+            }
+            .track-card {
+                padding: 18px 14px;
+            }
+            .track-icon {
+                font-size: 2rem;
+            }
+            .track-title {
+                font-size: 1.1rem;
+            }
+            .track-description {
+                font-size: 0.85rem;
+            }
+            .track-features li {
+                font-size: 0.8rem;
             }
         }
     </style>
