@@ -701,7 +701,7 @@ $active_tab = 'overview';
             // Check teacher onboarding status
             $has_calendar_setup = !empty($user['google_calendar_token']);
             $has_profile_complete = !empty($user['bio']) && !empty($user['profile_pic']);
-            $has_students = count($assigned_students) > 0;
+            $has_students = isset($students) && is_array($students) && count($students) > 0;
             
             // Get today's lessons
             $today_lessons = [];

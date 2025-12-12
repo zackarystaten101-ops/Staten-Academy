@@ -75,7 +75,7 @@ if (isset($_SESSION['user_id'])) {
 
     .user-info-text .user-role {
         font-size: 0.8rem;
-        color: #ccc;
+        color: rgba(0, 64, 128, 0.7);
         text-transform: capitalize;
     }
 

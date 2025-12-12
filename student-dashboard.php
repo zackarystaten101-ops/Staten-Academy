@@ -1576,12 +1576,10 @@ $active_tab = 'overview';
                                     <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
                                 </a>
                                 <?php 
-                                // Only show profile link if teacher is assigned to student
-                                $is_assigned_lesson = ($assigned_teacher && $assigned_teacher['id'] == $lesson['teacher_id']) || 
-                                                      ($user['assigned_teacher_id'] == $lesson['teacher_id']);
-                                if ($is_assigned_lesson): ?>
-                                    <a href="profile.php?id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">View Teacher</a>
-                                <?php endif; ?>
+                                // Show profile link for any teacher the student has lessons with
+                                // (assigned_teacher_id is deprecated, so we show for all lessons)
+                                ?>
+                                    <a href="teacher-profile.php?id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">View Teacher</a>
                             </div>
                         </div>
                     <?php endforeach; ?>
