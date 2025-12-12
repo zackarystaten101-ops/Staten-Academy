@@ -118,6 +118,228 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_material'])) {
     exit();
 }
 
+// Handle Wallet Adjustment
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_wallet'])) {
+    require_once __DIR__ . '/app/Services/WalletService.php';
+    
+    $student_id = intval($_POST['student_id']);
+    $amount = floatval($_POST['amount']);
+    $reason = $_POST['reason'] ?? 'Manual adjustment by admin';
+    $adjustment_type = $_POST['adjustment_type'] ?? 'adjustment'; // 'add' or 'deduct'
+    
+    $walletService = new WalletService($conn);
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    $conn->begin_transaction();
+    try {
+        if ($adjustment_type === 'add') {
+            $reference_id = 'admin_adjustment_' . time() . '_' . $student_id;
+            $result = $walletService->addFunds($student_id, $amount, 'admin_adjustment', $reference_id);
+        } else {
+            $reference_id = 'admin_deduction_' . time() . '_' . $student_id;
+            $result = $walletService->deductFunds($student_id, $amount, $reference_id, $reason);
+        }
+        
+        if ($result) {
+            // Log to audit log
+            $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                         VALUES (?, 'wallet_adjustment', 'student', ?, ?, ?)";
+            $audit_stmt = $conn->prepare($audit_sql);
+            $details = json_encode([
+                'type' => $adjustment_type,
+                'amount' => $amount,
+                'reason' => $reason,
+                'reference_id' => $reference_id
+            ]);
+            $audit_stmt->bind_param("iiss", $admin_id, $student_id, $details, $ip_address);
+            $audit_stmt->execute();
+            $audit_stmt->close();
+            
+            $conn->commit();
+            $wallet_msg = "Wallet adjusted successfully";
+        } else {
+            throw new Exception("Failed to adjust wallet");
+        }
+    } catch (Exception $e) {
+        $conn->rollback();
+        $wallet_error = "Error: " . $e->getMessage();
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#wallet-reconciliation");
+    exit();
+}
+
+// Handle User Role Change
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_user_role'])) {
+    $target_user_id = intval($_POST['user_id']);
+    $new_role = $_POST['new_role'];
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    $allowed_roles = ['student', 'teacher', 'admin'];
+    if (!in_array($new_role, $allowed_roles)) {
+        $user_msg = "Invalid role";
+    } else {
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
+            $stmt->bind_param("si", $new_role, $target_user_id);
+            $stmt->execute();
+            $stmt->close();
+            
+            // Log to audit log
+            $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                         VALUES (?, 'role_change', 'user', ?, ?, ?)";
+            $audit_stmt = $conn->prepare($audit_sql);
+            $details = json_encode(['old_role' => 'unknown', 'new_role' => $new_role]);
+            $audit_stmt->bind_param("iiss", $admin_id, $target_user_id, $details, $ip_address);
+            $audit_stmt->execute();
+            $audit_stmt->close();
+            
+            $conn->commit();
+            $user_msg = "User role updated successfully";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $user_error = "Error: " . $e->getMessage();
+        }
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#users");
+    exit();
+}
+
+// Handle Teacher Category Assignment
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_category'])) {
+    $teacher_id = intval($_POST['teacher_id']);
+    $category = $_POST['category'];
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    $allowed_categories = ['young_learners', 'adults', 'coding'];
+    if (!in_array($category, $allowed_categories)) {
+        $user_msg = "Invalid category";
+    } else {
+        $conn->begin_transaction();
+        try {
+            // Remove existing category assignments
+            $stmt = $conn->prepare("DELETE FROM teacher_categories WHERE teacher_id = ?");
+            $stmt->bind_param("i", $teacher_id);
+            $stmt->execute();
+            $stmt->close();
+            
+            // Add new category assignment
+            $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category) VALUES (?, ?)");
+            $stmt->bind_param("is", $teacher_id, $category);
+            $stmt->execute();
+            $stmt->close();
+            
+            // Log to audit log
+            $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                         VALUES (?, 'category_assignment', 'teacher', ?, ?, ?)";
+            $audit_stmt = $conn->prepare($audit_sql);
+            $details = json_encode(['category' => $category]);
+            $audit_stmt->bind_param("iiss", $admin_id, $teacher_id, $details, $ip_address);
+            $audit_stmt->execute();
+            $audit_stmt->close();
+            
+            $conn->commit();
+            $user_msg = "Category assigned successfully";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $user_error = "Error: " . $e->getMessage();
+        }
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#users");
+    exit();
+}
+
+// Handle Account Suspension/Activation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_account_status'])) {
+    $target_user_id = intval($_POST['user_id']);
+    $action = $_POST['action_type']; // 'suspend' or 'activate'
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    $conn->begin_transaction();
+    try {
+        if ($action === 'suspend') {
+            // Add suspended flag (you may need to add this column to users table)
+            $stmt = $conn->prepare("UPDATE users SET application_status = 'rejected' WHERE id = ?");
+            $stmt->bind_param("i", $target_user_id);
+            $stmt->execute();
+            $stmt->close();
+            $status_msg = "Account suspended";
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET application_status = 'approved' WHERE id = ?");
+            $stmt->bind_param("i", $target_user_id);
+            $stmt->execute();
+            $stmt->close();
+            $status_msg = "Account activated";
+        }
+        
+        // Log to audit log
+        $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                     VALUES (?, 'account_status_change', 'user', ?, ?, ?)";
+        $audit_stmt = $conn->prepare($audit_sql);
+        $details = json_encode(['action' => $action]);
+        $audit_stmt->bind_param("iiss", $admin_id, $target_user_id, $details, $ip_address);
+        $audit_stmt->execute();
+        $audit_stmt->close();
+        
+        $conn->commit();
+        $user_msg = $status_msg;
+    } catch (Exception $e) {
+        $conn->rollback();
+        $user_error = "Error: " . $e->getMessage();
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#users");
+    exit();
+}
+
+// Handle CSV Export
+if (isset($_GET['export_wallet_csv'])) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="wallet_transactions_' . date('Y-m-d') . '.csv"');
+    
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['ID', 'Student ID', 'Student Name', 'Type', 'Amount', 'Status', 'Stripe Payment ID', 'Reference ID', 'Description', 'Created At']);
+    
+    $date_from = $_GET['date_from'] ?? date('Y-m-01');
+    $date_to = $_GET['date_to'] ?? date('Y-m-d');
+    
+    $export_sql = "SELECT wt.*, u.name as student_name 
+                   FROM wallet_transactions wt 
+                   JOIN users u ON wt.student_id = u.id 
+                   WHERE DATE(wt.created_at) BETWEEN ? AND ? 
+                   ORDER BY wt.created_at DESC";
+    $export_stmt = $conn->prepare($export_sql);
+    $export_stmt->bind_param("ss", $date_from, $date_to);
+    $export_stmt->execute();
+    $export_result = $export_stmt->get_result();
+    
+    while ($row = $export_result->fetch_assoc()) {
+        fputcsv($output, [
+            $row['id'],
+            $row['student_id'],
+            $row['student_name'],
+            $row['type'],
+            $row['amount'],
+            $row['status'] ?? 'confirmed',
+            $row['stripe_payment_id'] ?? '',
+            $row['reference_id'] ?? '',
+            $row['description'] ?? '',
+            $row['created_at']
+        ]);
+    }
+    
+    $export_stmt->close();
+    fclose($output);
+    exit();
+}
+
 // Fetch data
 $pending_updates = $conn->query("SELECT p.*, u.email as user_email FROM pending_updates p JOIN users u ON p.user_id = u.id");
 if (!$pending_updates) {
@@ -437,9 +659,178 @@ $all_users_stmt->close();
             </div>
             
             <div id="reports-reports" class="reports-subtab" style="display: none;">
+                <h2>Financial Reports</h2>
+                
+                <?php
+                // Get financial report filters
+                $report_date_from = $_GET['report_date_from'] ?? date('Y-m-01');
+                $report_date_to = $_GET['report_date_to'] ?? date('Y-m-d');
+                $report_type = $_GET['report_type'] ?? 'all';
+                
+                // Calculate revenue metrics
+                $revenue_sql = "SELECT 
+                    COALESCE(SUM(CASE WHEN type = 'purchase' THEN amount ELSE 0 END), 0) as total_purchases,
+                    COALESCE(SUM(CASE WHEN type = 'trial' THEN amount ELSE 0 END), 0) as total_trials,
+                    COALESCE(SUM(CASE WHEN type = 'refund' THEN amount ELSE 0 END), 0) as total_refunds,
+                    COUNT(CASE WHEN type = 'purchase' THEN 1 END) as purchase_count,
+                    COUNT(CASE WHEN type = 'trial' THEN 1 END) as trial_count,
+                    COUNT(CASE WHEN type = 'refund' THEN 1 END) as refund_count
+                    FROM wallet_transactions 
+                    WHERE DATE(created_at) BETWEEN ? AND ? AND status = 'confirmed'";
+                $revenue_stmt = $conn->prepare($revenue_sql);
+                $revenue_stmt->bind_param("ss", $report_date_from, $report_date_to);
+                $revenue_stmt->execute();
+                $revenue_data = $revenue_stmt->get_result()->fetch_assoc();
+                $revenue_stmt->close();
+                
+                // Get wallet top-ups
+                $topups_sql = "SELECT COUNT(*) as count, SUM(amount) as total 
+                              FROM wallet_transactions 
+                              WHERE type = 'purchase' AND DATE(created_at) BETWEEN ? AND ? AND status = 'confirmed'";
+                $topups_stmt = $conn->prepare($topups_sql);
+                $topups_stmt->bind_param("ss", $report_date_from, $report_date_to);
+                $topups_stmt->execute();
+                $topups_data = $topups_stmt->get_result()->fetch_assoc();
+                $topups_stmt->close();
+                
+                // Get refunds detail
+                $refunds_sql = "SELECT wt.*, u.name as student_name, u.email as student_email
+                               FROM wallet_transactions wt
+                               JOIN users u ON wt.student_id = u.id
+                               WHERE wt.type = 'refund' AND DATE(wt.created_at) BETWEEN ? AND ?
+                               ORDER BY wt.created_at DESC LIMIT 50";
+                $refunds_stmt = $conn->prepare($refunds_sql);
+                $refunds_stmt->bind_param("ss", $report_date_from, $report_date_to);
+                $refunds_stmt->execute();
+                $refunds_result = $refunds_stmt->get_result();
+                ?>
+                
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2><i class="fas fa-filter"></i> Report Filters</h2>
+                    <form method="GET" action="" style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; align-items: end;">
+                        <input type="hidden" name="tab" value="reports">
+                        <input type="hidden" name="reports_subtab" value="reports">
+                        <div>
+                            <label>Date From</label>
+                            <input type="date" name="report_date_from" value="<?php echo h($report_date_from); ?>" class="form-control">
+                        </div>
+                        <div>
+                            <label>Date To</label>
+                            <input type="date" name="report_date_to" value="<?php echo h($report_date_to); ?>" class="form-control">
+                        </div>
+                        <div>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-search"></i> Generate Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="stats-grid" style="margin-bottom: 30px;">
+                    <div class="stat-card">
+                        <div class="stat-icon success"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-info">
+                            <h3><?php echo formatCurrency($revenue_data['total_purchases'] ?? 0); ?></h3>
+                            <p>Total Purchases</p>
+                            <small style="color: #666;"><?php echo $revenue_data['purchase_count'] ?? 0; ?> transactions</small>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon info"><i class="fas fa-gift"></i></div>
+                        <div class="stat-info">
+                            <h3><?php echo formatCurrency($revenue_data['total_trials'] ?? 0); ?></h3>
+                            <p>Trial Payments</p>
+                            <small style="color: #666;"><?php echo $revenue_data['trial_count'] ?? 0; ?> trials</small>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon warning"><i class="fas fa-undo"></i></div>
+                        <div class="stat-info">
+                            <h3><?php echo formatCurrency($revenue_data['total_refunds'] ?? 0); ?></h3>
+                            <p>Total Refunds</p>
+                            <small style="color: #666;"><?php echo $revenue_data['refund_count'] ?? 0; ?> refunds</small>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+                        <div class="stat-info">
+                            <h3><?php echo formatCurrency(($revenue_data['total_purchases'] ?? 0) + ($revenue_data['total_trials'] ?? 0) - ($revenue_data['total_refunds'] ?? 0)); ?></h3>
+                            <p>Net Revenue</p>
+                            <small style="color: #666;">After refunds</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2><i class="fas fa-chart-bar"></i> Revenue Breakdown</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h3 style="margin-top: 0; color: #004080;">Wallet Top-ups</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #28a745;">
+                                <?php echo formatCurrency($topups_data['total'] ?? 0); ?>
+                            </div>
+                            <small style="color: #666;"><?php echo $topups_data['count'] ?? 0; ?> top-ups</small>
+                        </div>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h3 style="margin-top: 0; color: #004080;">Trial Lessons</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #0b6cf5;">
+                                <?php echo formatCurrency($revenue_data['total_trials'] ?? 0); ?>
+                            </div>
+                            <small style="color: #666;"><?php echo $revenue_data['trial_count'] ?? 0; ?> trials</small>
+                        </div>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h3 style="margin-top: 0; color: #004080;">Refunds</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #dc3545;">
+                                -<?php echo formatCurrency($revenue_data['total_refunds'] ?? 0); ?>
+                            </div>
+                            <small style="color: #666;"><?php echo $revenue_data['refund_count'] ?? 0; ?> refunds</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <?php if ($refunds_result && $refunds_result->num_rows > 0): ?>
+                <div class="card" style="margin-bottom: 30px;">
+                    <h2><i class="fas fa-undo"></i> Refund Tracking</h2>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Student</th>
+                                    <th>Amount</th>
+                                    <th>Reference</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($refund = $refunds_result->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?php echo date('M d, Y H:i', strtotime($refund['created_at'])); ?></td>
+                                    <td>
+                                        <div><?php echo h($refund['student_name']); ?></div>
+                                        <small style="color: #666;"><?php echo h($refund['student_email']); ?></small>
+                                    </td>
+                                    <td style="color: #dc3545; font-weight: 600;">
+                                        -<?php echo formatCurrency($refund['amount']); ?>
+                                    </td>
+                                    <td><small><?php echo h($refund['reference_id'] ?? '-'); ?></small></td>
+                                    <td><?php echo h($refund['description'] ?? '-'); ?></td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <?php endif; ?>
+                <?php if (isset($refunds_stmt)) $refunds_stmt->close(); ?>
+                
                 <div class="card">
-                    <h2><i class="fas fa-file-export"></i> Export Data</h2>
-                    <div class="quick-actions">
+                    <h2><i class="fas fa-file-export"></i> Export Reports</h2>
+                    <div class="quick-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <a href="?export_wallet_csv=1&date_from=<?php echo urlencode($report_date_from); ?>&date_to=<?php echo urlencode($report_date_to); ?>" class="quick-action-btn">
+                            <i class="fas fa-download"></i>
+                            <span>Export Wallet Transactions</span>
+                        </a>
                         <a href="api/export.php?type=students" class="quick-action-btn">
                             <i class="fas fa-users"></i>
                             <span>Export Students</span>
@@ -746,6 +1137,37 @@ $all_users_stmt->close();
         <!-- Users Tab (Combined Teachers & Students) -->
         <div id="users" class="tab-content">
             <h1>User Management</h1>
+            
+            <!-- Search and Filter Bar -->
+            <div class="card" style="margin-bottom: 30px;">
+                <form method="GET" action="" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; align-items: end;">
+                    <input type="hidden" name="tab" value="users">
+                    <div>
+                        <label>Search Users</label>
+                        <input type="text" name="user_search" value="<?php echo h($user_search); ?>" 
+                               placeholder="Search by name or email..." class="form-control">
+                    </div>
+                    <div>
+                        <label>Filter by Role</label>
+                        <select name="user_role_filter" class="form-control">
+                            <option value="">All Roles</option>
+                            <option value="teacher" <?php echo $user_role_filter === 'teacher' ? 'selected' : ''; ?>>Teachers</option>
+                            <option value="student" <?php echo $user_role_filter === 'student' ? 'selected' : ''; ?>>Students</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <?php if ($user_search || $user_role_filter): ?>
+                        <a href="admin-dashboard.php#users" class="btn-outline" style="margin-left: 10px;">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </div>
+            
             <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
                 <button onclick="switchUsersSubTab('teachers')" class="btn-outline" id="usr-teachers-btn" style="border-bottom: 3px solid #0b6cf5;">
                     <i class="fas fa-chalkboard-teacher"></i> Teachers
@@ -755,6 +1177,17 @@ $all_users_stmt->close();
                 </button>
             </div>
             
+            <?php if (isset($user_msg)): ?>
+                <div class="alert-success" style="margin-bottom: 20px;">
+                    <?php echo h($user_msg); ?>
+                </div>
+            <?php endif; ?>
+            <?php if (isset($user_error)): ?>
+                <div class="alert-error" style="margin-bottom: 20px;">
+                    <?php echo h($user_error); ?>
+                </div>
+            <?php endif; ?>
+            
             <div id="users-teachers" class="users-subtab active">
                 <h2>Teacher Management</h2>
             <table class="data-table">
@@ -762,9 +1195,11 @@ $all_users_stmt->close();
                     <tr>
                         <th>Teacher</th>
                         <th>Email</th>
+                        <th>Categories</th>
                         <th>Rating</th>
                         <th>Students</th>
                         <th>Hours</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -772,6 +1207,8 @@ $all_users_stmt->close();
                     <?php 
                     $teachers->data_seek(0);
                     while($t = $teachers->fetch_assoc()): 
+                        $categories = $t['categories'] ? explode(',', $t['categories']) : [];
+                        $is_suspended = ($t['application_status'] ?? 'approved') === 'rejected';
                     ?>
                     <tr>
                         <td data-label="Teacher">
@@ -781,15 +1218,54 @@ $all_users_stmt->close();
                             </div>
                         </td>
                         <td data-label="Email"><?php echo h($t['email']); ?></td>
+                        <td data-label="Categories">
+                            <?php if (!empty($categories)): ?>
+                                <?php foreach ($categories as $cat): ?>
+                                    <span class="badge badge-info" style="margin-right: 5px;">
+                                        <?php echo ucfirst(str_replace('_', ' ', $cat)); ?>
+                                    </span>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <span style="color: #999;">Not assigned</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
                         <td data-label="Students"><?php echo $t['student_count'] ?? 0; ?></td>
                         <td data-label="Hours"><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
+                        <td data-label="Status">
+                            <?php if ($is_suspended): ?>
+                                <span class="badge badge-danger">Suspended</span>
+                            <?php else: ?>
+                                <span class="badge badge-success">Active</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Actions">
-                            <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
-                            <form action="admin-actions.php" method="POST" style="display: inline;">
-                                <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
-                                <button type="submit" name="action" value="make_student" class="btn-danger btn-sm" onclick="return handleDemoteClick(event, this)">Demote</button>
-                            </form>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
+                                <button onclick="showRoleModal(<?php echo $t['id']; ?>, '<?php echo h($t['role']); ?>')" class="btn-outline btn-sm">
+                                    <i class="fas fa-user-tag"></i> Role
+                                </button>
+                                <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" class="btn-outline btn-sm">
+                                    <i class="fas fa-tags"></i> Category
+                                </button>
+                                <?php if ($is_suspended): ?>
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this teacher account?');">
+                                        <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
+                                        <input type="hidden" name="action_type" value="activate">
+                                        <button type="submit" name="toggle_account_status" class="btn-success btn-sm">
+                                            <i class="fas fa-check"></i> Activate
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Suspend this teacher account?');">
+                                        <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
+                                        <input type="hidden" name="action_type" value="suspend">
+                                        <button type="submit" name="toggle_account_status" class="btn-danger btn-sm">
+                                            <i class="fas fa-ban"></i> Suspend
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; ?>
@@ -804,13 +1280,31 @@ $all_users_stmt->close();
                     <tr>
                         <th>Student</th>
                         <th>Email</th>
+                        <th>Category</th>
                         <th>Joined</th>
-                        <th>Bio</th>
+                        <th>Wallet Balance</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while($s = $students->fetch_assoc()): ?>
+                    <?php 
+                    $students->data_seek(0);
+                    while($s = $students->fetch_assoc()): 
+                        // Get wallet balance
+                        $wallet_stmt = $conn->prepare("SELECT balance FROM student_wallet WHERE student_id = ?");
+                        $wallet_balance = 0;
+                        if ($wallet_stmt) {
+                            $wallet_stmt->bind_param("i", $s['id']);
+                            $wallet_stmt->execute();
+                            $wallet_result = $wallet_stmt->get_result();
+                            if ($wallet_row = $wallet_result->fetch_assoc()) {
+                                $wallet_balance = $wallet_row['balance'];
+                            }
+                            $wallet_stmt->close();
+                        }
+                        $is_suspended = ($s['application_status'] ?? 'approved') === 'rejected';
+                    ?>
                     <tr>
                         <td data-label="Student">
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -819,18 +1313,271 @@ $all_users_stmt->close();
                             </div>
                         </td>
                         <td data-label="Email"><?php echo h($s['email']); ?></td>
+                        <td data-label="Category">
+                            <?php if ($s['preferred_category']): ?>
+                                <span class="badge badge-info">
+                                    <?php echo ucfirst(str_replace('_', ' ', $s['preferred_category'])); ?>
+                                </span>
+                            <?php else: ?>
+                                <span style="color: #999;">Not set</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Joined"><?php echo date('M d, Y', strtotime($s['reg_date'])); ?></td>
-                        <td data-label="Bio"><?php echo h(substr($s['bio'] ?? 'No bio', 0, 40)); ?>...</td>
+                        <td data-label="Wallet"><?php echo formatCurrency($wallet_balance); ?></td>
+                        <td data-label="Status">
+                            <?php if ($is_suspended): ?>
+                                <span class="badge badge-danger">Suspended</span>
+                            <?php else: ?>
+                                <span class="badge badge-success">Active</span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Actions">
-                            <form action="admin-actions.php" method="POST" style="display: inline;">
-                                <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
-                                <button type="submit" name="action" value="make_teacher" class="btn-success btn-sm">Promote</button>
-                            </form>
+                            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                <a href="profile.php?id=<?php echo $s['id']; ?>" class="btn-outline btn-sm">View</a>
+                                <button onclick="showRoleModal(<?php echo $s['id']; ?>, '<?php echo h($s['role']); ?>')" class="btn-outline btn-sm">
+                                    <i class="fas fa-user-tag"></i> Role
+                                </button>
+                                <?php if ($is_suspended): ?>
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this student account?');">
+                                        <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
+                                        <input type="hidden" name="action_type" value="activate">
+                                        <button type="submit" name="toggle_account_status" class="btn-success btn-sm">
+                                            <i class="fas fa-check"></i> Activate
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Suspend this student account?');">
+                                        <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
+                                        <input type="hidden" name="action_type" value="suspend">
+                                        <button type="submit" name="toggle_account_status" class="btn-danger btn-sm">
+                                            <i class="fas fa-ban"></i> Suspend
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; ?>
                 </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Scheduling Tab -->
+        <div id="scheduling" class="tab-content">
+            <h1>Scheduling Oversight</h1>
+            
+            <?php
+            // Get all lessons with teacher and student info
+            $lessons_sql = "SELECT l.*, 
+                           t.name as teacher_name, t.email as teacher_email,
+                           s.name as student_name, s.email as student_email
+                           FROM lessons l
+                           JOIN users t ON l.teacher_id = t.id
+                           JOIN users s ON l.student_id = s.id
+                           ORDER BY l.lesson_date DESC, l.lesson_time DESC
+                           LIMIT 100";
+            $all_lessons = $conn->query($lessons_sql);
+            if (!$all_lessons) {
+                error_log("Error fetching lessons: " . $conn->error);
+                $all_lessons = new mysqli_result($conn);
+            }
+            
+            // Get conflicts (overlapping lessons for same teacher)
+            $conflicts_sql = "SELECT l1.id as lesson1_id, l2.id as lesson2_id,
+                             l1.teacher_id, l1.lesson_date, l1.lesson_time,
+                             l1.duration, t.name as teacher_name
+                             FROM lessons l1
+                             JOIN lessons l2 ON l1.teacher_id = l2.teacher_id 
+                             AND l1.id < l2.id
+                             JOIN users t ON l1.teacher_id = t.id
+                             WHERE l1.lesson_date = l2.lesson_date
+                             AND l1.status != 'cancelled'
+                             AND l2.status != 'cancelled'
+                             AND (
+                                 (l1.lesson_time <= l2.lesson_time AND ADDTIME(l1.lesson_time, SEC_TO_TIME(l1.duration * 60)) > l2.lesson_time)
+                                 OR (l2.lesson_time <= l1.lesson_time AND ADDTIME(l2.lesson_time, SEC_TO_TIME(l2.duration * 60)) > l1.lesson_time)
+                             )
+                             ORDER BY l1.lesson_date DESC, l1.lesson_time DESC";
+            $conflicts = $conn->query($conflicts_sql);
+            if (!$conflicts) {
+                error_log("Error fetching conflicts: " . $conn->error);
+                $conflicts = new mysqli_result($conn);
+            }
+            ?>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-calendar-plus"></i> Create Lesson Manually</h2>
+                <form method="POST" action="api/admin-create-lesson.php" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                    <div>
+                        <label>Teacher</label>
+                        <select name="teacher_id" class="form-control" required>
+                            <option value="">Select Teacher</option>
+                            <?php
+                            $teachers_for_schedule = $conn->query("SELECT id, name FROM users WHERE role='teacher' ORDER BY name");
+                            if ($teachers_for_schedule) {
+                                while ($t = $teachers_for_schedule->fetch_assoc()): ?>
+                                    <option value="<?php echo $t['id']; ?>"><?php echo h($t['name']); ?></option>
+                                <?php endwhile;
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Student</label>
+                        <select name="student_id" class="form-control" required>
+                            <option value="">Select Student</option>
+                            <?php
+                            $students_for_schedule = $conn->query("SELECT id, name FROM users WHERE role='student' ORDER BY name");
+                            if ($students_for_schedule) {
+                                while ($s = $students_for_schedule->fetch_assoc()): ?>
+                                    <option value="<?php echo $s['id']; ?>"><?php echo h($s['name']); ?></option>
+                                <?php endwhile;
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Date</label>
+                        <input type="date" name="lesson_date" class="form-control" required>
+                    </div>
+                    <div>
+                        <label>Time</label>
+                        <input type="time" name="lesson_time" class="form-control" required>
+                    </div>
+                    <div>
+                        <label>Duration (minutes)</label>
+                        <input type="number" name="duration" class="form-control" value="60" min="15" step="15" required>
+                    </div>
+                    <div>
+                        <label>Category</label>
+                        <select name="category" class="form-control" required>
+                            <option value="young_learners">Young Learners</option>
+                            <option value="adults">Adults</option>
+                            <option value="coding">English for Coding/Tech</option>
+                        </select>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label>Notes</label>
+                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-plus"></i> Create Lesson
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <?php if ($conflicts && $conflicts->num_rows > 0): ?>
+            <div class="card" style="margin-bottom: 30px; border-left: 4px solid #dc3545;">
+                <h2><i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> Scheduling Conflicts</h2>
+                <p style="color: #666; margin-bottom: 15px;">The following lessons have overlapping times for the same teacher:</p>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Teacher</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Lesson 1 ID</th>
+                                <th>Lesson 2 ID</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($conflict = $conflicts->fetch_assoc()): ?>
+                            <tr>
+                                <td><?php echo h($conflict['teacher_name']); ?></td>
+                                <td><?php echo date('M d, Y', strtotime($conflict['lesson_date'])); ?></td>
+                                <td><?php echo date('H:i', strtotime($conflict['lesson_time'])); ?></td>
+                                <td><a href="admin-dashboard.php#scheduling" onclick="highlightLesson(<?php echo $conflict['lesson1_id']; ?>)">#<?php echo $conflict['lesson1_id']; ?></a></td>
+                                <td><a href="admin-dashboard.php#scheduling" onclick="highlightLesson(<?php echo $conflict['lesson2_id']; ?>)">#<?php echo $conflict['lesson2_id']; ?></a></td>
+                                <td>
+                                    <a href="admin-dashboard.php#scheduling" class="btn-outline btn-sm">View</a>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <div class="card">
+                <h2><i class="fas fa-calendar-alt"></i> All Lessons</h2>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Teacher</th>
+                                <th>Student</th>
+                                <th>Duration</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($all_lessons && $all_lessons->num_rows > 0): ?>
+                                <?php while ($lesson = $all_lessons->fetch_assoc()): ?>
+                                <tr id="lesson-<?php echo $lesson['id']; ?>" style="transition: background 0.3s;">
+                                    <td><?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?></td>
+                                    <td><?php echo date('H:i', strtotime($lesson['lesson_time'])); ?></td>
+                                    <td>
+                                        <div><?php echo h($lesson['teacher_name']); ?></div>
+                                        <small style="color: #666;"><?php echo h($lesson['teacher_email']); ?></small>
+                                    </td>
+                                    <td>
+                                        <div><?php echo h($lesson['student_name']); ?></div>
+                                        <small style="color: #666;"><?php echo h($lesson['student_email']); ?></small>
+                                    </td>
+                                    <td><?php echo $lesson['duration']; ?> min</td>
+                                    <td>
+                                        <span class="badge badge-info">
+                                            <?php echo ucfirst(str_replace('_', ' ', $lesson['category'] ?? 'N/A')); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $status_class = 'badge-info';
+                                        if ($lesson['status'] === 'completed') $status_class = 'badge-success';
+                                        elseif ($lesson['status'] === 'cancelled') $status_class = 'badge-danger';
+                                        elseif ($lesson['status'] === 'pending') $status_class = 'badge-warning';
+                                        ?>
+                                        <span class="badge <?php echo $status_class; ?>">
+                                            <?php echo ucfirst($lesson['status'] ?? 'pending'); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div style="display: flex; gap: 5px;">
+                                            <a href="classroom.php?lesson_id=<?php echo $lesson['id']; ?>" class="btn-outline btn-sm" target="_blank">
+                                                <i class="fas fa-door-open"></i> View
+                                            </a>
+                                            <?php if ($lesson['status'] !== 'cancelled' && $lesson['status'] !== 'completed'): ?>
+                                            <form method="POST" action="api/admin-cancel-lesson.php" style="display: inline;" onsubmit="return confirm('Cancel this lesson?');">
+                                                <input type="hidden" name="lesson_id" value="<?php echo $lesson['id']; ?>">
+                                                <button type="submit" class="btn-danger btn-sm">
+                                                    <i class="fas fa-times"></i> Cancel
+                                                </button>
+                                            </form>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 20px; color: #666;">
+                                        No lessons found.
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -1140,6 +1887,263 @@ $all_users_stmt->close();
             </script>
         </div>
 
+        <!-- Wallet Reconciliation Tab -->
+        <div id="wallet-reconciliation" class="tab-content">
+            <h1><i class="fas fa-wallet"></i> Wallet Reconciliation</h1>
+            
+            <?php
+            // Get wallet statistics
+            $wallet_stats_sql = "SELECT 
+                COUNT(DISTINCT student_id) as total_students,
+                SUM(balance) as total_balance,
+                SUM(trial_credits) as total_trial_credits
+                FROM student_wallet";
+            $wallet_stats_result = $conn->query($wallet_stats_sql);
+            $wallet_stats = $wallet_stats_result ? $wallet_stats_result->fetch_assoc() : ['total_students' => 0, 'total_balance' => 0, 'total_trial_credits' => 0];
+            
+            // Get filter parameters
+            $filter_student = $_GET['filter_student'] ?? '';
+            $filter_type = $_GET['filter_type'] ?? '';
+            $filter_status = $_GET['filter_status'] ?? '';
+            $date_from = $_GET['date_from'] ?? date('Y-m-01');
+            $date_to = $_GET['date_to'] ?? date('Y-m-d');
+            
+            // Build transaction query
+            $transactions_sql = "SELECT wt.*, u.name as student_name, u.email as student_email 
+                               FROM wallet_transactions wt 
+                               JOIN users u ON wt.student_id = u.id 
+                               WHERE DATE(wt.created_at) BETWEEN ? AND ?";
+            $params = [$date_from, $date_to];
+            $types = "ss";
+            
+            if ($filter_student) {
+                $transactions_sql .= " AND wt.student_id = ?";
+                $params[] = $filter_student;
+                $types .= "i";
+            }
+            if ($filter_type) {
+                $transactions_sql .= " AND wt.type = ?";
+                $params[] = $filter_type;
+                $types .= "s";
+            }
+            if ($filter_status) {
+                $transactions_sql .= " AND wt.status = ?";
+                $params[] = $filter_status;
+                $types .= "s";
+            }
+            
+            $transactions_sql .= " ORDER BY wt.created_at DESC LIMIT 500";
+            
+            $transactions_stmt = $conn->prepare($transactions_sql);
+            if ($transactions_stmt) {
+                $transactions_stmt->bind_param($types, ...$params);
+                $transactions_stmt->execute();
+                $transactions_result = $transactions_stmt->get_result();
+            } else {
+                $transactions_result = null;
+            }
+            
+            // Get all students for filter dropdown
+            $students_list = $conn->query("SELECT id, name, email FROM users WHERE role = 'student' ORDER BY name");
+            ?>
+            
+            <div class="stats-grid" style="margin-bottom: 30px;">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+                    <div class="stat-info">
+                        <h3><?php echo $wallet_stats['total_students']; ?></h3>
+                        <p>Students with Wallets</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon success"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="stat-info">
+                        <h3><?php echo formatCurrency($wallet_stats['total_balance'] ?? 0); ?></h3>
+                        <p>Total Wallet Balance</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon warning"><i class="fas fa-gift"></i></div>
+                    <div class="stat-info">
+                        <h3><?php echo $wallet_stats['total_trial_credits'] ?? 0; ?></h3>
+                        <p>Total Trial Credits</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-filter"></i> Filters & Export</h2>
+                <form method="GET" action="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
+                    <input type="hidden" name="tab" value="wallet-reconciliation">
+                    <div>
+                        <label>Student</label>
+                        <select name="filter_student" class="form-control">
+                            <option value="">All Students</option>
+                            <?php if ($students_list): 
+                                $students_list->data_seek(0);
+                                while ($student = $students_list->fetch_assoc()): ?>
+                                <option value="<?php echo $student['id']; ?>" <?php echo $filter_student == $student['id'] ? 'selected' : ''; ?>>
+                                    <?php echo h($student['name']); ?>
+                                </option>
+                            <?php endwhile; endif; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Type</label>
+                        <select name="filter_type" class="form-control">
+                            <option value="">All Types</option>
+                            <option value="purchase" <?php echo $filter_type == 'purchase' ? 'selected' : ''; ?>>Purchase</option>
+                            <option value="deduction" <?php echo $filter_type == 'deduction' ? 'selected' : ''; ?>>Deduction</option>
+                            <option value="refund" <?php echo $filter_type == 'refund' ? 'selected' : ''; ?>>Refund</option>
+                            <option value="trial" <?php echo $filter_type == 'trial' ? 'selected' : ''; ?>>Trial</option>
+                            <option value="adjustment" <?php echo $filter_type == 'adjustment' ? 'selected' : ''; ?>>Adjustment</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Status</label>
+                        <select name="filter_status" class="form-control">
+                            <option value="">All Statuses</option>
+                            <option value="pending" <?php echo $filter_status == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                            <option value="confirmed" <?php echo $filter_status == 'confirmed' ? 'selected' : ''; ?>>Confirmed</option>
+                            <option value="failed" <?php echo $filter_status == 'failed' ? 'selected' : ''; ?>>Failed</option>
+                            <option value="cancelled" <?php echo $filter_status == 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Date From</label>
+                        <input type="date" name="date_from" value="<?php echo h($date_from); ?>" class="form-control">
+                    </div>
+                    <div>
+                        <label>Date To</label>
+                        <input type="date" name="date_to" value="<?php echo h($date_to); ?>" class="form-control">
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-search"></i> Filter
+                        </button>
+                        <a href="?export_wallet_csv=1&date_from=<?php echo urlencode($date_from); ?>&date_to=<?php echo urlencode($date_to); ?>&filter_student=<?php echo urlencode($filter_student); ?>&filter_type=<?php echo urlencode($filter_type); ?>&filter_status=<?php echo urlencode($filter_status); ?>" class="btn-outline">
+                            <i class="fas fa-download"></i> Export CSV
+                        </a>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2><i class="fas fa-list"></i> Transaction Ledger</h2>
+                <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Student</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($txn = $transactions_result->fetch_assoc()): ?>
+                            <tr>
+                                <td><?php echo $txn['id']; ?></td>
+                                <td>
+                                    <div><?php echo h($txn['student_name']); ?></div>
+                                    <small style="color: #666;"><?php echo h($txn['student_email']); ?></small>
+                                </td>
+                                <td>
+                                    <span class="badge badge-<?php 
+                                        echo $txn['type'] == 'purchase' || $txn['type'] == 'trial' ? 'success' : 
+                                            ($txn['type'] == 'deduction' ? 'warning' : 'info'); 
+                                    ?>">
+                                        <?php echo ucfirst($txn['type']); ?>
+                                    </span>
+                                </td>
+                                <td style="font-weight: 600; color: <?php echo $txn['type'] == 'purchase' || $txn['type'] == 'trial' ? '#28a745' : '#dc3545'; ?>;">
+                                    <?php echo ($txn['type'] == 'purchase' || $txn['type'] == 'trial' ? '+' : '-'); ?>
+                                    <?php echo formatCurrency(abs($txn['amount'])); ?>
+                                </td>
+                                <td>
+                                    <span class="badge badge-<?php 
+                                        echo $txn['status'] == 'confirmed' ? 'success' : 
+                                            ($txn['status'] == 'pending' ? 'warning' : 'danger'); 
+                                    ?>">
+                                        <?php echo ucfirst($txn['status'] ?? 'confirmed'); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <small><?php echo h($txn['reference_id'] ?? '-'); ?></small>
+                                    <?php if ($txn['stripe_payment_id']): ?>
+                                        <br><small style="color: #666;">Stripe: <?php echo substr($txn['stripe_payment_id'], 0, 20); ?>...</small>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo h($txn['description'] ?? '-'); ?></td>
+                                <td><?php echo date('M d, Y H:i', strtotime($txn['created_at'])); ?></td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <p style="text-align: center; color: #666; padding: 40px;">
+                    <i class="fas fa-inbox" style="font-size: 3rem; color: #ddd; margin-bottom: 15px;"></i><br>
+                    No transactions found for the selected filters.
+                </p>
+                <?php endif; ?>
+                <?php if ($transactions_stmt) $transactions_stmt->close(); ?>
+            </div>
+            
+            <div class="card" style="margin-top: 30px;">
+                <h2><i class="fas fa-edit"></i> Manual Wallet Adjustment</h2>
+                <form method="POST" action="" style="max-width: 600px;">
+                    <input type="hidden" name="adjust_wallet" value="1">
+                    <div style="margin-bottom: 15px;">
+                        <label>Student</label>
+                        <select name="student_id" class="form-control" required>
+                            <option value="">Select Student</option>
+                            <?php if ($students_list): 
+                                $students_list->data_seek(0);
+                                while ($student = $students_list->fetch_assoc()): ?>
+                                <option value="<?php echo $student['id']; ?>">
+                                    <?php echo h($student['name']); ?> (<?php echo h($student['email']); ?>)
+                                </option>
+                            <?php endwhile; endif; ?>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label>Adjustment Type</label>
+                        <select name="adjustment_type" class="form-control" required>
+                            <option value="add">Add Funds</option>
+                            <option value="deduct">Deduct Funds</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label>Amount</label>
+                        <input type="number" name="amount" step="0.01" min="0.01" class="form-control" required>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label>Reason</label>
+                        <textarea name="reason" class="form-control" rows="3" placeholder="Reason for adjustment..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-check"></i> Apply Adjustment
+                    </button>
+                </form>
+                <?php if (isset($wallet_msg)): ?>
+                    <div class="alert-success" style="margin-top: 15px;">
+                        <?php echo h($wallet_msg); ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (isset($wallet_error)): ?>
+                    <div class="alert-error" style="margin-top: 15px;">
+                        <?php echo h($wallet_error); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <!-- Settings Tab (Combined My Profile, Security, Classroom) -->
         <div id="settings" class="tab-content">
             <h1>Settings</h1>
@@ -1152,6 +2156,9 @@ $all_users_stmt->close();
                 </button>
                 <button onclick="switchAdminSettingsSubTab('classroom')" class="btn-outline" id="adm-set-classroom-btn">
                     <i class="fas fa-book-open"></i> Classroom
+                </button>
+                <button onclick="switchAdminSettingsSubTab('global')" class="btn-outline" id="adm-set-global-btn">
+                    <i class="fas fa-cog"></i> Global Settings
                 </button>
             </div>
             
@@ -1487,6 +2494,122 @@ function switchReportsSubTab(subTab) {
     if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
 }
 
+// Role Change Modal
+function showRoleModal(userId, currentRole) {
+    let modal = document.getElementById('roleModal');
+    if (!modal) {
+        const modalHtml = `
+            <div id="roleModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+                <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 10px;">
+                    <span class="close" onclick="closeRoleModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+                    <h2>Change User Role</h2>
+                    <form method="POST" id="roleForm">
+                        <input type="hidden" name="change_user_role" value="1">
+                        <input type="hidden" name="user_id" id="roleUserId">
+                        <div style="margin-bottom: 20px;">
+                            <label>New Role</label>
+                            <select name="new_role" id="roleSelect" class="form-control" required>
+                                <option value="student">Student</option>
+                                <option value="teacher">Teacher</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" onclick="closeRoleModal()" class="btn-outline">Cancel</button>
+                            <button type="submit" class="btn-primary">Change Role</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('roleModal');
+    }
+    document.getElementById('roleUserId').value = userId;
+    document.getElementById('roleSelect').value = currentRole;
+    modal.style.display = 'block';
+}
+
+function closeRoleModal() {
+    const modal = document.getElementById('roleModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Category Assignment Modal
+function showCategoryModal(teacherId, currentCategories) {
+    let modal = document.getElementById('categoryModal');
+    if (!modal) {
+        const modalHtml = `
+            <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+                <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 10px;">
+                    <span class="close" onclick="closeCategoryModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+                    <h2>Assign Teacher Category</h2>
+                    <form method="POST" id="categoryForm">
+                        <input type="hidden" name="assign_category" value="1">
+                        <input type="hidden" name="teacher_id" id="categoryTeacherId">
+                        <div style="margin-bottom: 20px;">
+                            <label>Category</label>
+                            <select name="category" id="categorySelect" class="form-control" required>
+                                <option value="">Select Category</option>
+                                <option value="young_learners">Young Learners</option>
+                                <option value="adults">Adults</option>
+                                <option value="coding">English for Coding/Tech</option>
+                            </select>
+                            <small style="color: #666; display: block; margin-top: 5px;">
+                                Note: Assigning a new category will replace existing categories.
+                            </small>
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" onclick="closeCategoryModal()" class="btn-outline">Cancel</button>
+                            <button type="submit" class="btn-primary">Assign Category</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('categoryModal');
+    }
+    document.getElementById('categoryTeacherId').value = teacherId;
+    const cats = currentCategories ? currentCategories.split(',') : [];
+    if (cats.length > 0) {
+        document.getElementById('categorySelect').value = cats[0];
+    } else {
+        document.getElementById('categorySelect').value = '';
+    }
+    modal.style.display = 'block';
+}
+
+function closeCategoryModal() {
+    const modal = document.getElementById('categoryModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const roleModal = document.getElementById('roleModal');
+    const categoryModal = document.getElementById('categoryModal');
+    if (event.target == roleModal) {
+        closeRoleModal();
+    }
+    if (event.target == categoryModal) {
+        closeCategoryModal();
+    }
+}
+
+function highlightLesson(lessonId) {
+    const row = document.getElementById('lesson-' + lessonId);
+    if (row) {
+        row.style.background = '#fff3cd';
+        setTimeout(() => {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                row.style.background = '';
+            }, 3000);
+        }, 100);
+    }
+}
+
 function switchUsersSubTab(subTab) {
     document.querySelectorAll('.users-subtab').forEach(el => el.style.display = 'none');
     document.querySelectorAll('#usr-teachers-btn, #usr-students-btn').forEach(btn => {
@@ -1501,7 +2624,7 @@ function switchUsersSubTab(subTab) {
 
 function switchAdminSettingsSubTab(subTab) {
     document.querySelectorAll('.admin-settings-subtab').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('#adm-set-profile-btn, #adm-set-security-btn, #adm-set-classroom-btn').forEach(btn => {
+    document.querySelectorAll('#adm-set-profile-btn, #adm-set-security-btn, #adm-set-classroom-btn, #adm-set-global-btn').forEach(btn => {
         if (btn) btn.style.borderBottom = 'none';
     });
     

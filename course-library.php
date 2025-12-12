@@ -20,7 +20,13 @@ $categoryModel = new CourseCategory($conn);
 $enrollmentModel = new CourseEnrollment($conn);
 
 // Get all categories
-$categories = $categoryModel->getAllOrdered();
+$categories_result = $categoryModel->getAllOrdered();
+$categories = [];
+if ($categories_result) {
+    while ($cat = $categories_result->fetch_assoc()) {
+        $categories[] = $cat;
+    }
+}
 
 // Get courses based on filters
 if ($category_id || $difficulty || $search) {
@@ -266,11 +272,11 @@ if ($user_id && $user_role !== 'guest') {
                         <label><i class="fas fa-folder"></i> Category</label>
                         <select name="category">
                             <option value="">All Categories</option>
-                            <?php while ($cat = $categories->fetch_assoc()): ?>
-                                <option value="<?php echo $cat['id']; ?>" <?php echo $category_id == $cat['id'] ? 'selected' : ''; ?>>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?php echo (int)$cat['id']; ?>" <?php echo $category_id == $cat['id'] ? 'selected' : ''; ?>>
                                     <?php echo h($cat['name']); ?>
                                 </option>
-                            <?php endwhile; ?>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -379,13 +385,3 @@ if ($user_id && $user_role !== 'guest') {
     <script src="<?php echo getAssetPath('js/menu.js'); ?>" defer></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-

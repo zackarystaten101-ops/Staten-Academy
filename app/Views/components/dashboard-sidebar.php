@@ -487,8 +487,14 @@ if ($user_role === 'teacher' && isset($conn) && isset($user_id) && $user_id > 0)
                 <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('slot-requests'); } return false;" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                     <i class="fas fa-calendar-plus"></i> <span>Slot Requests</span>
                 </a>
+                <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('scheduling'); } return false;" class="<?php echo $active_tab === 'scheduling' ? 'active' : ''; ?>">
+                    <i class="fas fa-calendar-check"></i> <span>Scheduling</span>
+                </a>
                 <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('reports'); } return false;" class="<?php echo in_array($active_tab, ['reports', 'analytics']) ? 'active' : ''; ?>">
                     <i class="fas fa-file-alt"></i> <span>Reports & Analytics</span>
+                </a>
+                <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('wallet-reconciliation'); } return false;" class="<?php echo $active_tab === 'wallet-reconciliation' ? 'active' : ''; ?>">
+                    <i class="fas fa-wallet"></i> <span>Wallet Reconciliation</span>
                 </a>
                 <?php else: ?>
                 <a href="admin-dashboard.php#pending-requests" class="<?php echo $active_tab === 'pending-requests' ? 'active' : ''; ?>">
@@ -505,8 +511,14 @@ if ($user_role === 'teacher' && isset($conn) && isset($user_id) && $user_id > 0)
                 <a href="admin-dashboard.php#slot-requests" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                     <i class="fas fa-calendar-plus"></i> <span>Slot Requests</span>
                 </a>
+                <a href="admin-dashboard.php#scheduling" class="<?php echo $active_tab === 'scheduling' ? 'active' : ''; ?>">
+                    <i class="fas fa-calendar-check"></i> <span>Scheduling</span>
+                </a>
                 <a href="admin-dashboard.php#reports" class="<?php echo in_array($active_tab, ['reports', 'analytics']) ? 'active' : ''; ?>">
                     <i class="fas fa-file-alt"></i> <span>Reports & Analytics</span>
+                </a>
+                <a href="admin-dashboard.php#wallet-reconciliation" class="<?php echo $active_tab === 'wallet-reconciliation' ? 'active' : ''; ?>">
+                    <i class="fas fa-wallet"></i> <span>Wallet Reconciliation</span>
                 </a>
                 <?php endif; ?>
             </div>

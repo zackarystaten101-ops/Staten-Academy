@@ -570,6 +570,8 @@ $active_tab = 'overview';
     <!-- MODERN SHADOWS - To disable, comment out the line below -->
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.js"></script>
     <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
     <script>
         function createGroupClass(event) {
@@ -696,6 +698,25 @@ $active_tab = 'overview';
                     <i class="fas fa-check-circle"></i> <?php echo $msg; ?>
                 </div>
             <?php endif; ?>
+            
+            <!-- Test Classroom Button -->
+            <div class="card" style="background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%); border: 2px solid #0b6cf5; margin-bottom: 30px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <h3 style="color: #004080; margin: 0 0 8px 0; font-size: 1.2rem;">
+                            <i class="fas fa-video"></i> Test Classroom
+                        </h3>
+                        <p style="margin: 0; color: #666; font-size: 0.95rem;">
+                            Test your microphone, camera, and classroom features before your lessons. This is a sandbox environment for practice.
+                        </p>
+                    </div>
+                    <a href="classroom.php?testMode=true&sessionId=test_teacher_<?php echo $teacher_id; ?>_<?php echo time(); ?>" 
+                       class="btn-primary" 
+                       style="white-space: nowrap; padding: 12px 24px; font-size: 1rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-play-circle"></i> Open Test Classroom
+                    </a>
+                </div>
+            </div>
             
             <?php
             // Check teacher onboarding status
@@ -1132,6 +1153,61 @@ $active_tab = 'overview';
         <div id="students" class="tab-content">
             <h1>My Students</h1>
             
+            <?php
+            // Get filter parameters
+            $student_filter_category = $_GET['student_filter_category'] ?? '';
+            $student_search = $_GET['student_search'] ?? '';
+            $student_sort = $_GET['student_sort'] ?? 'recent';
+            
+            // Filter and sort students
+            $filtered_students = $students;
+            if ($student_filter_category) {
+                $filtered_students = array_filter($filtered_students, function($s) use ($student_filter_category) {
+                    return ($s['preferred_category'] ?? '') === $student_filter_category;
+                });
+            }
+            if ($student_search) {
+                $search_lower = strtolower($student_search);
+                $filtered_students = array_filter($filtered_students, function($s) use ($search_lower) {
+                    return strpos(strtolower($s['name']), $search_lower) !== false || 
+                           strpos(strtolower($s['email']), $search_lower) !== false;
+                });
+            }
+            
+            // Sort students
+            if ($student_sort === 'name') {
+                usort($filtered_students, function($a, $b) {
+                    return strcmp($a['name'], $b['name']);
+                });
+            } elseif ($student_sort === 'lessons') {
+                usort($filtered_students, function($a, $b) {
+                    return ($b['lesson_count'] ?? 0) - ($a['lesson_count'] ?? 0);
+                });
+            } else {
+                // Recent (default) - already sorted by last_lesson_date DESC
+            }
+            
+            // Get attendance stats for each student
+            foreach ($filtered_students as &$student) {
+                $attendance_stmt = $conn->prepare("
+                    SELECT 
+                        COUNT(*) as total_lessons,
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
+                        SUM(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) as no_show
+                    FROM lessons 
+                    WHERE student_id = ? AND teacher_id = ?
+                ");
+                $attendance_stmt->bind_param("ii", $student['id'], $teacher_id);
+                $attendance_stmt->execute();
+                $attendance_result = $attendance_stmt->get_result();
+                $attendance = $attendance_result->fetch_assoc();
+                $student['attendance'] = $attendance;
+                $attendance_stmt->close();
+            }
+            unset($student);
+            ?>
+            
             <?php if (!empty($teacher_categories)): ?>
                 <div style="margin-bottom: 20px; padding: 15px; background: #f0f7ff; border-radius: 8px; border-left: 4px solid #0b6cf5;">
                     <strong>Teaching Categories:</strong> 
@@ -1144,8 +1220,52 @@ $active_tab = 'overview';
                 </div>
             <?php endif; ?>
             
-            <?php if (count($students) > 0): ?>
-                <?php foreach ($students as $student): ?>
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-filter"></i> Filters & Search</h2>
+                <form method="GET" action="" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; align-items: end;">
+                    <input type="hidden" name="tab" value="students">
+                    <div>
+                        <label>Search</label>
+                        <input type="text" name="student_search" value="<?php echo h($student_search); ?>" 
+                               placeholder="Search by name or email..." class="form-control">
+                    </div>
+                    <div>
+                        <label>Category</label>
+                        <select name="student_filter_category" class="form-control">
+                            <option value="">All Categories</option>
+                            <option value="young_learners" <?php echo $student_filter_category === 'young_learners' ? 'selected' : ''; ?>>Young Learners</option>
+                            <option value="adults" <?php echo $student_filter_category === 'adults' ? 'selected' : ''; ?>>Adults</option>
+                            <option value="coding" <?php echo $student_filter_category === 'coding' ? 'selected' : ''; ?>>Coding/Tech</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Sort By</label>
+                        <select name="student_sort" class="form-control">
+                            <option value="recent" <?php echo $student_sort === 'recent' ? 'selected' : ''; ?>>Most Recent</option>
+                            <option value="name" <?php echo $student_sort === 'name' ? 'selected' : ''; ?>>Name (A-Z)</option>
+                            <option value="lessons" <?php echo $student_sort === 'lessons' ? 'selected' : ''; ?>>Most Lessons</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-search"></i> Filter
+                        </button>
+                        <?php if ($student_search || $student_filter_category): ?>
+                        <a href="teacher-dashboard.php#students" class="btn-outline" style="margin-left: 10px;">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </div>
+            
+            <?php if (count($filtered_students) > 0): ?>
+                <?php foreach ($filtered_students as $student): 
+                    $attendance = $student['attendance'] ?? [];
+                    $total_lessons = $attendance['total_lessons'] ?? 0;
+                    $completed = $attendance['completed'] ?? 0;
+                    $attendance_rate = $total_lessons > 0 ? round(($completed / $total_lessons) * 100) : 0;
+                ?>
                 <div class="card" style="margin-bottom: 15px;">
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
                         <img src="<?php echo h($student['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" alt="" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
@@ -1164,6 +1284,27 @@ $active_tab = 'overview';
                                     • Last lesson <?php echo date('M d, Y', strtotime($student['last_lesson_date'])); ?>
                                 <?php endif; ?>
                             </div>
+                            
+                            <?php if ($total_lessons > 0): ?>
+                            <div style="display: flex; gap: 20px; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                                <div>
+                                    <strong style="color: #28a745;"><?php echo $attendance_rate; ?>%</strong>
+                                    <small style="color: #666; display: block;">Attendance Rate</small>
+                                </div>
+                                <div>
+                                    <strong><?php echo $completed; ?></strong>
+                                    <small style="color: #666; display: block;">Completed</small>
+                                </div>
+                                <div>
+                                    <strong style="color: #dc3545;"><?php echo $attendance['cancelled'] ?? 0; ?></strong>
+                                    <small style="color: #666; display: block;">Cancelled</small>
+                                </div>
+                                <div>
+                                    <strong style="color: #ffc107;"><?php echo $attendance['no_show'] ?? 0; ?></strong>
+                                    <small style="color: #666; display: block;">No Show</small>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                             <?php if ($student['last_note']): ?>
                             <div style="background: var(--light-gray); padding: 10px; border-radius: 5px; font-size: 0.9rem; margin-bottom: 10px;">
                                 <strong>Last Note:</strong> <?php echo h(substr($student['last_note'], 0, 100)); ?>...
@@ -1406,7 +1547,69 @@ $active_tab = 'overview';
                 $availability_slots[] = $row;
             }
             $stmt->close();
+            
+            // Prepare calendar events JSON
+            $calendar_events = [];
+            foreach ($all_lessons_for_calendar as $lesson) {
+                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['lesson_time'];
+                $end_time = date('H:i:s', strtotime($lesson['lesson_time'] . ' + ' . ($lesson['duration'] ?? 60) . ' minutes'));
+                $end_datetime = $lesson['lesson_date'] . 'T' . $end_time;
+                
+                // Color coding by status and category
+                $color = '#0b6cf5'; // Default blue
+                if ($lesson['status'] === 'completed') $color = '#28a745';
+                elseif ($lesson['status'] === 'cancelled') $color = '#dc3545';
+                elseif ($lesson['is_trial']) $color = '#ffc107';
+                elseif ($lesson['category'] === 'young_learners') $color = '#17a2b8';
+                elseif ($lesson['category'] === 'coding') $color = '#6f42c1';
+                
+                $calendar_events[] = [
+                    'id' => $lesson['id'],
+                    'title' => $lesson['student_name'] . ($lesson['is_trial'] ? ' (Trial)' : ''),
+                    'start' => $start_datetime,
+                    'end' => $end_datetime,
+                    'color' => $color,
+                    'extendedProps' => [
+                        'student_name' => $lesson['student_name'],
+                        'category' => $lesson['category'],
+                        'status' => $lesson['status'],
+                        'is_trial' => $lesson['is_trial'] ?? 0,
+                        'duration' => $lesson['duration'] ?? 60
+                    ]
+                ];
+            }
             ?>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-calendar-check"></i> Calendar View</h2>
+                <div id="teacher-calendar" style="margin-bottom: 20px;"></div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #0b6cf5; border-radius: 4px;"></div>
+                        <span>Scheduled</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #ffc107; border-radius: 4px;"></div>
+                        <span>Trial Lesson</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #28a745; border-radius: 4px;"></div>
+                        <span>Completed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #dc3545; border-radius: 4px;"></div>
+                        <span>Cancelled</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #17a2b8; border-radius: 4px;"></div>
+                        <span>Young Learners</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #6f42c1; border-radius: 4px;"></div>
+                        <span>Coding/Tech</span>
+                    </div>
+                </div>
+            </div>
             
             <div class="card" style="margin-bottom: 30px;">
                 <h2><i class="fas fa-plus-circle"></i> Add Availability Slot</h2>
@@ -2171,6 +2374,37 @@ function toggleMobileSidebar() {
     document.querySelector('.sidebar').classList.toggle('active');
     document.querySelector('.sidebar-overlay').classList.toggle('active');
 }
+
+// Initialize FullCalendar for teacher dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('teacher-calendar');
+    if (calendarEl) {
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: <?php echo json_encode($calendar_events); ?>,
+            eventClick: function(info) {
+                const props = info.event.extendedProps;
+                const lessonId = info.event.id;
+                window.location.href = 'classroom.php?lesson_id=' + lessonId;
+            },
+            eventMouseEnter: function(info) {
+                info.el.style.cursor = 'pointer';
+            },
+            height: 'auto',
+            eventTimeFormat: {
+                hour: 'numeric',
+                minute: '2-digit',
+                meridiem: 'short'
+            }
+        });
+        calendar.render();
+    }
+});
 
 // Shared Materials Functions
 function toggleMaterialInputs() {

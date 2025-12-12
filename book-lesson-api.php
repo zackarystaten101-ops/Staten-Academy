@@ -99,25 +99,59 @@ if (!$teacherService->checkSlotAvailability($teacher_id, $lesson_date, $start_ti
     exit();
 }
 
-// Check for double-booking (conflicting lessons)
-$conflict_check = $conn->prepare("
-    SELECT id FROM lessons 
-    WHERE teacher_id = ? 
-    AND lesson_date = ? 
-    AND start_time = ? 
-    AND status != 'cancelled'
-    LIMIT 1
-");
-$conflict_check->bind_param("iss", $teacher_id, $lesson_date, $start_time);
-$conflict_check->execute();
-$conflict_result = $conflict_check->get_result();
-if ($conflict_result->num_rows > 0) {
+// Check for double-booking (conflicting lessons) - use row-level locking
+$conn->begin_transaction();
+try {
+    $conflict_check = $conn->prepare("
+        SELECT id FROM lessons 
+        WHERE teacher_id = ? 
+        AND lesson_date = ? 
+        AND start_time = ? 
+        AND status != 'cancelled'
+        FOR UPDATE
+        LIMIT 1
+    ");
+    $conflict_check->bind_param("iss", $teacher_id, $lesson_date, $start_time);
+    $conflict_check->execute();
+    $conflict_result = $conflict_check->get_result();
+    if ($conflict_result->num_rows > 0) {
+        $conflict_check->close();
+        $conn->rollback();
+        http_response_code(409);
+        echo json_encode(['error' => 'This time slot has already been booked by another student.']);
+        exit();
+    }
     $conflict_check->close();
-    http_response_code(409);
-    echo json_encode(['error' => 'This time slot has already been booked by another student.']);
+    
+    // Also check student's existing bookings for the same time
+    $student_conflict_check = $conn->prepare("
+        SELECT id FROM lessons 
+        WHERE student_id = ? 
+        AND lesson_date = ? 
+        AND start_time = ? 
+        AND status != 'cancelled'
+        FOR UPDATE
+        LIMIT 1
+    ");
+    $student_conflict_check->bind_param("iss", $student_id, $lesson_date, $start_time);
+    $student_conflict_check->execute();
+    $student_conflict_result = $student_conflict_check->get_result();
+    if ($student_conflict_result->num_rows > 0) {
+        $student_conflict_check->close();
+        $conn->rollback();
+        http_response_code(409);
+        echo json_encode(['error' => 'You already have a lesson booked at this time.']);
+        exit();
+    }
+    $student_conflict_check->close();
+    
+    $conn->commit();
+} catch (Exception $e) {
+    $conn->rollback();
+    http_response_code(500);
+    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
     exit();
 }
-$conflict_check->close();
 
 // Check if this is a trial lesson
 $is_trial = false;
@@ -171,7 +205,7 @@ $stmt->close();
 // Get student's category for lesson record
 $student_category = ($student && isset($student['preferred_category'])) ? $student['preferred_category'] : null;
 
-// Start transaction for booking
+// Start transaction for booking (new transaction after conflict checks)
 $conn->begin_transaction();
 
 try {

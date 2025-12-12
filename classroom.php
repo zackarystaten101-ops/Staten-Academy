@@ -101,8 +101,31 @@ if ($user_role === 'student' && $lessonId && $lesson_data) {
 }
 
 // Teachers can always join (for practice/testing)
+// Also allow test mode sessions
+$testMode = isset($_GET['testMode']) && $_GET['testMode'] === 'true';
+$sessionId = $_GET['sessionId'] ?? '';
+
 if ($user_role === 'teacher') {
     $canJoinClassroom = true;
+    
+    // For test mode, create or verify test session
+    if ($testMode && $sessionId) {
+        // Verify test session exists and belongs to this teacher
+        $stmt = $conn->prepare("SELECT id, status FROM video_sessions WHERE session_id = ? AND teacher_id = ? AND is_test_session = TRUE");
+        $stmt->bind_param("si", $sessionId, $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $test_session = $result->fetch_assoc();
+        $stmt->close();
+        
+        if (!$test_session) {
+            // Create test session if it doesn't exist
+            $stmt = $conn->prepare("INSERT INTO video_sessions (session_id, lesson_id, teacher_id, student_id, status, is_test_session) VALUES (?, NULL, ?, ?, 'active', TRUE)");
+            $stmt->bind_param("sii", $sessionId, $user_id, $user_id);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
 }
 
 // Set page title for header
@@ -240,6 +263,7 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
             data-user-name="<?php echo htmlspecialchars($user['name'] ?? 'User'); ?>"
             data-session-id="<?php echo htmlspecialchars($_GET['sessionId'] ?? ''); ?>"
             data-lesson-id="<?php echo htmlspecialchars($_GET['lessonId'] ?? ''); ?>"
+            data-test-mode="<?php echo $testMode ? 'true' : 'false'; ?>"
             data-meeting-link="<?php echo htmlspecialchars($lesson_data['meeting_link'] ?? ''); ?>"
             data-meeting-type="<?php echo htmlspecialchars($lesson_data['meeting_type'] ?? 'zoom'); ?>"
             data-teacher-id="<?php 
@@ -285,6 +309,17 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
         
         <!-- Load React Bundle -->
         <script type="module" src="<?php echo getAssetPath('js/classroom.bundle.js'); ?>"></script>
+        <script>
+            // Fallback if bundle fails to load
+            window.addEventListener('error', function(e) {
+                if (e.target && e.target.tagName === 'SCRIPT' && e.target.src && e.target.src.includes('classroom.bundle.js')) {
+                    const rootElement = document.getElementById('classroom-root');
+                    if (rootElement) {
+                        rootElement.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; padding: 20px; text-align: center;"><h2 style="color: #004080; margin-bottom: 15px;">Classroom Loading Error</h2><p style="color: #666; margin-bottom: 20px;">The classroom application failed to load. Please refresh the page or contact support if the problem persists.</p><button onclick="location.reload()" style="background: #0b6cf5; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Refresh Page</button></div>';
+                    }
+                }
+            }, true);
+        </script>
         <?php endif; ?>
     </div>
 </div>

@@ -204,6 +204,15 @@ function formatCurrency($amount, $symbol = '$') {
 }
 
 /**
+ * HTML escape helper function (alias for htmlspecialchars)
+ */
+if (!function_exists('h')) {
+    function h($string, $flags = ENT_QUOTES, $encoding = 'UTF-8') {
+        return htmlspecialchars($string ?? '', $flags, $encoding);
+    }
+}
+
+/**
  * Format date relative (e.g., "2 hours ago")
  */
 function formatRelativeTime($datetime) {

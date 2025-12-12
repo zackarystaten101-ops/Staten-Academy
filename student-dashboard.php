@@ -459,9 +459,27 @@ $stmt->bind_param("i", $student_id);
 $stmt->execute();
 $lessons_result = $stmt->get_result();
 while ($row = $lessons_result->fetch_assoc()) {
-    $upcoming_lessons[] = $row;
+$upcoming_lessons[] = $row;
 }
 $stmt->close();
+
+// Fetch all lessons for calendar (past 30 days and future)
+$all_lessons_for_calendar = [];
+$calendar_stmt = $conn->prepare("
+    SELECT l.*, u.name as teacher_name, u.profile_pic as teacher_pic, l.category, l.status
+    FROM lessons l
+    JOIN users u ON l.teacher_id = u.id
+    WHERE l.student_id = ? 
+    AND l.lesson_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    ORDER BY l.lesson_date ASC, l.lesson_time ASC
+");
+$calendar_stmt->bind_param("i", $student_id);
+$calendar_stmt->execute();
+$calendar_result = $calendar_stmt->get_result();
+while ($row = $calendar_result->fetch_assoc()) {
+    $all_lessons_for_calendar[] = $row;
+}
+$calendar_stmt->close();
 
 // Fetch Past Lessons Needing Confirmation
 $past_lessons_pending = [];
@@ -612,6 +630,8 @@ $active_tab = 'overview';
     <!-- MODERN SHADOWS - To disable, comment out the line below -->
     <link rel="stylesheet" href="<?php echo getAssetPath('css/modern-shadows.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.js"></script>
     <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
     <script>
         function enrollInGroupClass(classId) {
@@ -1516,6 +1536,61 @@ $active_tab = 'overview';
         <div id="bookings" class="tab-content">
             <h1>My Lessons</h1>
             
+            <?php
+            // Prepare calendar events JSON
+            $calendar_events = [];
+            foreach ($all_lessons_for_calendar as $lesson) {
+                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['lesson_time'];
+                $end_time = date('H:i:s', strtotime($lesson['lesson_time'] . ' + ' . ($lesson['duration'] ?? 60) . ' minutes'));
+                $end_datetime = $lesson['lesson_date'] . 'T' . $end_time;
+                
+                // Color coding by status
+                $color = '#0b6cf5'; // Default blue
+                if ($lesson['status'] === 'completed') $color = '#28a745';
+                elseif ($lesson['status'] === 'cancelled') $color = '#dc3545';
+                elseif ($lesson['is_trial']) $color = '#ffc107';
+                elseif ($lesson['category'] === 'young_learners') $color = '#17a2b8';
+                elseif ($lesson['category'] === 'coding') $color = '#6f42c1';
+                
+                $calendar_events[] = [
+                    'id' => (int)$lesson['id'],
+                    'title' => htmlspecialchars($lesson['teacher_name'] ?? 'Teacher', ENT_QUOTES, 'UTF-8') . ($lesson['is_trial'] ? ' (Trial)' : ''),
+                    'start' => $start_datetime,
+                    'end' => $end_datetime,
+                    'color' => $color,
+                    'extendedProps' => [
+                        'teacher_name' => htmlspecialchars($lesson['teacher_name'] ?? 'Teacher', ENT_QUOTES, 'UTF-8'),
+                        'category' => htmlspecialchars($lesson['category'] ?? '', ENT_QUOTES, 'UTF-8'),
+                        'status' => htmlspecialchars($lesson['status'] ?? 'scheduled', ENT_QUOTES, 'UTF-8'),
+                        'is_trial' => (int)($lesson['is_trial'] ?? 0)
+                    ]
+                ];
+            }
+            ?>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-calendar-check"></i> Calendar View</h2>
+                <div id="student-calendar" style="margin-bottom: 20px;"></div>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #0b6cf5; border-radius: 4px;"></div>
+                        <span>Scheduled</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #ffc107; border-radius: 4px;"></div>
+                        <span>Trial Lesson</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #28a745; border-radius: 4px;"></div>
+                        <span>Completed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 20px; height: 20px; background: #dc3545; border-radius: 4px;"></div>
+                        <span>Cancelled</span>
+                    </div>
+                </div>
+            </div>
+            
             <?php if (count($past_lessons_pending) > 0): ?>
             <div class="card" style="background: linear-gradient(135deg, #fff3cd 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
                 <h2 style="color: #856404; margin-bottom: 20px;">
@@ -1839,7 +1914,46 @@ function switchTab(id) {
 }
 
 // Handle URL hash on load
+// Initialize FullCalendar for student dashboard
 document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('student-calendar');
+    if (calendarEl && typeof FullCalendar !== 'undefined') {
+        try {
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: <?php echo json_encode($calendar_events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+                eventClick: function(info) {
+                    const props = info.event.extendedProps;
+                    const lessonId = parseInt(info.event.id, 10);
+                    if (lessonId && lessonId > 0) {
+                        window.location.href = 'classroom.php?lessonId=' + encodeURIComponent(lessonId);
+                    }
+                },
+                eventMouseEnter: function(info) {
+                    info.el.style.cursor = 'pointer';
+                },
+                height: 'auto',
+                eventTimeFormat: {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    meridiem: 'short'
+                }
+            });
+            calendar.render();
+        } catch (error) {
+            console.error('Error initializing calendar:', error);
+            calendarEl.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">Unable to load calendar. Please refresh the page.</p>';
+        }
+    } else if (calendarEl && typeof FullCalendar === 'undefined') {
+        calendarEl.innerHTML = '<p style="text-align: center; padding: 20px; color: #666;">Calendar library failed to load. Please refresh the page.</p>';
+    }
+    
+    // Original DOMContentLoaded code
     const hash = window.location.hash.substring(1);
     if (hash && document.getElementById(hash)) {
         switchTab(hash);

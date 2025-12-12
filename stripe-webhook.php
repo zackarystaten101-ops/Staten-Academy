@@ -76,7 +76,16 @@ function handleCheckoutCompleted($conn, $session) {
     $metadata = $session['metadata'] ?? [];
     $amount_total = isset($session['amount_total']) ? ($session['amount_total'] / 100) : 0; // Convert from cents
     
-    // Check if already processed
+    // Check if already processed using idempotency key
+    $idempotency_key = 'stripe_' . $session_id;
+    $walletService = new WalletService($conn);
+    $existing_transaction = $walletService->getTransactionByIdempotencyKey($idempotency_key);
+    if ($existing_transaction) {
+        error_log("Stripe webhook: Session $session_id already processed (idempotency key: $idempotency_key)");
+        return;
+    }
+    
+    // Also check by stripe_payment_id for backward compatibility
     $check_sql = "SELECT id FROM wallet_transactions WHERE stripe_payment_id = ? LIMIT 1";
     $check_stmt = $conn->prepare($check_sql);
     if ($check_stmt) {

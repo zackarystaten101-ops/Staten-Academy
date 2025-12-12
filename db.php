@@ -459,16 +459,47 @@ $sql = "CREATE TABLE IF NOT EXISTS wallet_transactions (
     amount DECIMAL(10,2) NOT NULL,
     stripe_payment_id VARCHAR(255) DEFAULT NULL,
     reference_id VARCHAR(255) DEFAULT NULL,
+    lesson_id INT(6) UNSIGNED DEFAULT NULL,
     description TEXT,
+    status ENUM('pending', 'confirmed', 'failed', 'cancelled') DEFAULT 'confirmed',
+    idempotency_key VARCHAR(255) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_student (student_id),
     INDEX idx_type (type),
+    INDEX idx_status (status),
     INDEX idx_stripe_payment (stripe_payment_id),
     INDEX idx_reference (reference_id),
+    INDEX idx_lesson (lesson_id),
+    INDEX idx_idempotency (idempotency_key),
     INDEX idx_created (created_at),
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 $conn->query($sql);
+
+// Add status and idempotency_key columns if they don't exist
+$wallet_trans_cols = $conn->query("SHOW COLUMNS FROM wallet_transactions");
+$existing_wallet_trans_cols = [];
+if ($wallet_trans_cols) {
+    while($row = $wallet_trans_cols->fetch_assoc()) { 
+        $existing_wallet_trans_cols[] = $row['Field']; 
+    }
+}
+
+if (!in_array('status', $existing_wallet_trans_cols)) {
+    $conn->query("ALTER TABLE wallet_transactions ADD COLUMN status ENUM('pending', 'confirmed', 'failed', 'cancelled') DEFAULT 'confirmed' AFTER description");
+}
+if (!in_array('idempotency_key', $existing_wallet_trans_cols)) {
+    $conn->query("ALTER TABLE wallet_transactions ADD COLUMN idempotency_key VARCHAR(255) DEFAULT NULL AFTER status");
+    $conn->query("ALTER TABLE wallet_transactions ADD INDEX idx_idempotency (idempotency_key)");
+}
+if (!in_array('lesson_id', $existing_wallet_trans_cols)) {
+    $conn->query("ALTER TABLE wallet_transactions ADD COLUMN lesson_id INT(6) UNSIGNED DEFAULT NULL AFTER reference_id");
+    $conn->query("ALTER TABLE wallet_transactions ADD INDEX idx_lesson (lesson_id)");
+}
+if (!in_array('updated_at', $existing_wallet_trans_cols)) {
+    $conn->query("ALTER TABLE wallet_transactions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
+}
 
 // Create lessons table (for booked lessons)
 $sql = "CREATE TABLE IF NOT EXISTS lessons (
@@ -1262,6 +1293,89 @@ $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COL
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE student_learning_needs ADD CONSTRAINT fk_learning_needs_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
 }
+
+// Create signaling_queue table for WebRTC signaling
+$sql = "CREATE TABLE IF NOT EXISTS signaling_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    from_user_id INT NOT NULL,
+    to_user_id INT NOT NULL,
+    message_type ENUM('webrtc-offer', 'webrtc-answer', 'webrtc-ice-candidate') NOT NULL,
+    message_data TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed BOOLEAN DEFAULT FALSE,
+    INDEX idx_session (session_id),
+    INDEX idx_users (from_user_id, to_user_id),
+    INDEX idx_processed (processed, timestamp)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Create whiteboard_operations table for collaborative whiteboard
+$sql = "CREATE TABLE IF NOT EXISTS whiteboard_operations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    user_id INT NOT NULL,
+    operation_data TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed BOOLEAN DEFAULT FALSE,
+    INDEX idx_session (session_id),
+    INDEX idx_user (user_id),
+    INDEX idx_processed (processed, timestamp)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Create video_sessions table for classroom sessions
+$sql = "CREATE TABLE IF NOT EXISTS video_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) UNIQUE NOT NULL,
+    lesson_id INT NULL,
+    teacher_id INT NOT NULL,
+    student_id INT NOT NULL,
+    status ENUM('active', 'ended', 'cancelled') DEFAULT 'active',
+    is_test_session BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP NULL,
+    INDEX idx_lesson (lesson_id),
+    INDEX idx_users (teacher_id, student_id),
+    INDEX idx_status (status),
+    INDEX idx_session (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// Add foreign keys for video_sessions
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='lesson_id' AND REFERENCED_TABLE_NAME='lessons'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $lesson_table_check = $conn->query("SHOW TABLES LIKE 'lessons'");
+    if ($lesson_table_check && $lesson_table_check->num_rows > 0) {
+        $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL");
+    }
+}
+
+// Create admin_audit_log table for tracking admin actions
+$sql = "CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50),
+    target_id INT,
+    details TEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_admin (admin_id),
+    INDEX idx_action (action),
+    INDEX idx_target (target_type, target_id),
+    INDEX idx_created (created_at),
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
 
 // Ensure admin account exists with correct credentials
 $admin_email = 'statenenglishacademy@gmail.com';

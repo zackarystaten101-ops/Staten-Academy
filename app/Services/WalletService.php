@@ -126,16 +126,17 @@ class WalletService {
             }
             $stmt->close();
             
-            // Record transaction
-            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, stripe_payment_id, reference_id, description)
-                               VALUES (?, 'purchase', ?, ?, ?, ?)";
+            // Record transaction with status and idempotency key
+            $idempotency_key = 'topup_' . $stripe_payment_id . '_' . time();
+            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, stripe_payment_id, reference_id, description, status, idempotency_key)
+                               VALUES (?, 'purchase', ?, ?, ?, ?, 'confirmed', ?)";
             $stmt = $this->conn->prepare($transaction_sql);
             if (!$stmt) {
                 throw new Exception("Failed to prepare transaction statement: " . $this->conn->error);
             }
             
             $description = "Funds added via Stripe payment";
-            $stmt->bind_param("idsss", $student_id, $amount, $stripe_payment_id, $reference_id, $description);
+            $stmt->bind_param("idssss", $student_id, $amount, $stripe_payment_id, $reference_id, $description, $idempotency_key);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to record transaction: " . $stmt->error);
             }
@@ -176,34 +177,70 @@ class WalletService {
         $this->conn->begin_transaction();
         
         try {
-            // Check balance
-            $balance = $this->getWalletBalance($student_id);
-            if ($balance['balance'] < $amount) {
-                throw new Exception("Insufficient funds. Balance: $" . number_format($balance['balance'], 2) . ", Required: $" . number_format($amount, 2));
+            // Use row-level locking to prevent concurrent deductions
+            $lock_sql = "SELECT balance FROM student_wallet WHERE student_id = ? FOR UPDATE";
+            $lock_stmt = $this->conn->prepare($lock_sql);
+            if (!$lock_stmt) {
+                throw new Exception("Failed to prepare lock statement: " . $this->conn->error);
             }
             
-            // Update balance
-            $update_sql = "UPDATE student_wallet SET balance = balance - ? WHERE student_id = ?";
+            $lock_stmt->bind_param("i", $student_id);
+            $lock_stmt->execute();
+            $lock_result = $lock_stmt->get_result();
+            $wallet_row = $lock_result->fetch_assoc();
+            $lock_stmt->close();
+            
+            // Initialize wallet if it doesn't exist
+            if (!$wallet_row) {
+                $this->initializeWallet($student_id);
+                // Re-fetch after initialization
+                $lock_stmt = $this->conn->prepare($lock_sql);
+                $lock_stmt->bind_param("i", $student_id);
+                $lock_stmt->execute();
+                $lock_result = $lock_stmt->get_result();
+                $wallet_row = $lock_result->fetch_assoc();
+                $lock_stmt->close();
+            }
+            
+            $current_balance = floatval($wallet_row['balance'] ?? 0);
+            
+            // Check balance with locked row
+            if ($current_balance < $amount) {
+                throw new Exception("Insufficient funds. Balance: $" . number_format($current_balance, 2) . ", Required: $" . number_format($amount, 2));
+            }
+            
+            // Update balance with WHERE clause to prevent negative balance
+            $update_sql = "UPDATE student_wallet SET balance = balance - ? WHERE student_id = ? AND balance >= ?";
             $stmt = $this->conn->prepare($update_sql);
             if (!$stmt) {
                 throw new Exception("Failed to prepare update statement: " . $this->conn->error);
             }
             
-            $stmt->bind_param("di", $amount, $student_id);
+            $stmt->bind_param("did", $amount, $student_id, $amount);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to update balance: " . $stmt->error);
             }
+            
+            // Check if update actually affected a row (balance was sufficient)
+            if ($stmt->affected_rows === 0) {
+                throw new Exception("Insufficient funds or concurrent modification detected");
+            }
             $stmt->close();
             
-            // Record transaction
-            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, reference_id, description)
-                               VALUES (?, 'deduction', ?, ?, ?)";
+            // Record transaction with status and lesson reference
+            $lesson_id = null;
+            if (strpos($reference_id, 'lesson_') === 0) {
+                $lesson_id = (int)str_replace('lesson_', '', $reference_id);
+            }
+            $idempotency_key = 'deduct_' . $student_id . '_' . $reference_id . '_' . time();
+            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, reference_id, lesson_id, description, status, idempotency_key)
+                               VALUES (?, 'deduction', ?, ?, ?, ?, 'confirmed', ?)";
             $stmt = $this->conn->prepare($transaction_sql);
             if (!$stmt) {
                 throw new Exception("Failed to prepare transaction statement: " . $this->conn->error);
             }
             
-            $stmt->bind_param("idss", $student_id, $amount, $reference_id, $description);
+            $stmt->bind_param("idssiss", $student_id, $amount, $reference_id, $lesson_id, $description, $idempotency_key);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to record transaction: " . $stmt->error);
             }
@@ -256,15 +293,16 @@ class WalletService {
             }
             $stmt->close();
             
-            // Record transaction
-            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, stripe_payment_id, description)
-                               VALUES (?, 'trial', 25.00, ?, 'Trial lesson credit')";
+            // Record transaction with status
+            $idempotency_key = 'trial_' . $stripe_payment_id . '_' . time();
+            $transaction_sql = "INSERT INTO wallet_transactions (student_id, type, amount, stripe_payment_id, description, status, idempotency_key)
+                               VALUES (?, 'trial', 25.00, ?, 'Trial lesson credit', 'confirmed', ?)";
             $stmt = $this->conn->prepare($transaction_sql);
             if (!$stmt) {
                 throw new Exception("Failed to prepare transaction statement: " . $this->conn->error);
             }
             
-            $stmt->bind_param("is", $student_id, $stripe_payment_id);
+            $stmt->bind_param("iss", $student_id, $stripe_payment_id, $idempotency_key);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to record transaction: " . $stmt->error);
             }
@@ -313,6 +351,56 @@ class WalletService {
         
         $stmt->close();
         return $transactions;
+    }
+    
+    /**
+     * Check if transaction with idempotency key already exists
+     * @param string $idempotency_key
+     * @return array|null Transaction data if exists, null otherwise
+     */
+    public function getTransactionByIdempotencyKey($idempotency_key) {
+        $idempotency_key = $this->conn->real_escape_string($idempotency_key);
+        
+        $sql = "SELECT * FROM wallet_transactions WHERE idempotency_key = ? LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        
+        $stmt->bind_param("s", $idempotency_key);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $transaction = $result->fetch_assoc();
+        $stmt->close();
+        
+        return $transaction;
+    }
+    
+    /**
+     * Update transaction status
+     * @param int $transaction_id
+     * @param string $status
+     * @return bool
+     */
+    public function updateTransactionStatus($transaction_id, $status) {
+        $transaction_id = intval($transaction_id);
+        $status = $this->conn->real_escape_string($status);
+        
+        if (!in_array($status, ['pending', 'confirmed', 'failed', 'cancelled'])) {
+            return false;
+        }
+        
+        $sql = "UPDATE wallet_transactions SET status = ? WHERE id = ?";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        
+        $stmt->bind_param("si", $status, $transaction_id);
+        $result = $stmt->execute();
+        $stmt->close();
+        
+        return $result;
     }
     
     /**
