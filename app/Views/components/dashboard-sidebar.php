@@ -343,10 +343,19 @@ if ($user_role === 'teacher' && isset($conn) && isset($user_id) && $user_id > 0)
                         <span class="sidebar-badge"><?php echo $pending_assignments; ?></span>
                     <?php endif; ?>
                 </a>
+                <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('calendar'); } return false;" class="<?php echo $active_tab === 'calendar' ? 'active' : ''; ?>">
+                    <i class="fas fa-calendar-alt"></i> <span>Manage Availability</span>
+                </a>
                 <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('slot-requests'); } return false;" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                     <i class="fas fa-calendar-plus"></i> <span>Slot Requests</span>
                     <?php if ($pending_slot_requests_count > 0): ?>
                         <span class="sidebar-badge alert"><?php echo $pending_slot_requests_count; ?></span>
+                    <?php endif; ?>
+                </a>
+                <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('messages'); } return false;" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
+                    <i class="fas fa-envelope"></i> <span>Messages</span>
+                    <?php if ($unread_messages > 0): ?>
+                        <span class="sidebar-badge"><?php echo $unread_messages; ?></span>
                     <?php endif; ?>
                 </a>
                 <a href="#" onclick="if(typeof switchTab === 'function') { switchTab('group-classes'); } return false;" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">
@@ -362,10 +371,19 @@ if ($user_role === 'teacher' && isset($conn) && isset($user_id) && $user_id > 0)
                         <span class="sidebar-badge"><?php echo $pending_assignments; ?></span>
                     <?php endif; ?>
                 </a>
+                <a href="teacher-dashboard.php#calendar" class="<?php echo $active_tab === 'calendar' ? 'active' : ''; ?>">
+                    <i class="fas fa-calendar-alt"></i> <span>Manage Availability</span>
+                </a>
                 <a href="teacher-dashboard.php#slot-requests" class="<?php echo $active_tab === 'slot-requests' ? 'active' : ''; ?>">
                     <i class="fas fa-calendar-plus"></i> <span>Slot Requests</span>
                     <?php if ($pending_slot_requests_count > 0): ?>
                         <span class="sidebar-badge alert"><?php echo $pending_slot_requests_count; ?></span>
+                    <?php endif; ?>
+                </a>
+                <a href="teacher-dashboard.php#messages" class="<?php echo $active_tab === 'messages' ? 'active' : ''; ?>">
+                    <i class="fas fa-envelope"></i> <span>Messages</span>
+                    <?php if ($unread_messages > 0): ?>
+                        <span class="sidebar-badge"><?php echo $unread_messages; ?></span>
                     <?php endif; ?>
                 </a>
                 <a href="teacher-dashboard.php#group-classes" class="<?php echo $active_tab === 'group-classes' ? 'active' : ''; ?>">

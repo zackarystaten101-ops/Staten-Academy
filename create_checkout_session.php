@@ -90,15 +90,62 @@ if (!defined('STRIPE_SECRET_KEY') || empty(STRIPE_SECRET_KEY) || strpos(STRIPE_S
     die("Error: Stripe API key is not configured. Please set STRIPE_SECRET_KEY in env.php with a valid Stripe secret key (sk_test_... or sk_live_...).");
 }
 
-// Check if Price ID is provided
-if (!isset($_POST['price_id'])) {
-    die("Error: No Price ID provided.");
-}
+// Check if this is a trial lesson checkout
+$is_trial = (isset($_GET['type']) && $_GET['type'] === 'trial') || (isset($_POST['type']) && $_POST['type'] === 'trial');
+$teacher_id = null;
 
-$priceId = $_POST['price_id'];
-$mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
-$plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : null;
-$track = isset($_POST['track']) ? $_POST['track'] : null;
+if ($is_trial) {
+    // Trial lesson checkout
+    require_once __DIR__ . '/app/Services/TrialService.php';
+    
+    if (!isset($_SESSION['user_id'])) {
+        die("Error: You must be logged in to book a trial lesson.");
+    }
+    
+    $student_id = $_SESSION['user_id'];
+    $teacher_id = isset($_GET['teacher_id']) ? intval($_GET['teacher_id']) : (isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0);
+    
+    if (!$teacher_id) {
+        die("Error: Teacher ID is required for trial lesson.");
+    }
+    
+    // Check trial eligibility
+    $trialService = new TrialService($conn);
+    $eligibility = $trialService->checkTrialEligibility($student_id);
+    
+    if (!$eligibility['eligible']) {
+        die("Error: " . $eligibility['reason']);
+    }
+    
+    // Get trial price ID from env or use default
+    $priceId = defined('STRIPE_PRODUCT_TRIAL') && !empty(STRIPE_PRODUCT_TRIAL) 
+        ? STRIPE_PRODUCT_TRIAL 
+        : null;
+    
+    if (!$priceId) {
+        // Create a one-time price for $25 if not configured
+        // For now, we'll require it to be set in env.php
+        die("Error: STRIPE_PRODUCT_TRIAL is not configured in env.php. Please set a Stripe Price ID for trial lessons ($25).");
+    }
+    
+    $mode = 'payment';
+    $plan_id = null;
+    $track = null;
+    
+    // Store trial info in session
+    $_SESSION['trial_teacher_id'] = $teacher_id;
+    $_SESSION['trial_student_id'] = $student_id;
+} else {
+    // Regular plan checkout
+    if (!isset($_POST['price_id'])) {
+        die("Error: No Price ID provided.");
+    }
+    
+    $priceId = $_POST['price_id'];
+    $mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
+    $plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : null;
+    $track = isset($_POST['track']) ? $_POST['track'] : null;
+}
 
 // Store plan_id and track in session for success page
 if ($plan_id) {
@@ -123,6 +170,21 @@ if (strpos($domain, ' ') !== false) {
 // Stripe API Endpoint
 $api_url = 'https://api.stripe.com/v1/checkout/sessions';
 
+// Build success URL
+$success_params = [];
+if ($is_trial) {
+    $success_params[] = 'type=trial';
+    $success_params[] = 'teacher_id=' . $teacher_id;
+} else {
+    if ($plan_id) {
+        $success_params[] = 'plan_id=' . $plan_id;
+    }
+    if ($track) {
+        $success_params[] = 'track=' . urlencode($track);
+    }
+}
+$success_url = $domain . '/success.php' . (!empty($success_params) ? '?' . implode('&', $success_params) : '');
+
 // Data for the request
 $data = [
     'line_items' => [
@@ -132,9 +194,18 @@ $data = [
         ],
     ],
     'mode' => $mode, // 'subscription' for recurring, 'payment' for one-time
-    'success_url' => $domain . '/success.php' . ($plan_id ? '?plan_id=' . $plan_id : '') . ($track ? ($plan_id ? '&' : '?') . 'track=' . urlencode($track) : ''),
+    'success_url' => $success_url,
     'cancel_url' => $domain . '/cancel.php',
 ];
+
+// Add metadata for trial lessons
+if ($is_trial) {
+    $data['metadata'] = [
+        'type' => 'trial',
+        'teacher_id' => (string)$teacher_id,
+        'student_id' => (string)$_SESSION['user_id']
+    ];
+}
 
 // If it's a subscription plan (you can check price ID or pass a mode param)
 // For now, defaulting to 'payment' as requested for the $30 one-time.

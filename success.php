@@ -26,26 +26,53 @@ if (isset($_SESSION['user_id'])) {
         $_SESSION['user_role'] = 'student';
     }
     
-    // Get plan_id from session or URL if available
-    $plan_id = $_GET['plan_id'] ?? $_SESSION['selected_plan_id'] ?? null;
-    $track = $_GET['track'] ?? $_SESSION['selected_track'] ?? null;
+    // Check if this is a trial payment (prefer URL parameter over session to avoid stale session data)
+    $is_trial = (isset($_GET['type']) && $_GET['type'] === 'trial');
     
-    // Update user's plan_id and track if provided
-    if ($plan_id) {
-        $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
-        if ($col_check && $col_check->num_rows > 0) {
-            $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
-            $plan_stmt->bind_param("ii", $plan_id, $user_id);
-            $plan_stmt->execute();
-            $plan_stmt->close();
+    if ($is_trial) {
+        // Handle trial payment success
+        $teacher_id = $_GET['teacher_id'] ?? $_SESSION['trial_teacher_id'] ?? null;
+        
+        if ($teacher_id) {
+            // Trial credit should already be added by webhook, but verify
+            require_once __DIR__ . '/app/Services/WalletService.php';
+            require_once __DIR__ . '/app/Services/TrialService.php';
+            
+            $walletService = new WalletService($conn);
+            $wallet = $walletService->getWalletBalance($user_id);
         }
-    }
-    
-    if ($track && in_array($track, ['kids', 'adults', 'coding'])) {
-        $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
-        $track_stmt->bind_param("si", $track, $user_id);
-        $track_stmt->execute();
-        $track_stmt->close();
+        
+        // Clear trial session variables after processing to prevent interference with future purchases
+        unset($_SESSION['trial_teacher_id']);
+        unset($_SESSION['trial_student_id']);
+        unset($_SESSION['trial_success']);
+    } else {
+        // Handle plan purchase
+        // Clear any lingering trial session variables to prevent false trial detection
+        unset($_SESSION['trial_teacher_id']);
+        unset($_SESSION['trial_student_id']);
+        unset($_SESSION['trial_success']);
+        
+        $plan_id = $_GET['plan_id'] ?? $_SESSION['selected_plan_id'] ?? null;
+        $track = $_GET['track'] ?? $_SESSION['selected_track'] ?? null;
+        
+        // Update user's plan_id and track if provided
+        if ($plan_id) {
+            $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+            if ($col_check && $col_check->num_rows > 0) {
+                $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
+                $plan_stmt->bind_param("ii", $plan_id, $user_id);
+                $plan_stmt->execute();
+                $plan_stmt->close();
+            }
+        }
+        
+        if ($track && in_array($track, ['kids', 'adults', 'coding'])) {
+            $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
+            $track_stmt->bind_param("si", $track, $user_id);
+            $track_stmt->execute();
+            $track_stmt->close();
+        }
     }
 }
 ?>
@@ -216,113 +243,191 @@ if (isset($_SESSION['user_id'])) {
         <div class="success-icon">
             <i class="fas fa-check-circle"></i>
         </div>
-        <h1>Payment Successful! 🎉</h1>
-        <?php if (isset($_GET['test_student'])): ?>
-            <div class="test-badge">
-                <i class="fas fa-info-circle"></i> <strong>Test Account:</strong> Your plan has been activated without payment.
-            </div>
+        <?php
+        // Check if this is a trial payment (prefer URL parameter over session to avoid stale session data)
+        $is_trial = (isset($_GET['type']) && $_GET['type'] === 'trial');
+        $teacher_id = $_GET['teacher_id'] ?? null;
+        $teacher_name = '';
+        
+        if ($is_trial && $teacher_id) {
+            $teacher_stmt = $conn->prepare("SELECT name FROM users WHERE id = ?");
+            $teacher_stmt->bind_param("i", $teacher_id);
+            $teacher_stmt->execute();
+            $teacher_result = $teacher_stmt->get_result();
+            if ($teacher_result->num_rows > 0) {
+                $teacher_data = $teacher_result->fetch_assoc();
+                $teacher_name = $teacher_data['name'];
+            }
+            $teacher_stmt->close();
+        }
+        ?>
+        
+        <?php if ($is_trial): ?>
+            <h1>Trial Lesson Purchased! 🎉</h1>
+            <p>Your trial lesson credit has been added to your wallet. You can now book a lesson with <?php echo htmlspecialchars($teacher_name ?: 'your selected teacher'); ?>.</p>
         <?php else: ?>
-            <p>Thank you for your purchase! Your subscription is now active.</p>
+            <h1>Payment Successful! 🎉</h1>
+            <?php if (isset($_GET['test_student'])): ?>
+                <div class="test-badge">
+                    <i class="fas fa-info-circle"></i> <strong>Test Account:</strong> Your plan has been activated without payment.
+                </div>
+            <?php else: ?>
+                <p>Thank you for your purchase! Your subscription is now active.</p>
+            <?php endif; ?>
         <?php endif; ?>
         
         <?php if (isset($_SESSION['user_id'])): ?>
             <?php
             $user_id = $_SESSION['user_id'];
-            // Check onboarding status
-            $stmt = $conn->prepare("SELECT plan_id, learning_track, assigned_teacher_id FROM users WHERE id = ?");
-            $stmt->bind_param("i", $user_id);
-            $stmt->execute();
-            $user_data = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
             
-            $has_plan = !empty($user_data['plan_id']);
-            $has_needs = false;
-            $has_teacher = !empty($user_data['assigned_teacher_id']);
-            
-            if ($has_plan) {
-                $needs_stmt = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
-                $needs_stmt->bind_param("i", $user_id);
-                $needs_stmt->execute();
-                $has_needs = $needs_stmt->get_result()->num_rows > 0;
-                $needs_stmt->close();
+            if ($is_trial) {
+                // For trial, show simple next steps
+                $trial_used = false;
+                $trial_stmt = $conn->prepare("SELECT trial_used FROM users WHERE id = ?");
+                $trial_stmt->bind_param("i", $user_id);
+                $trial_stmt->execute();
+                $trial_result = $trial_stmt->get_result();
+                if ($trial_result->num_rows > 0) {
+                    $trial_data = $trial_result->fetch_assoc();
+                    $trial_used = (bool)$trial_data['trial_used'];
+                }
+                $trial_stmt->close();
+            } else {
+                // Check onboarding status for plan purchases
+                $stmt = $conn->prepare("SELECT plan_id, learning_track, assigned_teacher_id FROM users WHERE id = ?");
+                $stmt->bind_param("i", $user_id);
+                $stmt->execute();
+                $user_data = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                
+                $has_plan = !empty($user_data['plan_id']);
+                $has_needs = false;
+                $has_teacher = !empty($user_data['assigned_teacher_id']);
+                
+                if ($has_plan) {
+                    $needs_stmt = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
+                    $needs_stmt->bind_param("i", $user_id);
+                    $needs_stmt->execute();
+                    $has_needs = $needs_stmt->get_result()->num_rows > 0;
+                    $needs_stmt->close();
+                }
             }
             ?>
             
-            <div class="progress-steps">
-                <h3><i class="fas fa-list-check"></i> Next Steps</h3>
-                
-                <div class="step <?php echo $has_plan ? 'completed' : 'current'; ?>">
-                    <div class="step-number">
-                        <?php if ($has_plan): ?>
+            <?php if ($is_trial): ?>
+                <div class="progress-steps">
+                    <h3><i class="fas fa-list-check"></i> Next Steps</h3>
+                    
+                    <div class="step completed">
+                        <div class="step-number">
                             <i class="fas fa-check"></i>
-                        <?php else: ?>
-                            1
-                        <?php endif; ?>
+                        </div>
+                        <div class="step-content">
+                            <div class="step-title">Trial Lesson Purchased</div>
+                            <div class="step-desc">Your $25 trial lesson credit has been added to your wallet</div>
+                        </div>
                     </div>
-                    <div class="step-content">
-                        <div class="step-title">Complete Payment</div>
-                        <div class="step-desc">Your payment has been processed successfully</div>
-                    </div>
-                </div>
-                
-                <div class="step <?php echo $has_needs ? 'completed' : ($has_plan ? 'current' : ''); ?>">
-                    <div class="step-number">
-                        <?php if ($has_needs): ?>
-                            <i class="fas fa-check"></i>
-                        <?php else: ?>
-                            2
-                        <?php endif; ?>
-                    </div>
-                    <div class="step-content">
-                        <div class="step-title">Add Your Learning Needs</div>
-                        <div class="step-desc">Tell us about your goals so we can match you with the perfect teacher</div>
+                    
+                    <div class="step current">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Book Your Trial Lesson</div>
+                            <div class="step-desc">Schedule your trial lesson with <?php echo htmlspecialchars($teacher_name ?: 'your selected teacher'); ?></div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="step <?php echo $has_teacher ? 'completed' : ($has_needs ? 'current' : ''); ?>">
-                    <div class="step-number">
-                        <?php if ($has_teacher): ?>
-                            <i class="fas fa-check"></i>
-                        <?php else: ?>
-                            3
-                        <?php endif; ?>
-                    </div>
-                    <div class="step-content">
-                        <div class="step-title">Get Assigned a Teacher</div>
-                        <div class="step-desc">We'll match you with a teacher based on your learning needs (usually within 24-48 hours)</div>
-                    </div>
-                </div>
-                
-                <div class="step <?php echo $has_teacher ? 'current' : ''; ?>">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <div class="step-title">Book Your First Lesson</div>
-                        <div class="step-desc">Schedule your first class with your assigned teacher</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="margin-top: 30px;">
-                <?php if (!$has_needs): ?>
-                    <a href="student-dashboard.php#learning-needs" class="btn">
-                        <i class="fas fa-arrow-right"></i> Add Learning Needs Now
-                    </a>
-                <?php elseif (!$has_teacher): ?>
-                    <a href="student-dashboard.php" class="btn">
-                        <i class="fas fa-home"></i> Go to Dashboard
-                    </a>
-                    <p style="margin-top: 15px; color: #666; font-size: 0.9rem;">
-                        <i class="fas fa-info-circle"></i> We're matching you with a teacher. You'll be notified when assigned!
-                    </p>
-                <?php else: ?>
-                    <a href="schedule.php" class="btn">
-                        <i class="fas fa-calendar-plus"></i> Book Your First Lesson
-                    </a>
+                <div style="margin-top: 30px;">
+                    <?php if ($teacher_id): ?>
+                        <a href="teacher-profile.php?id=<?php echo intval($teacher_id); ?>" class="btn">
+                            <i class="fas fa-calendar-plus"></i> Book Trial Lesson Now
+                        </a>
+                    <?php else: ?>
+                        <a href="index.php" class="btn">
+                            <i class="fas fa-search"></i> Browse Teachers
+                        </a>
+                    <?php endif; ?>
                     <a href="student-dashboard.php" class="btn btn-secondary">
                         <i class="fas fa-home"></i> Go to Dashboard
                     </a>
-                <?php endif; ?>
-            </div>
+                </div>
+            <?php else: ?>
+                <div class="progress-steps">
+                    <h3><i class="fas fa-list-check"></i> Next Steps</h3>
+                    
+                    <div class="step <?php echo $has_plan ? 'completed' : 'current'; ?>">
+                        <div class="step-number">
+                            <?php if ($has_plan): ?>
+                                <i class="fas fa-check"></i>
+                            <?php else: ?>
+                                1
+                            <?php endif; ?>
+                        </div>
+                        <div class="step-content">
+                            <div class="step-title">Complete Payment</div>
+                            <div class="step-desc">Your payment has been processed successfully</div>
+                        </div>
+                    </div>
+                    
+                    <div class="step <?php echo $has_needs ? 'completed' : ($has_plan ? 'current' : ''); ?>">
+                        <div class="step-number">
+                            <?php if ($has_needs): ?>
+                                <i class="fas fa-check"></i>
+                            <?php else: ?>
+                                2
+                            <?php endif; ?>
+                        </div>
+                        <div class="step-content">
+                            <div class="step-title">Add Your Learning Needs</div>
+                            <div class="step-desc">Tell us about your goals so we can match you with the perfect teacher</div>
+                        </div>
+                    </div>
+                    
+                    <div class="step <?php echo $has_teacher ? 'completed' : ($has_needs ? 'current' : ''); ?>">
+                        <div class="step-number">
+                            <?php if ($has_teacher): ?>
+                                <i class="fas fa-check"></i>
+                            <?php else: ?>
+                                3
+                            <?php endif; ?>
+                        </div>
+                        <div class="step-content">
+                            <div class="step-title">Get Assigned a Teacher</div>
+                            <div class="step-desc">We'll match you with a teacher based on your learning needs (usually within 24-48 hours)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="step <?php echo $has_teacher ? 'current' : ''; ?>">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <div class="step-title">Book Your First Lesson</div>
+                            <div class="step-desc">Schedule your first class with your assigned teacher</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <?php if (!$has_needs): ?>
+                        <a href="student-dashboard.php#learning-needs" class="btn">
+                            <i class="fas fa-arrow-right"></i> Add Learning Needs Now
+                        </a>
+                    <?php elseif (!$has_teacher): ?>
+                        <a href="student-dashboard.php" class="btn">
+                            <i class="fas fa-home"></i> Go to Dashboard
+                        </a>
+                        <p style="margin-top: 15px; color: #666; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> We're matching you with a teacher. You'll be notified when assigned!
+                        </p>
+                    <?php else: ?>
+                        <a href="schedule.php" class="btn">
+                            <i class="fas fa-calendar-plus"></i> Book Your First Lesson
+                        </a>
+                        <a href="student-dashboard.php" class="btn btn-secondary">
+                            <i class="fas fa-home"></i> Go to Dashboard
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         <?php else: ?>
             <p>Please log in to continue with your learning journey.</p>
             <a href="login.php" class="btn">Login</a>

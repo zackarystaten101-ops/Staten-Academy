@@ -13,10 +13,72 @@ $sender_role = $_SESSION['user_role'] ?? 'guest';
 $receiver_id = isset($_POST['receiver_id']) ? intval($_POST['receiver_id']) : 0;
 $message = isset($_POST['message']) ? trim($_POST['message']) : '';
 
-if (empty($message)) {
+if (empty($message) && empty($_FILES['attachment']['name'])) {
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Message cannot be empty']);
+    echo json_encode(['success' => false, 'message' => 'Message or attachment is required']);
     exit();
+}
+
+// Handle file attachment
+$attachment_path = null;
+$attachment_type = null;
+
+if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
+    $upload_dir = __DIR__ . '/public/uploads/messages/';
+    
+    // Create directory if it doesn't exist
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+    
+    $file = $_FILES['attachment'];
+    $file_name = $file['name'];
+    $file_tmp = $file['tmp_name'];
+    $file_size = $file['size'];
+    $file_type_raw = $file['type'];
+    
+    // Validate file size (max 10MB)
+    if ($file_size > 10 * 1024 * 1024) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'File size exceeds 10MB limit']);
+        exit();
+    }
+    
+    // Validate file type
+    $allowed_types = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'video/mp4', 'video/quicktime', 'video/x-msvideo'
+    ];
+    
+    if (!in_array($file_type_raw, $allowed_types)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'File type not allowed']);
+        exit();
+    }
+    
+    // Determine attachment type
+    if (strpos($file_type_raw, 'image/') === 0) {
+        $attachment_type = 'image';
+    } elseif (strpos($file_type_raw, 'video/') === 0) {
+        $attachment_type = 'video';
+    } else {
+        $attachment_type = 'file';
+    }
+    
+    // Generate unique filename
+    $file_ext = pathinfo($file_name, PATHINFO_EXTENSION);
+    $unique_name = uniqid('msg_', true) . '_' . time() . '.' . $file_ext;
+    $upload_path = $upload_dir . $unique_name;
+    
+    // Move uploaded file
+    if (move_uploaded_file($file_tmp, $upload_path)) {
+        $attachment_path = 'uploads/messages/' . $unique_name;
+    } else {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Failed to upload file']);
+        exit();
+    }
 }
 
 if ($receiver_id <= 0) {
@@ -45,15 +107,38 @@ $can_message = false;
 if ($sender_role === 'admin' || $receiver['role'] === 'admin') {
     $can_message = true;
 }
-// Teachers can ONLY reply to messages from students (including new_student)
+// Teachers can message students who:
+// - Booked trial with them
+// - Booked paid lesson with them
+// - Previously messaged them
 elseif ($sender_role === 'teacher' && ($receiver['role'] === 'student' || $receiver['role'] === 'new_student')) {
-    $check = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct'");
-    $check->bind_param("ii", $receiver_id, $sender_id);
-    $check->execute();
-    if ($check->get_result()->num_rows > 0) {
-        $can_message = true;
+    // Check if student has booked trial or lesson with this teacher
+    $check_booking = $conn->prepare("SELECT id FROM lessons WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+    $check_booking->bind_param("ii", $receiver_id, $sender_id);
+    $check_booking->execute();
+    $has_booking = $check_booking->get_result()->num_rows > 0;
+    $check_booking->close();
+    
+    // Check if student has trial with this teacher
+    if (!$has_booking) {
+        $check_trial = $conn->prepare("SELECT id FROM trial_lessons WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+        $check_trial->bind_param("ii", $receiver_id, $sender_id);
+        $check_trial->execute();
+        $has_trial = $check_trial->get_result()->num_rows > 0;
+        $check_trial->close();
+        $has_booking = $has_trial;
     }
-    $check->close();
+    
+    // Check if student previously messaged this teacher
+    if (!$has_booking) {
+        $check_msg = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct' LIMIT 1");
+        $check_msg->bind_param("ii", $receiver_id, $sender_id);
+        $check_msg->execute();
+        $has_booking = $check_msg->get_result()->num_rows > 0;
+        $check_msg->close();
+    }
+    
+    $can_message = $has_booking;
 }
 // Students can message teachers and admins
 elseif (($sender_role === 'student' || $sender_role === 'new_student') && ($receiver['role'] === 'teacher' || $receiver['role'] === 'admin')) {
@@ -120,17 +205,28 @@ if ($verify_result->num_rows === 0) {
 }
 $verify_thread->close();
 
-// Insert message with thread_id
-$insert_msg = $conn->prepare("INSERT INTO messages (thread_id, sender_id, receiver_id, message, message_type, sent_at) VALUES (?, ?, ?, ?, 'direct', NOW())");
-if (!$insert_msg) {
-    header('Content-Type: application/json');
-    $error_detail = defined('APP_DEBUG') && APP_DEBUG ? $conn->error : 'Database error';
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $error_detail]);
-    $conn->close();
-    exit();
+// Insert message with thread_id (including attachment if present)
+if ($attachment_path) {
+    $insert_msg = $conn->prepare("INSERT INTO messages (thread_id, sender_id, receiver_id, message, message_type, attachment_path, attachment_type, sent_at) VALUES (?, ?, ?, ?, 'direct', ?, ?, NOW())");
+    if (!$insert_msg) {
+        header('Content-Type: application/json');
+        $error_detail = defined('APP_DEBUG') && APP_DEBUG ? $conn->error : 'Database error';
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $error_detail]);
+        $conn->close();
+        exit();
+    }
+    $insert_msg->bind_param("iiisss", $thread_id, $sender_id, $receiver_id, $message, $attachment_path, $attachment_type);
+} else {
+    $insert_msg = $conn->prepare("INSERT INTO messages (thread_id, sender_id, receiver_id, message, message_type, sent_at) VALUES (?, ?, ?, ?, 'direct', NOW())");
+    if (!$insert_msg) {
+        header('Content-Type: application/json');
+        $error_detail = defined('APP_DEBUG') && APP_DEBUG ? $conn->error : 'Database error';
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $error_detail]);
+        $conn->close();
+        exit();
+    }
+    $insert_msg->bind_param("iiis", $thread_id, $sender_id, $receiver_id, $message);
 }
-
-$insert_msg->bind_param("iiss", $thread_id, $sender_id, $receiver_id, $message);
 
 if ($insert_msg->execute()) {
     // Update thread's last_message_at timestamp

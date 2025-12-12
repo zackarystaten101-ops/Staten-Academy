@@ -96,7 +96,10 @@ if (!in_array('age_visibility', $existing_cols)) $conn->query("ALTER TABLE users
 if (!in_array('specialty', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN specialty VARCHAR(100) DEFAULT NULL AFTER age_visibility");
 if (!in_array('hourly_rate', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN hourly_rate DECIMAL(10,2) DEFAULT NULL AFTER specialty");
 if (!in_array('learning_track', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN learning_track ENUM('kids', 'adults', 'coding') NULL AFTER hourly_rate");
+// Note: assigned_teacher_id is deprecated - migration will remove it
 if (!in_array('assigned_teacher_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN assigned_teacher_id INT(6) UNSIGNED NULL AFTER learning_track");
+if (!in_array('preferred_category', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN preferred_category ENUM('young_learners', 'adults', 'coding') NULL AFTER learning_track");
+if (!in_array('trial_used', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN trial_used BOOLEAN DEFAULT FALSE AFTER preferred_category");
 if (!in_array('last_active', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN last_active TIMESTAMP NULL AFTER reg_date");
 // Preply-style calendar features (check if already added later in file)
 if (!in_array('default_buffer_minutes', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN default_buffer_minutes INT DEFAULT 15 AFTER assigned_teacher_id");
@@ -323,7 +326,10 @@ while($row = $msg_cols->fetch_assoc()) { $existing_msg_cols[] = $row['Field']; }
 
 if (!in_array('thread_id', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN thread_id INT(6) UNSIGNED AFTER id");
 if (!in_array('message_type', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN message_type ENUM('direct', 'support') DEFAULT 'direct' AFTER message");
+if (!in_array('attachment_path', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN attachment_path VARCHAR(500) DEFAULT NULL AFTER message_type");
+if (!in_array('attachment_type', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN attachment_type ENUM('image', 'video', 'file') DEFAULT NULL AFTER attachment_path");
 if (!in_array('is_read', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN is_read BOOLEAN DEFAULT FALSE AFTER sent_at");
+if (!in_array('read_at', $existing_msg_cols)) $conn->query("ALTER TABLE messages ADD COLUMN read_at TIMESTAMP NULL AFTER is_read");
 
 // Add foreign key for thread_id if messages table exists
 $check_fk = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='messages' AND COLUMN_NAME='thread_id' AND REFERENCED_TABLE_NAME='message_threads'");
@@ -359,6 +365,110 @@ $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COL
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE teacher_availability ADD CONSTRAINT fk_availability_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
 }
+
+// =====================================================
+// TEACHER_AVAILABILITY_SLOTS TABLE
+// Available time slots per teacher (more detailed than teacher_availability)
+// =====================================================
+$sql = "CREATE TABLE IF NOT EXISTS teacher_availability_slots (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    day_of_week ENUM('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday') NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    is_recurring BOOLEAN DEFAULT TRUE,
+    specific_date DATE DEFAULT NULL,
+    is_available BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_day_time (day_of_week, start_time),
+    INDEX idx_specific_date (specific_date),
+    INDEX idx_available (is_available),
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// =====================================================
+// TRIAL_LESSONS TABLE
+// Track trial lesson usage (one per student)
+// =====================================================
+$sql = "CREATE TABLE IF NOT EXISTS trial_lessons (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    lesson_id INT(6) UNSIGNED DEFAULT NULL,
+    stripe_payment_id VARCHAR(255) NOT NULL,
+    used_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_student_trial (student_id),
+    INDEX idx_student (student_id),
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_lesson (lesson_id),
+    INDEX idx_stripe_payment (stripe_payment_id),
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// =====================================================
+// TEACHER_CATEGORIES TABLE
+// Links teachers to categories (young_learners, adults, coding)
+// =====================================================
+$sql = "CREATE TABLE IF NOT EXISTS teacher_categories (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    category ENUM('young_learners', 'adults', 'coding') NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_teacher_category (teacher_id, category),
+    INDEX idx_teacher (teacher_id),
+    INDEX idx_category (category),
+    INDEX idx_active (is_active),
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// =====================================================
+// STUDENT_WALLET TABLE
+// Wallet balance tracking (PHP side, syncs with TypeScript)
+// =====================================================
+$sql = "CREATE TABLE IF NOT EXISTS student_wallet (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL UNIQUE,
+    balance DECIMAL(10,2) DEFAULT 0.00,
+    trial_credits INT DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_student (student_id),
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
+
+// =====================================================
+// WALLET_TRANSACTIONS TABLE
+// Transaction history for wallet operations
+// =====================================================
+$sql = "CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(6) UNSIGNED NOT NULL,
+    type ENUM('purchase', 'deduction', 'refund', 'trial', 'adjustment') NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    stripe_payment_id VARCHAR(255) DEFAULT NULL,
+    reference_id VARCHAR(255) DEFAULT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_student (student_id),
+    INDEX idx_type (type),
+    INDEX idx_stripe_payment (stripe_payment_id),
+    INDEX idx_reference (reference_id),
+    INDEX idx_created (created_at),
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+$conn->query($sql);
 
 // Create lessons table (for booked lessons)
 $sql = "CREATE TABLE IF NOT EXISTS lessons (
@@ -401,6 +511,33 @@ if (!in_array('attendance_status', $existing_lessons_cols)) $conn->query("ALTER 
 if (!in_array('student_notes', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN student_notes TEXT NULL AFTER attendance_status");
 if (!in_array('completion_notes', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN completion_notes TEXT NULL AFTER student_notes");
 if (!in_array('confirmed_at', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN confirmed_at TIMESTAMP NULL AFTER completion_notes");
+// Student-selects-teacher model columns
+if (!in_array('is_trial', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN is_trial BOOLEAN DEFAULT FALSE AFTER status");
+if (!in_array('wallet_transaction_id', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN wallet_transaction_id INT(6) UNSIGNED NULL AFTER is_trial");
+if (!in_array('category', $existing_lessons_cols)) $conn->query("ALTER TABLE lessons ADD COLUMN category ENUM('young_learners', 'adults', 'coding') NULL AFTER wallet_transaction_id");
+
+// Add indexes for new columns
+$index_check = $conn->query("SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lessons' AND INDEX_NAME = 'idx_wallet_transaction'");
+if ($index_check) {
+    $index_result = $index_check->fetch_assoc();
+    if ($index_result['count'] == 0) {
+        $conn->query("ALTER TABLE lessons ADD INDEX idx_wallet_transaction (wallet_transaction_id)");
+    }
+}
+$index_check = $conn->query("SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lessons' AND INDEX_NAME = 'idx_category'");
+if ($index_check) {
+    $index_result = $index_check->fetch_assoc();
+    if ($index_result['count'] == 0) {
+        $conn->query("ALTER TABLE lessons ADD INDEX idx_category (category)");
+    }
+}
+$index_check = $conn->query("SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lessons' AND INDEX_NAME = 'idx_is_trial'");
+if ($index_check) {
+    $index_result = $index_check->fetch_assoc();
+    if ($index_result['count'] == 0) {
+        $conn->query("ALTER TABLE lessons ADD INDEX idx_is_trial (is_trial)");
+    }
+}
 
 // Add foreign keys separately
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
@@ -410,6 +547,17 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE lessons ADD CONSTRAINT fk_lessons_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+}
+// Add foreign key for wallet_transaction_id
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='lessons' AND COLUMN_NAME='wallet_transaction_id' AND REFERENCED_TABLE_NAME='wallet_transactions'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $col_check = $conn->query("SHOW COLUMNS FROM lessons LIKE 'wallet_transaction_id'");
+    if ($col_check && $col_check->num_rows > 0) {
+        $wallet_table_check = $conn->query("SHOW TABLES LIKE 'wallet_transactions'");
+        if ($wallet_table_check && $wallet_table_check->num_rows > 0) {
+            $conn->query("ALTER TABLE lessons ADD CONSTRAINT fk_lesson_wallet_transaction FOREIGN KEY (wallet_transaction_id) REFERENCES wallet_transactions(id) ON DELETE SET NULL");
+        }
+    }
 }
 
 // Create time_off table (for teacher time-off periods)
@@ -963,10 +1111,42 @@ if (!$fk_check || $fk_check->num_rows == 0) {
     $conn->query("ALTER TABLE group_class_enrollments ADD CONSTRAINT fk_enrollment_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
 }
 
-// Add foreign key for assigned_teacher_id in users table
+// Add foreign key for assigned_teacher_id in users table (deprecated but kept for migration)
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='users' AND COLUMN_NAME='assigned_teacher_id' AND REFERENCED_TABLE_NAME='users'");
 if (!$fk_check || $fk_check->num_rows == 0) {
-    $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_assigned_teacher FOREIGN KEY (assigned_teacher_id) REFERENCES users(id) ON DELETE SET NULL");
+    $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'assigned_teacher_id'");
+    if ($col_check && $col_check->num_rows > 0) {
+        $conn->query("ALTER TABLE users ADD CONSTRAINT fk_user_assigned_teacher FOREIGN KEY (assigned_teacher_id) REFERENCES users(id) ON DELETE SET NULL");
+    }
+}
+
+// =====================================================
+// MIGRATION: Student Selects Teacher Model
+// Migrate existing students to new model
+// =====================================================
+
+// Migrate learning_track to preferred_category
+$migrate_check = $conn->query("SELECT COUNT(*) as count FROM users WHERE learning_track IS NOT NULL AND (preferred_category IS NULL OR preferred_category = '')");
+if ($migrate_check && $migrate_check->num_rows > 0) {
+    $migrate_result = $migrate_check->fetch_assoc();
+    if ($migrate_result['count'] > 0) {
+        // Map learning_track to preferred_category
+        $conn->query("UPDATE users SET preferred_category = CASE 
+            WHEN learning_track = 'kids' THEN 'young_learners'
+            WHEN learning_track = 'adults' THEN 'adults'
+            WHEN learning_track = 'coding' THEN 'coding'
+            ELSE NULL
+        END WHERE learning_track IS NOT NULL AND (preferred_category IS NULL OR preferred_category = '')");
+    }
+}
+
+// Initialize trial_used for all students
+$trial_check = $conn->query("SELECT COUNT(*) as count FROM users WHERE role IN ('student', 'new_student') AND trial_used IS NULL");
+if ($trial_check && $trial_check->num_rows > 0) {
+    $trial_result = $trial_check->fetch_assoc();
+    if ($trial_result['count'] > 0) {
+        $conn->query("UPDATE users SET trial_used = FALSE WHERE role IN ('student', 'new_student') AND trial_used IS NULL");
+    }
 }
 
 // Add foreign key for plan_id in users table (only if column exists)

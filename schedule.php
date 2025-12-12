@@ -29,6 +29,7 @@ require_once __DIR__ . '/google-calendar-config.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 require_once __DIR__ . '/app/Services/TimezoneService.php';
 require_once __DIR__ . '/app/Services/CalendarService.php';
+require_once __DIR__ . '/app/Services/TeacherService.php';
 
 // Ensure getAssetPath function is available
 if (!function_exists('getAssetPath')) {
@@ -69,85 +70,36 @@ $user_role = $_SESSION['user_role'] ?? 'student';
 // Get user's timezone
 $user_timezone = $tzService->getUserTimezone($user_id);
 
-// For students, check onboarding status and get availability
+// Initialize TeacherService
+$teacherService = new TeacherService($conn);
+
+// For students, get teachers in their category
 if ($user_role === 'student' || $user_role === 'new_student') {
-    // Check if student has completed onboarding
-    $stmt = $conn->prepare("SELECT assigned_teacher_id, plan_id, learning_track FROM users WHERE id = ?");
+    // Get student's preferred category
+    $stmt = $conn->prepare("SELECT preferred_category FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     $stmt->close();
     
-    $has_plan = !empty($user['plan_id']);
-    $learning_needs_check = $conn->prepare("SELECT id FROM student_learning_needs WHERE student_id = ? AND completed = 1");
-    $learning_needs_check->bind_param("i", $user_id);
-    $learning_needs_check->execute();
-    $has_learning_needs = $learning_needs_check->get_result()->num_rows > 0;
-    $learning_needs_check->close();
+    $student_category = ($user && isset($user['preferred_category'])) ? $user['preferred_category'] : 'adults'; // Default to adults if not set
     
-    // If student hasn't completed onboarding, redirect to dashboard
-    if (!$has_plan || !$has_learning_needs) {
-        header("Location: student-dashboard.php");
-        exit();
-    }
+    // Get all teachers in student's category
+    $all_available_teachers = $teacherService->getTeachersByCategory($student_category, ['has_availability' => true]);
     
-    // Get assigned teacher
-    $selected_teacher = $user['assigned_teacher_id'] ?? null;
+    // Get selected teacher from query parameter (if browsing a specific teacher)
+    $selected_teacher = isset($_GET['teacher_id']) ? intval($_GET['teacher_id']) : null;
     
-    // If no assigned teacher, try to get from assignment table
-    if (!$selected_teacher) {
-        $assignment = $assignmentModel->getStudentTeacher($user_id);
-        if ($assignment) {
-            $selected_teacher = $assignment['teacher_id'];
-            $teacher_data = [
-                'id' => $assignment['teacher_id'],
-                'name' => $assignment['teacher_name'],
-                'email' => $assignment['teacher_email'],
-                'profile_pic' => $assignment['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg'),
-                'bio' => $assignment['teacher_bio'] ?? ''
-            ];
+    if ($selected_teacher) {
+        // Fetch selected teacher details
+        $teacher_data = $teacherService->getTeacherProfile($selected_teacher);
+        if ($teacher_data) {
+            // Fetch teacher's availability slots
+            $start_date = date('Y-m-d');
+            $end_date = date('Y-m-d', strtotime('+30 days'));
+            $availability_slots = $teacherService->getTeacherAvailability($selected_teacher, $start_date, $end_date);
         }
-    }
-    
-    // If still no teacher assigned but has learning needs, show all available teachers
-    if (!$selected_teacher) {
-        // Get all teachers for the student's track
-        $track = $user['learning_track'];
-        $all_teachers_stmt = $conn->prepare("
-            SELECT u.id, u.name, u.email, u.profile_pic, u.bio
-            FROM users u
-            WHERE u.role = 'teacher' 
-            AND u.application_status = 'approved'
-            ORDER BY u.name
-        ");
-        $all_teachers_stmt->execute();
-        $all_teachers_result = $all_teachers_stmt->get_result();
-        $all_available_teachers = [];
-        while ($teacher_row = $all_teachers_result->fetch_assoc()) {
-            // Get combined availability for each teacher
-            $teacher_slots = $api->getTeacherAvailability($teacher_row['id'], null, null);
-            if (count($teacher_slots) > 0) {
-                $teacher_row['availability_slots'] = $teacher_slots;
-                $all_available_teachers[] = $teacher_row;
-            }
-        }
-        $all_teachers_stmt->close();
-        
-        // Will show combined availability view instead of single teacher
-    } else {
-        // Fetch assigned teacher details
-        $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
-        $stmt->bind_param("i", $selected_teacher);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result->num_rows > 0) {
-            $teacher_data = $result->fetch_assoc();
-        }
-        $stmt->close();
-        
-        // Fetch teacher's availability slots
-        $availability_slots = $api->getTeacherAvailability($selected_teacher, null, null);
     }
     
     // Fetch student's upcoming lessons
@@ -211,7 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (
     $user_result = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     
-    if (empty($user_result['plan_id'])) {
+    if (!$user_result || empty($user_result['plan_id'])) {
         http_response_code(403);
         echo json_encode(['error' => 'Please select and purchase a plan first.']);
         exit();
@@ -256,18 +208,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (
     $teacher_id = $booking_teacher_id;
     $student_id = $_SESSION['user_id'];
     
-    // If teacher was assigned via booking, update student's assigned_teacher_id
-    if ($teacher_id_from_post && !$selected_teacher) {
-        $update_assign_stmt = $conn->prepare("UPDATE users SET assigned_teacher_id = ? WHERE id = ?");
-        $update_assign_stmt->bind_param("ii", $teacher_id, $student_id);
-        $update_assign_stmt->execute();
-        $update_assign_stmt->close();
-        
-        // Create assignment record
-        require_once __DIR__ . '/app/Models/TeacherAssignment.php';
-        $assignmentModel = new TeacherAssignment($conn);
-        $assignmentModel->assignStudentToTeacher($student_id, $teacher_id);
-    }
+    // Note: assigned_teacher_id is deprecated - students can now book with any teacher in their category
+    // No need to update assigned_teacher_id anymore
 
     // Validate
     if (strtotime($lesson_date . ' ' . $start_time) <= time()) {
@@ -485,7 +427,7 @@ $stmt->close();
 
 // Set page title for header
 $page_title = 'Schedule & Book Lessons';
-$_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg');
+$_SESSION['profile_pic'] = ($user && isset($user['profile_pic'])) ? $user['profile_pic'] : getAssetPath('images/placeholder-teacher.svg');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -712,18 +654,32 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                             </div>
                         <?php endif; ?>
                         <div class="teachers-grid">
-                            <?php
-                            $teachers_result = $conn->query("SELECT id, name, profile_pic, email FROM users WHERE role='teacher' ORDER BY name");
-                            while ($teacher = $teachers_result->fetch_assoc()):
-                            ?>
-                                <div class="teacher-card">
-                                    <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
-                                         style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
-                                    <h4><?php echo htmlspecialchars($teacher['name']); ?></h4>
-                                    <p><?php echo htmlspecialchars($teacher['email']); ?></p>
-                                    <a href="schedule.php?teacher=<?php echo urlencode($teacher['name']); ?>">View Availability</a>
-                                </div>
-                            <?php endwhile; ?>
+                            <?php if (isset($all_available_teachers) && count($all_available_teachers) > 0): ?>
+                                <?php foreach ($all_available_teachers as $teacher): ?>
+                                    <div class="teacher-card">
+                                        <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                             style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                                        <h4><?php echo htmlspecialchars($teacher['name']); ?></h4>
+                                        <?php if ($teacher['specialty']): ?>
+                                            <p style="color: #666; font-size: 0.9rem;"><?php echo htmlspecialchars($teacher['specialty']); ?></p>
+                                        <?php endif; ?>
+                                        <?php if ($teacher['avg_rating']): ?>
+                                            <p style="color: #ffa500; margin: 5px 0;">
+                                                <?php 
+                                                $rating = floatval($teacher['avg_rating']);
+                                                for ($i = 0; $i < floor($rating); $i++) {
+                                                    echo '<i class="fas fa-star"></i>';
+                                                }
+                                                ?>
+                                                <?php echo number_format($rating, 1); ?> (<?php echo intval($teacher['review_count']); ?>)
+                                            </p>
+                                        <?php endif; ?>
+                                        <a href="schedule.php?teacher_id=<?php echo intval($teacher['id']); ?>" class="btn">View Availability & Book</a>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p>No teachers available in your category. Please contact support.</p>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php elseif ($teacher_data): ?>

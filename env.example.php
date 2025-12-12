@@ -23,6 +23,24 @@ define('DB_NAME', 'staten_academy');
 define('STRIPE_SECRET_KEY', 'sk_test_YOUR_TEST_SECRET_KEY_HERE');
 define('STRIPE_PUBLISHABLE_KEY', 'pk_test_YOUR_TEST_PUBLISHABLE_KEY_HERE');
 
+// Stripe Webhook Secret
+// Get this from https://dashboard.stripe.com/webhooks
+// Create a webhook endpoint pointing to: https://yourdomain.com/stripe-webhook.php
+// Copy the "Signing secret" (starts with whsec_...)
+define('STRIPE_WEBHOOK_SECRET', 'whsec_YOUR_WEBHOOK_SECRET_HERE');
+
+// Stripe Product IDs for Categories
+// Create products in Stripe Dashboard and get their Price IDs
+// ===========================================
+define('STRIPE_PRODUCT_TRIAL', 'price_YOUR_TRIAL_PRICE_ID_HERE'); // $25 trial lesson
+define('STRIPE_PRODUCT_KIDS', 'price_YOUR_KIDS_PLAN_PRICE_ID_HERE'); // Young Learners category
+define('STRIPE_PRODUCT_ADULTS', 'price_YOUR_ADULTS_PLAN_PRICE_ID_HERE'); // Adults category
+define('STRIPE_PRODUCT_CODING', 'price_YOUR_CODING_PLAN_PRICE_ID_HERE'); // English for Coding category
+
+// Wallet API URL (TypeScript backend)
+// ===========================================
+define('WALLET_API_URL', 'http://localhost:3001/api'); // Default: localhost:3001
+
 // ===========================================
 // Google OAuth Configuration
 // Get these from https://console.cloud.google.com/

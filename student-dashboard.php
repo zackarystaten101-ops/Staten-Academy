@@ -3,6 +3,9 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 require_once __DIR__ . '/google-calendar-config.php';
+require_once __DIR__ . '/app/Services/WalletService.php';
+require_once __DIR__ . '/app/Services/TeacherService.php';
+require_once __DIR__ . '/app/Services/TrialService.php';
 
 // #region agent log helper
 if (!function_exists('agent_debug_log')) {
@@ -38,42 +41,98 @@ $student_id = $_SESSION['user_id'];
 $user = getUserById($conn, $student_id);
 $user_role = $_SESSION['user_role']; // Keep actual role (student or new_student)
 
-// Get student's track and assigned teacher
-require_once __DIR__ . '/app/Models/TeacherAssignment.php';
-require_once __DIR__ . '/app/Models/GroupClass.php';
-$assignmentModel = new TeacherAssignment($conn);
-$groupClassModel = new GroupClass($conn);
-
-$assigned_teacher = null;
-$student_track = $user['learning_track'] ?? null;
-
-// Get assigned teacher
-if (!empty($user['assigned_teacher_id'])) {
-    $stmt = $conn->prepare("SELECT id, name, email, profile_pic, bio FROM users WHERE id = ?");
-    $stmt->bind_param("i", $user['assigned_teacher_id']);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $assigned_teacher = $result->fetch_assoc();
-    $stmt->close();
-} else {
-    // Try assignment table
-    $assignment = $assignmentModel->getStudentTeacher($student_id);
-    if ($assignment) {
-        $assigned_teacher = [
-            'id' => $assignment['teacher_id'],
-            'name' => $assignment['teacher_name'],
-            'email' => $assignment['teacher_email'],
-            'profile_pic' => $assignment['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg'),
-            'bio' => $assignment['teacher_bio'] ?? ''
-        ];
-    }
+// Verify user exists
+if (!$user) {
+    session_destroy();
+    header("Location: login.php");
+    exit();
 }
 
-// Get group classes for student's track
-$group_classes = [];
-if ($student_track) {
-    $group_classes = $groupClassModel->getTrackClasses($student_track);
+// Initialize services
+$walletService = new WalletService($conn);
+$teacherService = new TeacherService($conn);
+$trialService = new TrialService($conn);
+
+// Get student's preferred category
+$student_category = ($user && isset($user['preferred_category'])) ? $user['preferred_category'] : 'adults';
+$student_track = ($user && isset($user['learning_track'])) ? $user['learning_track'] : null; // Keep for backward compatibility
+
+// Get wallet balance
+$wallet = $walletService->getWalletBalance($student_id);
+
+// Get trial status
+$trial_info = $trialService->getTrialInfo($student_id);
+$trial_used = $user['trial_used'] ?? false;
+
+// Get upcoming lessons (all teachers)
+$upcoming_lessons = [];
+$stmt = $conn->prepare("
+    SELECT l.*, u.id as teacher_id, u.name as teacher_name, u.profile_pic as teacher_pic, u.email as teacher_email
+    FROM lessons l
+    JOIN users u ON l.teacher_id = u.id
+    WHERE l.student_id = ? 
+    AND l.lesson_date >= CURDATE() 
+    AND l.status = 'scheduled'
+    ORDER BY l.lesson_date ASC, l.start_time ASC
+    LIMIT 10
+");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $upcoming_lessons[] = $row;
 }
+$stmt->close();
+
+// Get past lessons
+$past_lessons = [];
+$stmt = $conn->prepare("
+    SELECT l.*, u.id as teacher_id, u.name as teacher_name, u.profile_pic as teacher_pic, u.email as teacher_email
+    FROM lessons l
+    JOIN users u ON l.teacher_id = u.id
+    WHERE l.student_id = ? 
+    AND (l.lesson_date < CURDATE() OR (l.lesson_date = CURDATE() AND l.end_time < CURTIME()))
+    AND l.status IN ('scheduled', 'completed')
+    ORDER BY l.lesson_date DESC, l.start_time DESC
+    LIMIT 10
+");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $past_lessons[] = $row;
+}
+$stmt->close();
+
+// Get favorite teachers
+$favorite_teachers = [];
+$stmt = $conn->prepare("
+    SELECT u.id, u.name, u.profile_pic, u.specialty, u.avg_rating, u.review_count
+    FROM favorite_teachers ft
+    JOIN users u ON ft.teacher_id = u.id
+    WHERE ft.student_id = ?
+    ORDER BY ft.created_at DESC
+    LIMIT 5
+");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $favorite_teachers[] = $row;
+}
+$stmt->close();
+
+// Get unread message count
+$unread_messages = 0;
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM messages WHERE receiver_id = ? AND is_read = 0 AND message_type = 'direct'");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$result = $stmt->get_result();
+if ($result->num_rows > 0) {
+    $unread_data = $result->fetch_assoc();
+    $unread_messages = intval($unread_data['count']);
+}
+$stmt->close();
 
 // Initialize Google Calendar API
 $api = new GoogleCalendarAPI($conn);
@@ -246,18 +305,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
         $insert_time->close();
     }
     
-    // Automated teacher assignment: Find best matching teacher
-    // Priority: 1. Teachers with matching preferred times (if specified), 2. Teachers with matching track, 3. Available capacity, 4. Best rating
+    // Note: Automated teacher assignment removed - students now select their own teachers
+    // Update preferred_category based on track
+    if ($track) {
+        $category_map = ['kids' => 'young_learners', 'adults' => 'adults', 'coding' => 'coding'];
+        $preferred_category = $category_map[$track] ?? 'adults';
+        $category_stmt = $conn->prepare("UPDATE users SET preferred_category = ? WHERE id = ?");
+        $category_stmt->bind_param("si", $preferred_category, $student_id);
+        $category_stmt->execute();
+        $category_stmt->close();
+    }
     
-    // Check if student has preferred times
-    $preferred_times_check = $conn->prepare("SELECT COUNT(*) as time_count FROM preferred_times WHERE student_id = ?");
-    $preferred_times_check->bind_param("i", $student_id);
-    $preferred_times_check->execute();
-    $preferred_times_result = $preferred_times_check->get_result();
-    $preferred_times_row = $preferred_times_result->fetch_assoc();
-    $has_preferred_times = $preferred_times_row['time_count'] > 0;
-    $preferred_times_check->close();
-    
+    // Old teacher assignment code removed - students now select teachers themselves
+    /* REMOVED: Automated teacher assignment logic
     if ($has_preferred_times) {
         // Match teachers with overlapping availability
         $teacher_match_stmt = $conn->prepare("
@@ -298,38 +358,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
         ");
     }
     
-    $teacher_match_stmt->execute();
-    $matched_teacher = $teacher_match_stmt->get_result()->fetch_assoc();
-    $teacher_match_stmt->close();
-    
-    if ($matched_teacher) {
-        // Assign teacher to student
-        $assign_stmt = $conn->prepare("UPDATE users SET assigned_teacher_id = ? WHERE id = ?");
-        $assign_stmt->bind_param("ii", $matched_teacher['id'], $student_id);
-        $assign_stmt->execute();
-        $assign_stmt->close();
-        
-        // Also create assignment record
-        $assign_record_stmt = $conn->prepare("
-            INSERT INTO teacher_assignments (student_id, teacher_id, assigned_at, status)
-            VALUES (?, ?, NOW(), 'active')
-            ON DUPLICATE KEY UPDATE teacher_id = VALUES(teacher_id), assigned_at = NOW(), status = 'active'
-        ");
-        $assign_record_stmt->bind_param("ii", $student_id, $matched_teacher['id']);
-        $assign_record_stmt->execute();
-        $assign_record_stmt->close();
-        
-        // Notify student
-        if (function_exists('createNotification')) {
-            createNotification($conn, $student_id, 'assignment', 'Teacher Assigned', 
-                'You have been assigned to ' . $matched_teacher['name'] . '. You can now book lessons!', 
-                'student-dashboard.php#overview');
-        }
-        
-        $_SESSION['success_message'] = 'Learning needs submitted! You have been assigned to ' . $matched_teacher['name'] . '. You can now book lessons!';
-    } else {
-        $_SESSION['success_message'] = 'Learning needs submitted! We will assign you a teacher within 24-48 hours.';
-    }
+    // Note: Teacher assignment removed - students now select teachers themselves
+    $_SESSION['success_message'] = 'Learning needs submitted! You can now browse and select teachers in your category.';
     
     header("Location: student-dashboard.php#overview");
     exit();
@@ -474,16 +504,17 @@ if ($stmt) {
     $stmt->close();
 }
 
-// Fetch Teachers from bookings for "My Teachers" tab
+// Fetch Teachers from lessons for "My Teachers" tab (all teachers student has booked with)
 $my_teachers = [];
 $stmt = $conn->prepare("
-    SELECT DISTINCT u.id, u.name, u.profile_pic, u.bio, 
+    SELECT DISTINCT u.id, u.name, u.profile_pic, u.bio, u.specialty,
            (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating,
            (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
-           (SELECT COUNT(*) FROM bookings WHERE student_id = ? AND teacher_id = u.id) as lesson_count
+           (SELECT COUNT(*) FROM lessons WHERE student_id = ? AND teacher_id = u.id) as lesson_count
     FROM users u 
-    JOIN bookings b ON u.id = b.teacher_id 
-    WHERE b.student_id = ?
+    JOIN lessons l ON u.id = l.teacher_id 
+    WHERE l.student_id = ?
+    ORDER BY lesson_count DESC, u.name ASC
 ");
 if ($stmt) {
     $stmt->bind_param("ii", $student_id, $student_id);
@@ -645,7 +676,7 @@ $active_tab = 'overview';
             $learning_needs_stmt->close();
             
             // Show TODO list if student hasn't completed onboarding
-            if (!$has_plan || !$has_learning_needs || !$assigned_teacher):
+            if (!$has_plan || !$has_learning_needs):
             ?>
             <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border: 2px solid #dc3545; margin-bottom: 30px;">
                 <h2 style="color: #dc3545; margin-bottom: 20px;">
@@ -681,43 +712,104 @@ $active_tab = 'overview';
                     </div>
                     <?php endif; ?>
                     
-                    <?php if ($has_plan && $has_learning_needs && !$assigned_teacher): ?>
-                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #28a745;">
-                        <div style="flex: 1;">
-                            <h3 style="margin: 0 0 5px 0; color: #155724;">
-                                <i class="fas fa-spinner fa-spin"></i> Step 3: Teacher Assignment
-                            </h3>
-                            <p style="margin: 0; color: #666; font-size: 0.9rem;">We're matching you with the perfect teacher based on your learning needs. This usually takes 24-48 hours.</p>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </div>
             </div>
             <?php endif; ?>
             
-            <?php if ($assigned_teacher): ?>
-            <div class="dashboard-card" style="margin-bottom: 30px; padding: 25px; background: linear-gradient(135deg, var(--track-bg, #f0f7ff) 0%, #ffffff 100%);">
-                <h2 style="margin-bottom: 20px; color: var(--track-primary, #0b6cf5);">
-                    <i class="fas fa-chalkboard-teacher"></i> Your Assigned Teacher
+            <!-- Upcoming Classes -->
+            <?php if (count($upcoming_lessons) > 0): ?>
+            <div class="dashboard-card" style="margin-bottom: 30px;">
+                <h2 style="margin-bottom: 20px;">
+                    <i class="fas fa-calendar-check"></i> Upcoming Classes
                 </h2>
-                <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
-                    <img src="<?php echo htmlspecialchars($assigned_teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
-                         alt="<?php echo htmlspecialchars($assigned_teacher['name']); ?>" 
-                         style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid var(--track-primary, #0b6cf5);">
-                    <div style="flex: 1; min-width: 200px;">
-                        <h3 style="margin: 0 0 10px 0; color: var(--track-primary, #004080);"><?php echo htmlspecialchars($assigned_teacher['name']); ?></h3>
-                        <?php if (!empty($assigned_teacher['bio'])): ?>
-                            <p style="color: #666; margin: 0; line-height: 1.6;"><?php echo htmlspecialchars(substr($assigned_teacher['bio'], 0, 150)); ?><?php echo strlen($assigned_teacher['bio']) > 150 ? '...' : ''; ?></p>
-                        <?php endif; ?>
-                    </div>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <?php foreach ($upcoming_lessons as $lesson): ?>
+                        <div style="display: flex; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; align-items: center;">
+                            <img src="<?php echo htmlspecialchars($lesson['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                 alt="<?php echo htmlspecialchars($lesson['teacher_name']); ?>" 
+                                 style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 5px 0;"><?php echo htmlspecialchars($lesson['teacher_name']); ?></h4>
+                                <p style="margin: 0; color: #666; font-size: 0.9rem;">
+                                    <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?> 
+                                    at <?php echo date('g:i A', strtotime($lesson['start_time'])); ?>
+                                    <?php if ($lesson['is_trial']): ?>
+                                        <span style="color: #28a745; margin-left: 10px;"><i class="fas fa-gift"></i> Trial</span>
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            <a href="teacher-profile.php?id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem;">
+                                View Teacher
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-            <?php else: ?>
-            <div class="dashboard-card" style="margin-bottom: 30px; padding: 25px; background: #fff3cd; border-left: 4px solid #ffc107;">
-                <h3 style="margin: 0; color: #856404;">
-                    <i class="fas fa-info-circle"></i> No Teacher Assigned Yet
-                </h3>
-                <p style="margin: 10px 0 0 0; color: #856404;">Your teacher will be assigned soon. Please contact support if you have questions.</p>
+            <?php endif; ?>
+            
+            <!-- Past Classes -->
+            <?php if (count($past_lessons) > 0): ?>
+            <div class="dashboard-card" style="margin-bottom: 30px;">
+                <h2 style="margin-bottom: 20px;">
+                    <i class="fas fa-history"></i> Past Classes
+                </h2>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <?php foreach ($past_lessons as $lesson): ?>
+                        <div style="display: flex; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; align-items: center;">
+                            <img src="<?php echo htmlspecialchars($lesson['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                 alt="<?php echo htmlspecialchars($lesson['teacher_name']); ?>" 
+                                 style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;">
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0 0 5px 0;"><?php echo htmlspecialchars($lesson['teacher_name']); ?></h4>
+                                <p style="margin: 0; color: #666; font-size: 0.9rem;">
+                                    <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?> 
+                                    at <?php echo date('g:i A', strtotime($lesson['start_time'])); ?>
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <a href="teacher-profile.php?id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem;">
+                                    Book Again
+                                </a>
+                                <a href="schedule.php?teacher_id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem; background: #28a745;">
+                                    Schedule
+                                </a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Favorite Teachers -->
+            <?php if (count($favorite_teachers) > 0): ?>
+            <div class="dashboard-card" style="margin-bottom: 30px;">
+                <h2 style="margin-bottom: 20px;">
+                    <i class="fas fa-heart"></i> Favorite Teachers
+                </h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                    <?php foreach ($favorite_teachers as $teacher): ?>
+                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                 alt="<?php echo htmlspecialchars($teacher['name']); ?>" 
+                                 style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;">
+                            <h4 style="margin: 0 0 5px 0; font-size: 1rem;"><?php echo htmlspecialchars($teacher['name']); ?></h4>
+                            <?php if ($teacher['avg_rating']): ?>
+                                <p style="margin: 0; color: #ffa500; font-size: 0.9rem;">
+                                    <?php 
+                                    $rating = floatval($teacher['avg_rating']);
+                                    for ($i = 0; $i < floor($rating); $i++) {
+                                        echo '<i class="fas fa-star"></i>';
+                                    }
+                                    ?>
+                                    <?php echo number_format($rating, 1); ?>
+                                </p>
+                            <?php endif; ?>
+                            <a href="teacher-profile.php?id=<?php echo intval($teacher['id']); ?>" class="btn" style="margin-top: 10px; padding: 6px 12px; font-size: 0.85rem; display: inline-block;">
+                                View Profile
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
             <?php endif; ?>
             
@@ -1378,12 +1470,19 @@ $active_tab = 'overview';
                         </button>
                         <?php 
                         // Only show profile link if teacher is assigned to student
-                        $is_assigned = ($assigned_teacher && $assigned_teacher['id'] == $teacher['id']) || 
-                                      ($user['assigned_teacher_id'] == $teacher['id']);
-                        if ($is_assigned): ?>
-                            <a href="profile.php?id=<?php echo $teacher['id']; ?>" class="btn-outline btn-sm">View Profile</a>
+                        // Check if student has lessons with this teacher
+                        $has_lessons = false;
+                        $lesson_check = $conn->prepare("SELECT id FROM lessons WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+                        $lesson_check->bind_param("ii", $student_id, $teacher['id']);
+                        $lesson_check->execute();
+                        $has_lessons = $lesson_check->get_result()->num_rows > 0;
+                        $lesson_check->close();
+                        
+                        if ($has_lessons): ?>
+                            <a href="teacher-profile.php?id=<?php echo $teacher['id']; ?>" class="btn-outline btn-sm">View Profile</a>
+                            <a href="schedule.php?teacher_id=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Book Again</a>
                         <?php endif; ?>
-                        <a href="message_threads.php?to=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Message</a>
+                        <a href="message_threads.php?user_id=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Message</a>
                     </div>
                 </div>
                 <?php endforeach; ?>

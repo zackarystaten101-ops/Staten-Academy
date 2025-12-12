@@ -67,21 +67,44 @@ if ($other_user_id > 0) {
     if ($user_role === 'admin' || $other_user['role'] === 'admin') {
         $can_message = true; // Admins can always message, and anyone can message admin
     }
-    // Teachers can ONLY reply to messages from students (including new_student)
+    // Teachers can message students who:
+    // - Booked trial with them
+    // - Booked paid lesson with them
+    // - Previously messaged them
     elseif ($user_role === 'teacher' && ($other_user['role'] === 'student' || $other_user['role'] === 'new_student')) {
-        $check = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct'");
-        $check->bind_param("ii", $other_user_id, $user_id);
-        $check->execute();
-        if ($check->get_result()->num_rows == 0) {
-            $can_message = false;
+        // Check if student has booked trial or lesson with this teacher
+        $check_booking = $conn->prepare("SELECT id FROM lessons WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+        $check_booking->bind_param("ii", $other_user_id, $user_id);
+        $check_booking->execute();
+        $has_booking = $check_booking->get_result()->num_rows > 0;
+        $check_booking->close();
+        
+        // Check if student has trial with this teacher
+        if (!$has_booking) {
+            $check_trial = $conn->prepare("SELECT id FROM trial_lessons WHERE student_id = ? AND teacher_id = ? LIMIT 1");
+            $check_trial->bind_param("ii", $other_user_id, $user_id);
+            $check_trial->execute();
+            $has_booking = $check_trial->get_result()->num_rows > 0;
+            $check_trial->close();
         }
-        $check->close();
+        
+        // Check if student previously messaged this teacher
+        if (!$has_booking) {
+            $check_msg = $conn->prepare("SELECT id FROM messages WHERE sender_id = ? AND receiver_id = ? AND message_type = 'direct' LIMIT 1");
+            $check_msg->bind_param("ii", $other_user_id, $user_id);
+            $check_msg->execute();
+            $has_booking = $check_msg->get_result()->num_rows > 0;
+            $check_msg->close();
+        }
+        
+        $can_message = $has_booking;
     }
     
     // Fetch messages (only direct messages, ordered by time)
     $stmt = $conn->prepare("
-        SELECT m.id, m.sender_id, m.receiver_id, m.message, m.sent_at, m.is_read, u.name as sender_name, u.profile_pic 
-        FROM messages m 
+        SELECT m.id, m.sender_id, m.receiver_id, m.message, m.sent_at, m.is_read, m.read_at, 
+               m.attachment_path, m.attachment_type, u.name as sender_name, u.profile_pic 
+        FROM messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.message_type = 'direct'
         AND ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
@@ -95,7 +118,7 @@ if ($other_user_id > 0) {
     
     // Mark messages as read when user views the conversation
     if (count($messages) > 0) {
-        $stmt = $conn->prepare("UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND is_read = 0 AND message_type = 'direct'");
+        $stmt = $conn->prepare("UPDATE messages SET is_read = 1, read_at = NOW() WHERE receiver_id = ? AND sender_id = ? AND is_read = 0 AND message_type = 'direct'");
         $stmt->bind_param("ii", $user_id, $other_user_id);
         $stmt->execute();
         $stmt->close();
@@ -151,12 +174,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
                 header('Content-Type: application/json');
                 echo json_encode($response);
+                $insert_msg->close();
                 exit();
             }
+            // For non-AJAX requests, close will happen after the if block
         } else {
             $response['message'] = 'Error sending message';
         }
-        $insert_msg->close();
+        // Close statement once, regardless of success or failure (for non-AJAX requests)
+        if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) !== 'xmlhttprequest') {
+            $insert_msg->close();
+        }
     }
     
     // If not AJAX, reload page
@@ -597,8 +625,46 @@ if ($conv_result) {
                             <div class="message <?php echo ($msg['sender_id'] == $user_id) ? 'sent' : 'received'; ?>">
                                 <img src="<?php echo htmlspecialchars($msg['profile_pic']); ?>" alt="" class="message-pic" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 <div>
-                                    <div class="message-bubble"><?php echo htmlspecialchars($msg['message']); ?></div>
-                                    <div class="message-time"><?php echo date('M d, H:i', strtotime($msg['sent_at'])); ?></div>
+                                    <div class="message-bubble">
+                                        <?php if ($msg['message']): ?>
+                                            <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($msg['attachment_path'])): ?>
+                                            <div class="message-attachment" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 6px;">
+                                                <?php if ($msg['attachment_type'] === 'image'): ?>
+                                                    <img src="<?php echo htmlspecialchars(getAssetPath($msg['attachment_path'])); ?>" 
+                                                         alt="Attachment" 
+                                                         style="max-width: 300px; max-height: 300px; border-radius: 4px; cursor: pointer;"
+                                                         onclick="window.open('<?php echo htmlspecialchars(getAssetPath($msg['attachment_path'])); ?>', '_blank')">
+                                                <?php elseif ($msg['attachment_type'] === 'video'): ?>
+                                                    <video controls style="max-width: 300px; max-height: 300px; border-radius: 4px;">
+                                                        <source src="<?php echo htmlspecialchars(getAssetPath($msg['attachment_path'])); ?>" type="video/mp4">
+                                                        Your browser does not support the video tag.
+                                                    </video>
+                                                <?php else: ?>
+                                                    <a href="<?php echo htmlspecialchars(getAssetPath($msg['attachment_path'])); ?>" 
+                                                       target="_blank" 
+                                                       style="display: inline-flex; align-items: center; gap: 8px; color: #0b6cf5; text-decoration: none;">
+                                                        <i class="fas fa-file"></i>
+                                                        <span>Download Attachment</span>
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="message-meta" style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                        <span class="message-time"><?php echo date('M d, H:i', strtotime($msg['sent_at'])); ?></span>
+                                        <?php if ($msg['sender_id'] == $user_id && isset($msg['is_read']) && $msg['is_read']): ?>
+                                            <span class="read-indicator" title="Read at <?php echo $msg['read_at'] ? date('M d, H:i', strtotime($msg['read_at'])) : ''; ?>">
+                                                <i class="fas fa-check-double" style="color: #0b6cf5;"></i>
+                                            </span>
+                                        <?php elseif ($msg['sender_id'] == $user_id): ?>
+                                            <span class="read-indicator" title="Sent">
+                                                <i class="fas fa-check" style="color: #999;"></i>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -612,11 +678,33 @@ if ($conv_result) {
                 
                 <!-- Input -->
                 <?php if ($can_message): ?>
-                    <form class="input-panel" id="messageForm" method="POST">
-                        <textarea id="messageInput" name="message" placeholder="Type your message..." required></textarea>
+                    <form class="input-panel" id="messageForm" method="POST" enctype="multipart/form-data">
+                        <input type="file" id="attachmentInput" name="attachment" accept="image/*,video/*,.pdf,.doc,.docx" style="display: none;">
+                        <button type="button" class="attach-btn" onclick="document.getElementById('attachmentInput').click();" title="Attach file">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <textarea id="messageInput" name="message" placeholder="Type your message..."></textarea>
                         <input type="hidden" name="receiver_id" value="<?php echo $other_user['id']; ?>">
                         <button type="submit" class="send-btn" title="Send message"><i class="fas fa-paper-plane"></i></button>
+                        <div id="attachmentPreview" style="display: none; padding: 8px; background: #f8f9fa; border-radius: 4px; margin-top: 8px;">
+                            <span id="attachmentName"></span>
+                            <button type="button" onclick="clearAttachment()" style="margin-left: 8px; color: #dc3545; background: none; border: none; cursor: pointer;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </form>
+                    <script>
+                    document.getElementById('attachmentInput').addEventListener('change', function(e) {
+                        if (e.target.files.length > 0) {
+                            document.getElementById('attachmentPreview').style.display = 'block';
+                            document.getElementById('attachmentName').textContent = e.target.files[0].name;
+                        }
+                    });
+                    function clearAttachment() {
+                        document.getElementById('attachmentInput').value = '';
+                        document.getElementById('attachmentPreview').style.display = 'none';
+                    }
+                    </script>
                 <?php else: ?>
                     <div class="input-panel" style="background: #f8d7da; justify-content: center; text-align: center; color: #721c24;">
                         You cannot message this student until they message you first.

@@ -43,35 +43,51 @@ $user_id = $teacher_id; // Ensure $user_id is set for sidebar component and slot
 $user = getUserById($conn, $teacher_id);
 $user_role = 'teacher';
 
-// Load models for assigned students and group classes
-require_once __DIR__ . '/app/Models/TeacherAssignment.php';
+// Load models for group classes
 require_once __DIR__ . '/app/Models/GroupClass.php';
-$assignmentModel = new TeacherAssignment($conn);
 $groupClassModel = new GroupClass($conn);
 
-// Get assigned students
-$assigned_students = $assignmentModel->getTeacherStudents($teacher_id);
-
-// Get teacher's track(s) from assigned students
-$teacher_tracks = [];
-foreach ($assigned_students as $student) {
-    if (!empty($student['learning_track']) && !in_array($student['learning_track'], $teacher_tracks)) {
-        $teacher_tracks[] = $student['learning_track'];
-    }
+// Get students who have booked lessons with this teacher (from lessons table)
+$students = [];
+$stmt = $conn->prepare("
+    SELECT DISTINCT u.id, u.name, u.email, u.profile_pic, u.preferred_category,
+           (SELECT COUNT(*) FROM lessons WHERE student_id = u.id AND teacher_id = ?) as lesson_count,
+           (SELECT MAX(lesson_date) FROM lessons WHERE student_id = u.id AND teacher_id = ?) as last_lesson_date,
+           (SELECT note FROM lesson_notes WHERE student_id = u.id AND teacher_id = ? ORDER BY created_at DESC LIMIT 1) as last_note
+    FROM users u
+    INNER JOIN lessons l ON u.id = l.student_id
+    WHERE l.teacher_id = ? AND u.role IN ('student', 'new_student')
+    ORDER BY last_lesson_date DESC
+");
+$stmt->bind_param("iiii", $teacher_id, $teacher_id, $teacher_id, $teacher_id);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $students[] = $row;
 }
+$stmt->close();
 
-// Get group classes for teacher's tracks
+// Get teacher's categories
+$teacher_categories = [];
+$stmt = $conn->prepare("SELECT category FROM teacher_categories WHERE teacher_id = ? AND is_active = 1");
+$stmt->bind_param("i", $teacher_id);
+$stmt->execute();
+$cat_result = $stmt->get_result();
+while ($row = $cat_result->fetch_assoc()) {
+    $teacher_categories[] = $row['category'];
+}
+$stmt->close();
+
+// Get group classes for teacher
 $group_classes = [];
-if (!empty($teacher_tracks)) {
-    foreach ($teacher_tracks as $track) {
-        $track_classes = $groupClassModel->getTrackClasses($track);
-        $group_classes = array_merge($group_classes, $track_classes);
-    }
+$stmt = $conn->prepare("SELECT * FROM group_classes WHERE teacher_id = ? ORDER BY scheduled_date DESC");
+$stmt->bind_param("i", $teacher_id);
+$stmt->execute();
+$gc_result = $stmt->get_result();
+while ($row = $gc_result->fetch_assoc()) {
+    $group_classes[] = $row;
 }
-// Filter to only show classes taught by this teacher
-$group_classes = array_filter($group_classes, function($class) use ($teacher_id) {
-    return $class['teacher_id'] == $teacher_id;
-});
+$stmt->close();
 
 // Handle Profile Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
@@ -338,6 +354,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_note'])) {
     exit();
 }
 
+// Handle Availability Slot Management
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_availability_slot'])) {
+    $day_of_week = $_POST['day_of_week'] ?? null;
+    $start_time = $_POST['start_time'];
+    $end_time = $_POST['end_time'];
+    $timezone = $_POST['timezone'] ?? 'America/New_York';
+    $is_recurring = isset($_POST['is_recurring']) ? 1 : 0;
+    $specific_date = !empty($_POST['specific_date']) ? $_POST['specific_date'] : null;
+    
+    if (strtotime($start_time) >= strtotime($end_time)) {
+        $error_msg = 'End time must be after start time';
+    } else {
+        $stmt = $conn->prepare("
+            INSERT INTO teacher_availability_slots (teacher_id, day_of_week, start_time, end_time, timezone, is_recurring, specific_date, is_available)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ");
+        $stmt->bind_param("issssis", $teacher_id, $day_of_week, $start_time, $end_time, $timezone, $is_recurring, $specific_date);
+        if ($stmt->execute()) {
+            $success_msg = 'Availability slot added successfully';
+        } else {
+            $error_msg = 'Error adding availability slot: ' . $stmt->error;
+        }
+        $stmt->close();
+    }
+    header("Location: teacher-dashboard.php#calendar");
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_availability_slot'])) {
+    $slot_id = (int)$_POST['slot_id'];
+    $stmt = $conn->prepare("DELETE FROM teacher_availability_slots WHERE id = ? AND teacher_id = ?");
+    $stmt->bind_param("ii", $slot_id, $teacher_id);
+    if ($stmt->execute()) {
+        $success_msg = 'Availability slot deleted successfully';
+    } else {
+        $error_msg = 'Error deleting availability slot';
+    }
+    $stmt->close();
+    header("Location: teacher-dashboard.php#calendar");
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_availability_slot'])) {
+    $slot_id = (int)$_POST['slot_id'];
+    $stmt = $conn->prepare("UPDATE teacher_availability_slots SET is_available = NOT is_available WHERE id = ? AND teacher_id = ?");
+    $stmt->bind_param("ii", $slot_id, $teacher_id);
+    $stmt->execute();
+    $stmt->close();
+    header("Location: teacher-dashboard.php#calendar");
+    exit();
+}
+
+// Handle Group Class Request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_group_class_request'])) {
+    $track = $_POST['track'];
+    $scheduled_date = $_POST['scheduled_date'];
+    $scheduled_time = $_POST['scheduled_time'];
+    $duration = (int)$_POST['duration'];
+    $max_students = (int)$_POST['max_students'];
+    $title = trim($_POST['title']);
+    $description = trim($_POST['description']);
+    
+    $stmt = $conn->prepare("
+        INSERT INTO group_classes (teacher_id, track, scheduled_date, scheduled_time, duration, max_students, title, description, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    ");
+    $stmt->bind_param("isssiiss", $teacher_id, $track, $scheduled_date, $scheduled_time, $duration, $max_students, $title, $description);
+    if ($stmt->execute()) {
+        $success_msg = 'Group class request submitted successfully';
+    } else {
+        $error_msg = 'Error creating group class request: ' . $stmt->error;
+    }
+    $stmt->close();
+    header("Location: teacher-dashboard.php#group-classes");
+    exit();
+}
+
 // Handle Support Message
 $support_message = '';
 $support_error = '';
@@ -372,32 +465,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_support'])) {
 // Fetch Stats
 $rating_data = getTeacherRating($conn, $teacher_id);
 $earnings_data = getTeacherEarnings($conn, $teacher_id);
-$student_count = count($assigned_students); // Use assigned students count
+$student_count = count($students);
 $pending_assignments = getPendingAssignmentsCount($conn, $teacher_id);
-
-// Use assigned students instead of students from lessons
-$students = [];
-foreach ($assigned_students as $assignment) {
-    if (!isset($assignment['student_id'])) continue;
-    
-    $student_id = $assignment['student_id'];
-    $stmt = $conn->prepare("
-        SELECT u.id, u.name, u.email, u.profile_pic, u.learning_track,
-               (SELECT COUNT(*) FROM lessons WHERE student_id = u.id AND teacher_id = ?) as lesson_count,
-               (SELECT note FROM lesson_notes WHERE student_id = u.id AND teacher_id = ? ORDER BY created_at DESC LIMIT 1) as last_note
-        FROM users u 
-        WHERE u.id = ?
-    ");
-    $stmt->bind_param("iii", $teacher_id, $teacher_id, $student_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($row = $result->fetch_assoc()) {
-        $row['track'] = $assignment['track'] ?? $row['learning_track'] ?? null;
-        $row['assigned_at'] = $assignment['assigned_at'] ?? null;
-        $students[] = $row;
-    }
-    $stmt->close();
-}
 
 // Fetch Assignments
 $assignments = [];
@@ -797,6 +866,10 @@ $active_tab = 'overview';
                             <i class="fas fa-cog"></i>
                             <span>Calendar Setup</span>
                         </a>
+                        <a href="#" onclick="switchTab('calendar'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Manage Availability</span>
+                        </a>
                         <a href="#" onclick="switchTab('slot-requests'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); text-decoration: none; color: white; position: relative;">
                             <i class="fas fa-calendar-plus"></i>
                             <span>Slot Requests</span>
@@ -853,7 +926,7 @@ $active_tab = 'overview';
                         Communication
                     </h3>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); text-decoration: none; color: white; position: relative;">
+                        <a href="#" onclick="switchTab('messages'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); text-decoration: none; color: white; position: relative;">
                             <i class="fas fa-inbox"></i>
                             <span>Messages</span>
                             <?php if ($unread_messages > 0): ?>
@@ -999,6 +1072,9 @@ $active_tab = 'overview';
             
             <div id="performance-earnings" class="performance-subtab active">
                 <h2>Earnings</h2>
+                <div style="background: #e1f0ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #0b6cf5;">
+                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Payouts are handled outside this system. Contact admin for payment inquiries.
+                </div>
             
             <div class="earnings-summary">
                 <div class="earnings-card primary">
@@ -1054,15 +1130,15 @@ $active_tab = 'overview';
 
         <!-- Students Tab -->
         <div id="students" class="tab-content">
-            <h1>My Assigned Students</h1>
+            <h1>My Students</h1>
             
-            <?php if (!empty($teacher_tracks)): ?>
+            <?php if (!empty($teacher_categories)): ?>
                 <div style="margin-bottom: 20px; padding: 15px; background: #f0f7ff; border-radius: 8px; border-left: 4px solid #0b6cf5;">
-                    <strong>Teaching Tracks:</strong> 
-                    <?php foreach ($teacher_tracks as $track): ?>
+                    <strong>Teaching Categories:</strong> 
+                    <?php foreach ($teacher_categories as $category): ?>
                         <span style="display: inline-block; padding: 5px 15px; background: white; border-radius: 20px; margin-left: 10px; font-size: 0.9rem;">
-                            <i class="fas fa-<?php echo $track === 'kids' ? 'child' : ($track === 'coding' ? 'code' : 'user-graduate'); ?>"></i>
-                            <?php echo ucfirst($track); ?>
+                            <i class="fas fa-<?php echo $category === 'young_learners' ? 'child' : ($category === 'coding' ? 'code' : 'user-graduate'); ?>"></i>
+                            <?php echo ucfirst(str_replace('_', ' ', $category)); ?>
                         </span>
                     <?php endforeach; ?>
                 </div>
@@ -1072,20 +1148,20 @@ $active_tab = 'overview';
                 <?php foreach ($students as $student): ?>
                 <div class="card" style="margin-bottom: 15px;">
                     <div style="display: flex; gap: 20px; align-items: flex-start;">
-                        <img src="<?php echo h($student['profile_pic']); ?>" alt="" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                        <img src="<?php echo h($student['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" alt="" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                         <div style="flex: 1;">
                             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                                 <h3 style="margin: 0; border: none; padding: 0;"><?php echo h($student['name']); ?></h3>
-                                <?php if (!empty($student['track'])): ?>
+                                <?php if (!empty($student['preferred_category'])): ?>
                                     <span style="display: inline-block; padding: 3px 10px; background: #e1f0ff; color: #0b6cf5; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
-                                        <?php echo ucfirst($student['track']); ?>
+                                        <?php echo ucfirst(str_replace('_', ' ', $student['preferred_category'])); ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
                             <div style="font-size: 0.9rem; color: var(--gray); margin-bottom: 10px;">
                                 <?php echo h($student['email']); ?> • <?php echo $student['lesson_count']; ?> lessons
-                                <?php if (!empty($student['assigned_at'])): ?>
-                                    • Assigned <?php echo date('M d, Y', strtotime($student['assigned_at'])); ?>
+                                <?php if (!empty($student['last_lesson_date'])): ?>
+                                    • Last lesson <?php echo date('M d, Y', strtotime($student['last_lesson_date'])); ?>
                                 <?php endif; ?>
                             </div>
                             <?php if ($student['last_note']): ?>
@@ -1101,7 +1177,7 @@ $active_tab = 'overview';
                             </form>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <a href="message_threads.php?to=<?php echo $student['id']; ?>" class="btn-outline btn-sm">Message</a>
+                            <a href="message_threads.php?user_id=<?php echo $student['id']; ?>" class="btn-outline btn-sm">Message</a>
                             <button onclick="showAssignmentModal(<?php echo $student['id']; ?>, '<?php echo h($student['name']); ?>')" class="btn-primary btn-sm">Assign Work</button>
                         </div>
                     </div>
@@ -1307,6 +1383,311 @@ $active_tab = 'overview';
                     </div>
                     <p style="margin-top: 15px; color: #666; font-size: 1.1rem;">Loading slot requests...</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Calendar Editor Tab -->
+        <div id="calendar" class="tab-content">
+            <h1><i class="fas fa-calendar-alt"></i> Manage Availability</h1>
+            <p style="color: var(--gray); margin-bottom: 30px;">Set your available time slots for students to book lessons.</p>
+            
+            <?php
+            // Fetch existing availability slots
+            $availability_slots = [];
+            $stmt = $conn->prepare("
+                SELECT * FROM teacher_availability_slots 
+                WHERE teacher_id = ? 
+                ORDER BY day_of_week, start_time
+            ");
+            $stmt->bind_param("i", $teacher_id);
+            $stmt->execute();
+            $slots_result = $stmt->get_result();
+            while ($row = $slots_result->fetch_assoc()) {
+                $availability_slots[] = $row;
+            }
+            $stmt->close();
+            ?>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-plus-circle"></i> Add Availability Slot</h2>
+                <form method="POST">
+                    <div class="profile-grid">
+                        <div class="form-group">
+                            <label>Day of Week (for recurring slots)</label>
+                            <select name="day_of_week">
+                                <option value="">Select day...</option>
+                                <option value="Monday">Monday</option>
+                                <option value="Tuesday">Tuesday</option>
+                                <option value="Wednesday">Wednesday</option>
+                                <option value="Thursday">Thursday</option>
+                                <option value="Friday">Friday</option>
+                                <option value="Saturday">Saturday</option>
+                                <option value="Sunday">Sunday</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Specific Date (optional, for one-time slots)</label>
+                            <input type="date" name="specific_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Start Time</label>
+                            <input type="time" name="start_time" required>
+                        </div>
+                        <div class="form-group">
+                            <label>End Time</label>
+                            <input type="time" name="end_time" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Timezone</label>
+                            <select name="timezone" required>
+                                <option value="America/New_York" selected>Eastern Time (ET)</option>
+                                <option value="America/Chicago">Central Time (CT)</option>
+                                <option value="America/Denver">Mountain Time (MT)</option>
+                                <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="is_recurring" value="1" checked> Recurring Weekly
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" name="add_availability_slot" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Slot
+                    </button>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2><i class="fas fa-list"></i> Current Availability Slots</h2>
+                <?php if (count($availability_slots) > 0): ?>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Day/Date</th>
+                            <th>Time</th>
+                            <th>Timezone</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($availability_slots as $slot): ?>
+                        <tr>
+                            <td>
+                                <?php 
+                                if ($slot['specific_date']) {
+                                    echo date('M d, Y', strtotime($slot['specific_date']));
+                                } else {
+                                    echo $slot['day_of_week'] ?? 'N/A';
+                                }
+                                ?>
+                            </td>
+                            <td><?php echo date('g:i A', strtotime($slot['start_time'])); ?> - <?php echo date('g:i A', strtotime($slot['end_time'])); ?></td>
+                            <td><?php echo $slot['timezone']; ?></td>
+                            <td><?php echo $slot['is_recurring'] ? 'Recurring' : 'One-time'; ?></td>
+                            <td>
+                                <span class="tag <?php echo $slot['is_available'] ? 'success' : 'warning'; ?>">
+                                    <?php echo $slot['is_available'] ? 'Available' : 'Unavailable'; ?>
+                                </span>
+                            </td>
+                            <td>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="slot_id" value="<?php echo $slot['id']; ?>">
+                                    <button type="submit" name="toggle_availability_slot" class="btn-outline btn-sm">
+                                        <?php echo $slot['is_available'] ? 'Disable' : 'Enable'; ?>
+                                    </button>
+                                </form>
+                                <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this slot?');">
+                                    <input type="hidden" name="slot_id" value="<?php echo $slot['id']; ?>">
+                                    <button type="submit" name="delete_availability_slot" class="btn-danger btn-sm">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-calendar-times"></i>
+                    <h3>No Availability Slots</h3>
+                    <p>Add availability slots above to allow students to book lessons with you.</p>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div id="messages" class="tab-content">
+            <h1><i class="fas fa-envelope"></i> Messages</h1>
+            <p style="color: var(--gray); margin-bottom: 30px;">Communicate with your students.</p>
+            
+            <?php
+            // Fetch message threads for this teacher
+            $message_threads = [];
+            $stmt = $conn->prepare("
+                SELECT 
+                    t.other_user_id,
+                    u.name as other_user_name,
+                    u.profile_pic as other_user_pic,
+                    (SELECT message FROM messages WHERE (sender_id = ? AND receiver_id = t.other_user_id) OR (sender_id = t.other_user_id AND receiver_id = ?) ORDER BY sent_at DESC LIMIT 1) as last_message,
+                    (SELECT sent_at FROM messages WHERE (sender_id = ? AND receiver_id = t.other_user_id) OR (sender_id = t.other_user_id AND receiver_id = ?) ORDER BY sent_at DESC LIMIT 1) as last_message_time,
+                    (SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND sender_id = t.other_user_id AND is_read = 0) as unread_count
+                FROM (
+                    SELECT DISTINCT 
+                        CASE 
+                            WHEN m.sender_id = ? THEN m.receiver_id
+                            ELSE m.sender_id
+                        END as other_user_id
+                    FROM messages m
+                    WHERE (m.sender_id = ? OR m.receiver_id = ?)
+                ) t
+                JOIN users u ON t.other_user_id = u.id
+                WHERE u.role IN ('student', 'new_student')
+                ORDER BY last_message_time DESC
+            ");
+            $stmt->bind_param("iiiiiiii", $teacher_id, $teacher_id, $teacher_id, $teacher_id, $teacher_id, $teacher_id, $teacher_id, $teacher_id);
+            $stmt->execute();
+            $threads_result = $stmt->get_result();
+            while ($row = $threads_result->fetch_assoc()) {
+                $message_threads[] = $row;
+            }
+            $stmt->close();
+            ?>
+            
+            <?php if (count($message_threads) > 0): ?>
+                <?php foreach ($message_threads as $thread): ?>
+                <div class="card" style="margin-bottom: 15px; cursor: pointer;" onclick="window.location.href='message_threads.php?user_id=<?php echo $thread['other_user_id']; ?>'">
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <img src="<?php echo h($thread['other_user_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" alt="" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <h3 style="margin: 0; border: none; padding: 0;"><?php echo h($thread['other_user_name']); ?></h3>
+                                <?php if ($thread['unread_count'] > 0): ?>
+                                    <span style="background: #0b6cf5; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                        <?php echo $thread['unread_count']; ?> new
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <p style="color: var(--gray); font-size: 0.9rem; margin: 0;">
+                                <?php echo h(substr($thread['last_message'] ?? 'No messages', 0, 80)); ?>...
+                            </p>
+                            <p style="color: var(--gray); font-size: 0.8rem; margin: 5px 0 0;">
+                                <?php echo $thread['last_message_time'] ? formatRelativeTime($thread['last_message_time']) : 'No messages'; ?>
+                            </p>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color: var(--gray);"></i>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-envelope-open"></i>
+                    <h3>No Messages Yet</h3>
+                    <p>Messages from students will appear here.</p>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Group Classes Tab -->
+        <div id="group-classes" class="tab-content">
+            <h1><i class="fas fa-users"></i> Group Classes</h1>
+            <p style="color: var(--gray); margin-bottom: 30px;">Create and manage group class requests.</p>
+            
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-plus-circle"></i> Create Group Class Request</h2>
+                <form method="POST">
+                    <div class="profile-grid">
+                        <div class="form-group">
+                            <label>Category/Track</label>
+                            <select name="track" required>
+                                <option value="">Select category...</option>
+                                <option value="young_learners">Young Learners (0-11)</option>
+                                <option value="adults">Adults (12+)</option>
+                                <option value="coding">English for Coding / Tech</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Scheduled Date</label>
+                            <input type="date" name="scheduled_date" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Scheduled Time</label>
+                            <input type="time" name="scheduled_time" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (minutes)</label>
+                            <input type="number" name="duration" value="60" min="30" step="15" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Students</label>
+                            <input type="number" name="max_students" value="10" min="2" max="50" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" name="title" placeholder="e.g., Intermediate Conversation Practice" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea name="description" rows="4" placeholder="Describe the class content and objectives..."></textarea>
+                    </div>
+                    <button type="submit" name="create_group_class_request" class="btn-primary">
+                        <i class="fas fa-paper-plane"></i> Submit Request
+                    </button>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2><i class="fas fa-list"></i> My Group Classes</h2>
+                <?php if (count($group_classes) > 0): ?>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Date & Time</th>
+                            <th>Duration</th>
+                            <th>Max Students</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($group_classes as $class): ?>
+                        <tr>
+                            <td><?php echo h($class['title']); ?></td>
+                            <td><?php echo ucfirst(str_replace('_', ' ', $class['track'] ?? 'N/A')); ?></td>
+                            <td>
+                                <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?><br>
+                                <small><?php echo date('g:i A', strtotime($class['scheduled_time'])); ?></small>
+                            </td>
+                            <td><?php echo $class['duration']; ?> min</td>
+                            <td><?php echo $class['max_students']; ?></td>
+                            <td>
+                                <span class="tag <?php echo $class['status']; ?>">
+                                    <?php echo ucfirst($class['status']); ?>
+                                </span>
+                            </td>
+                            <td>
+                                <button onclick="viewGroupClassStudents(<?php echo $class['id']; ?>)" class="btn-outline btn-sm">
+                                    <i class="fas fa-users"></i> View Students
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>No Group Classes Yet</h3>
+                    <p>Create a group class request above to get started.</p>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 

@@ -8,7 +8,7 @@ import { query, transaction } from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import type pg from 'pg';
 
-export type EntitlementType = 'one_on_one_class' | 'group_class' | 'video_course_access' | 'practice_session';
+export type EntitlementType = 'one_on_one_class' | 'group_class' | 'video_course_access' | 'practice_session' | 'trial_credit';
 
 export interface Entitlement {
   id: string;
@@ -375,5 +375,183 @@ export async function getWalletLedger(studentId: number, limit: number = 50): Pr
     created_at: new Date(row.created_at),
     meta: row.meta || {},
   }));
+}
+
+/**
+ * Add trial credit to student wallet
+ * Creates a trial_credit entitlement
+ */
+export async function addTrialCredit(
+  studentId: number,
+  stripePaymentId: string
+): Promise<string> {
+  const result = await query(
+    `INSERT INTO entitlements 
+     (student_id, type, quantity_total, quantity_remaining, meta)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
+    [
+      studentId,
+      'trial_credit',
+      1,
+      1,
+      JSON.stringify({ stripe_payment_id: stripePaymentId, trial: true }),
+    ]
+  );
+  
+  // Also create wallet item for audit
+  const walletResult = await query(
+    `SELECT id FROM wallets WHERE user_id = $1`,
+    [studentId]
+  );
+  
+  let walletId: string;
+  if (walletResult.rows.length === 0) {
+    const newWallet = await query(
+      `INSERT INTO wallets (user_id) VALUES ($1) RETURNING id`,
+      [studentId]
+    );
+    walletId = newWallet.rows[0].id;
+  } else {
+    walletId = walletResult.rows[0].id;
+  }
+  
+  await query(
+    `INSERT INTO wallet_items (wallet_id, type, reference_id, status, amount, meta)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      walletId,
+      'plan_subscription',
+      stripePaymentId,
+      'confirmed',
+      25.00,
+      JSON.stringify({ trial: true, entitlement_id: result.rows[0].id }),
+    ]
+  );
+  
+  return result.rows[0].id;
+}
+
+/**
+ * Deduct funds for a lesson booking
+ * Checks balance and prevents negative balances
+ */
+export async function deductForLesson(
+  studentId: number,
+  amount: number,
+  lessonId: string | number,
+  existingClient?: pg.PoolClient
+): Promise<boolean> {
+  const execute = async (client: pg.PoolClient) => {
+    // Get current wallet balance (from MySQL student_wallet table via sync or direct query)
+    // For now, we'll use entitlements to check if student has available classes
+    // This is a simplified version - full implementation would sync with MySQL
+    
+    // Check if student has trial credit available
+    const trialResult = await client.query(
+      `SELECT id, quantity_remaining FROM entitlements
+       WHERE student_id = $1 AND type = 'trial_credit'
+       AND quantity_remaining > 0
+       ORDER BY created_at ASC
+       FOR UPDATE SKIP LOCKED
+       LIMIT 1`,
+      [studentId]
+    );
+    
+    if (trialResult.rows.length > 0) {
+      // Use trial credit
+      const trialEntitlement = trialResult.rows[0];
+      await client.query(
+        `UPDATE entitlements 
+         SET quantity_remaining = quantity_remaining - 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [trialEntitlement.id]
+      );
+      
+      // Create wallet item
+      const walletResult = await client.query(
+        `SELECT id FROM wallets WHERE user_id = $1`,
+        [studentId]
+      );
+      
+      if (walletResult.rows.length > 0) {
+        const walletId = walletResult.rows[0].id;
+        await client.query(
+          `INSERT INTO wallet_items (wallet_id, type, reference_id, credits_delta, amount, status, meta)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            walletId,
+            'entitlement_used',
+            String(lessonId),
+            -1,
+            amount,
+            'confirmed',
+            JSON.stringify({ entitlement_id: trialEntitlement.id, trial: true }),
+          ]
+        );
+      }
+      
+      return true;
+    }
+    
+    // Check for regular one-on-one class entitlements
+    const classResult = await client.query(
+      `SELECT id, quantity_remaining FROM entitlements
+       WHERE student_id = $1 AND type = 'one_on_one_class'
+       AND quantity_remaining > 0
+       AND (expires_at IS NULL OR expires_at > NOW())
+       ORDER BY created_at ASC
+       FOR UPDATE SKIP LOCKED
+       LIMIT 1`,
+      [studentId]
+    );
+    
+    if (classResult.rows.length > 0) {
+      const classEntitlement = classResult.rows[0];
+      await client.query(
+        `UPDATE entitlements 
+         SET quantity_remaining = quantity_remaining - 1,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [classEntitlement.id]
+      );
+      
+      // Create wallet item
+      const walletResult = await client.query(
+        `SELECT id FROM wallets WHERE user_id = $1`,
+        [studentId]
+      );
+      
+      if (walletResult.rows.length > 0) {
+        const walletId = walletResult.rows[0].id;
+        await client.query(
+          `INSERT INTO wallet_items (wallet_id, type, reference_id, credits_delta, amount, status, meta)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            walletId,
+            'entitlement_used',
+            String(lessonId),
+            -1,
+            amount,
+            'confirmed',
+            JSON.stringify({ entitlement_id: classEntitlement.id }),
+          ]
+        );
+      }
+      
+      return true;
+    }
+    
+    // No available entitlements - check MySQL balance as fallback
+    // This would require MySQL connection - for now, throw error
+    throw new Error('Insufficient balance or entitlements for lesson booking');
+  };
+  
+  if (existingClient) {
+    return execute(existingClient);
+  } else {
+    return transaction(execute);
+  }
 }
 
