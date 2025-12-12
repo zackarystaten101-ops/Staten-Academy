@@ -1461,9 +1461,48 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 }
 
 // Create admin_audit_log table for tracking admin actions
+// Check if table exists first
+$admin_audit_log_exists = $conn->query("SHOW TABLES LIKE 'admin_audit_log'");
+$admin_audit_log_current_cols = [];
+if ($admin_audit_log_exists && $admin_audit_log_exists->num_rows > 0) {
+    $cols_result = $conn->query("SHOW COLUMNS FROM admin_audit_log");
+    if ($cols_result) {
+        while($row = $cols_result->fetch_assoc()) {
+            $admin_audit_log_current_cols[$row['Field']] = [
+                'Type' => $row['Type'],
+                'Null' => $row['Null'],
+                'Key' => $row['Key']
+            ];
+        }
+    }
+    
+    // Check for existing foreign keys
+    $existing_fks = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_audit_log' AND TABLE_SCHEMA=DATABASE()");
+    $fk_names = [];
+    if ($existing_fks) {
+        while($fk_row = $existing_fks->fetch_assoc()) {
+            if (!empty($fk_row['CONSTRAINT_NAME'])) {
+                $fk_names[] = $fk_row['CONSTRAINT_NAME'];
+            }
+        }
+    }
+    
+    // If admin_id column needs fixing, drop foreign keys first, then alter
+    if (isset($admin_audit_log_current_cols['admin_id']) && 
+        strpos(strtolower($admin_audit_log_current_cols['admin_id']['Type']), 'unsigned') === false) {
+        // Drop foreign keys first
+        foreach ($fk_names as $fk_name) {
+            @$conn->query("ALTER TABLE admin_audit_log DROP FOREIGN KEY " . $conn->real_escape_string($fk_name));
+        }
+        
+        // Alter column
+        $alter_result = @$conn->query("ALTER TABLE admin_audit_log MODIFY COLUMN admin_id INT(6) UNSIGNED NOT NULL");
+    }
+}
+
 $sql = "CREATE TABLE IF NOT EXISTS admin_audit_log (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    admin_id INT NOT NULL,
+    admin_id INT(6) UNSIGNED NOT NULL,
     action VARCHAR(100) NOT NULL,
     target_type VARCHAR(50),
     target_id INT,
@@ -1473,10 +1512,33 @@ $sql = "CREATE TABLE IF NOT EXISTS admin_audit_log (
     INDEX idx_admin (admin_id),
     INDEX idx_action (action),
     INDEX idx_target (target_type, target_id),
-    INDEX idx_created (created_at),
-    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-$conn->query($sql);
+
+$create_result = @$conn->query($sql);
+
+// If CREATE TABLE fails with foreign key error, try recovery
+if ($create_result === false && ($conn->errno == 150 || strpos($conn->error ?? '', 'Foreign key constraint') !== false)) {
+    // Drop all foreign keys
+    $all_fks = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_audit_log' AND TABLE_SCHEMA=DATABASE() AND CONSTRAINT_NAME IS NOT NULL");
+    if ($all_fks) {
+        while($fk_row = $all_fks->fetch_assoc()) {
+            if (!empty($fk_row['CONSTRAINT_NAME'])) {
+                @$conn->query("ALTER TABLE admin_audit_log DROP FOREIGN KEY " . $conn->real_escape_string($fk_row['CONSTRAINT_NAME']));
+            }
+        }
+    }
+    
+    // Drop and recreate
+    @$conn->query("DROP TABLE IF EXISTS admin_audit_log");
+    $create_result = @$conn->query($sql);
+}
+
+// Add foreign key separately (like other tables)
+$fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='admin_audit_log' AND COLUMN_NAME='admin_id' AND REFERENCED_TABLE_NAME='users'");
+if (!$fk_check || $fk_check->num_rows == 0) {
+    $fk_result = @$conn->query("ALTER TABLE admin_audit_log ADD CONSTRAINT fk_admin_audit_log_admin FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE");
+}
 
 // Ensure admin account exists with correct credentials
 $admin_email = 'statenenglishacademy@gmail.com';
