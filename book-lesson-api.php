@@ -169,7 +169,7 @@ $student = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 // Get student's category for lesson record
-$student_category = $student_data['preferred_category'] ?? null;
+$student_category = ($student && isset($student['preferred_category'])) ? $student['preferred_category'] : null;
 
 // Start transaction for booking
 $conn->begin_transaction();

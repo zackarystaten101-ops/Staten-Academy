@@ -280,8 +280,8 @@ header.site-header {
   align-items: center;
   gap: 20px;
   padding: 18px 20px;
-  background: var(--brand-color, #004080);
-  color: #fff;
+  background: #FFFFFF;
+  color: #004080;
   min-height: 72px; /* ensures enough vertical space for centered content */
 }
 
@@ -316,12 +316,12 @@ header.site-header {
   pointer-events: auto;
 }
 
-/* Ensure centered branding is clearly visible on the dark header */
+/* Ensure centered branding is clearly visible on the white header */
 .header-center .branding,
 .header-center .branding h1,
 .header-center .branding p {
-  color: #ffffff; /* high contrast on header background */
-  text-shadow: 0 2px 8px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.5); /* Enhanced readability over gradients/images */
+  color: #004080; /* blue text on white header background */
+  text-shadow: none; /* Remove text shadow on white background */
 }
 
 /* Responsive: tablet and mobile improvements */
@@ -340,6 +340,7 @@ header.site-header {
   .site-logo {
     width: 72px;
     max-height: 56px;
+    filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
   }
 }
 
@@ -413,6 +414,7 @@ header.site-header {
     width: 52px;
     max-height: 40px;
     object-fit: contain;
+    filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
   }
 }
 
@@ -450,6 +452,7 @@ header.site-header {
     width: 48px;
     max-height: 36px;
     object-fit: contain;
+    filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
   }
 }
 
@@ -467,8 +470,9 @@ header.site-header {
   width: 84px;        /* ideal desktop size */
   max-width: 100%;
   height: auto;
-  max-height: 64px;   /* prevents very tall logos from stretching header */
+  max-height: 56px;   /* prevents very tall logos from stretching header */
   object-fit: contain;
+  filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
   display: block;
   border-radius: 6px;
   margin: 0;

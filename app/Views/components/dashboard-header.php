@@ -27,7 +27,7 @@ $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id
             <i class="fas fa-bars"></i>
         </button>
         <a href="index.php" class="header-logo-link" title="Go to Website Home">
-            <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Logo" class="header-logo">
+            <img src="<?php echo getLogoPath(); ?>" alt="Logo" class="header-logo">
             <h2>Staten Academy</h2>
         </a>
         <?php if ($user_role === 'teacher'): ?>

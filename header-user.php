@@ -59,7 +59,7 @@ if (isset($_SESSION['user_id'])) {
         display: flex;
         align-items: center;
         gap: 15px;
-        color: white;
+        color: #004080;
         z-index: 50;
     }
 
@@ -70,7 +70,7 @@ if (isset($_SESSION['user_id'])) {
 
     .user-info-text .user-name {
         font-weight: bold;
-        color: white;
+        color: #004080;
     }
 
     .user-info-text .user-role {
@@ -84,7 +84,7 @@ if (isset($_SESSION['user_id'])) {
         height: 45px;
         border-radius: 50%;
         object-fit: cover;
-        border: 2px solid white;
+        border: 2px solid #004080;
         flex-shrink: 0;
         cursor: pointer;
         transition: transform 0.2s;

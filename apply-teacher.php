@@ -146,6 +146,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apply to Teach - Staten Academy</title>
     <?php
+    // Load dashboard functions for getLogoPath
+    if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+        require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+    }
+    
     // Ensure getAssetPath is available - use same logic as index.php
     if (!function_exists('getAssetPath')) {
         function getAssetPath($asset) {
@@ -325,7 +330,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </head>
 <body>
      <header class="site-header">
-          <div class="header-left"><a href="index.php"><img src="<?php echo getAssetPath('logo.png'); ?>" alt="Logo" class="site-logo"></a></div>
+          <div class="header-left"><a href="index.php"><img src="<?php echo getLogoPath(); ?>" alt="Logo" class="site-logo"></a></div>
           <!-- User profile section (clean component) -->
           <?php include 'header-user.php'; ?>
       </header>

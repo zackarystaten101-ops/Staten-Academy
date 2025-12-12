@@ -210,7 +210,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <header class="site-header">
         <div class="header-left">
             <a href="index.php" style="text-decoration: none; display: flex; align-items: center;">
-                <img src="<?php echo getAssetPath('logo.png'); ?>" alt="Staten Academy logo" class="site-logo">
+                <img src="<?php echo getLogoPath(); ?>" alt="Staten Academy logo" class="site-logo">
             </a>
         </div>
         <div class="header-center">

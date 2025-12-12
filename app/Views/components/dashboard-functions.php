@@ -280,6 +280,52 @@ function h($string) {
 }
 
 /**
+ * Get logo path - checks for new shield logo first, falls back to default
+ * @return string URL path to logo (SVG > PNG > default logo.png)
+ */
+function getLogoPath() {
+    $base_dir = dirname(dirname(dirname(__DIR__)));
+    $public_uploads_svg = $base_dir . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'custom-shield.svg';
+    $public_uploads_png = $base_dir . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'custom-shield.png';
+    $flat_uploads_svg = $base_dir . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'custom-shield.svg';
+    $flat_uploads_png = $base_dir . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'custom-shield.png';
+    
+    // Check for SVG first (priority)
+    if (file_exists($public_uploads_svg)) {
+        return getAssetPath('uploads/custom-shield.svg');
+    } elseif (file_exists($flat_uploads_svg)) {
+        $basePath = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+        $basePath = str_replace('\\', '/', $basePath);
+        if ($basePath === '.' || $basePath === '/' || empty($basePath)) {
+            $basePath = '';
+        } else {
+            $basePath = '/' . trim($basePath, '/');
+        }
+        return $basePath . '/assets/uploads/custom-shield.svg';
+    }
+    
+    // Check for PNG second
+    if (file_exists($public_uploads_png)) {
+        return getAssetPath('uploads/custom-shield.png');
+    } elseif (file_exists($flat_uploads_png)) {
+        $basePath = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+        $basePath = str_replace('\\', '/', $basePath);
+        if ($basePath === '.' || $basePath === '/' || empty($basePath)) {
+            $basePath = '';
+        } else {
+            $basePath = '/' . trim($basePath, '/');
+        }
+        return $basePath . '/assets/uploads/custom-shield.png';
+    }
+    
+    // Fallback to default logo
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        error_log('Warning: New shield logo not found. Using default logo.png');
+    }
+    return getAssetPath('logo.png');
+}
+
+/**
  * Get asset path - works for both local development and cPanel deployment
  * @param string $asset Relative path from assets directory (e.g., 'styles.css', 'css/dashboard.css', 'logo.png')
  * @return string Correct URL path to asset (always uses forward slashes)

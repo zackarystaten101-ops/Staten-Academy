@@ -66,7 +66,7 @@
   display: block;
   width: 22px;
   height: 2px;
-  background: #ffffff; /* White to match header text color */
+  background: #004080; /* Blue to match header text color */
   position: relative;
   margin: 0 auto;
   top: 0;
@@ -79,7 +79,7 @@
 .menu-toggle .hamburger,
 .menu-toggle .hamburger::before,
 .menu-toggle .hamburger::after {
-  background: #ffffff; 
+  background: #004080;
 }
 
 .menu-toggle .hamburger::before,

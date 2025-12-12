@@ -65,13 +65,13 @@ body.dashboard-layout {
    Header Bar
    =========================================== */
 .header-bar {
-    background: linear-gradient(135deg, var(--secondary) 0%, #003366 100%);
-    color: white;
+    background: #FFFFFF;
+    color: #004080;
     padding: 12px 25px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 4px 20px rgba(0,64,128,0.3);
+    box-shadow: 0 4px 20px rgba(0,64,128,0.1);
     flex-shrink: 0;
     position: relative;
     z-index: 50; /* Lower than sidebar overlay but above content */
@@ -88,21 +88,21 @@ body.dashboard-layout {
     align-items: center;
     gap: 8px;
     padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
+    background: transparent;
+    color: #004080;
     text-decoration: none;
     border-radius: 8px;
     font-weight: 600;
     font-size: 0.95rem;
     transition: var(--transition);
     margin-left: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid #004080;
 }
 
 .header-home-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(0, 64, 128, 0.1);
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 64, 128, 0.2);
 }
 
 .header-home-btn i {
@@ -125,9 +125,9 @@ body.dashboard-layout {
 
 .mobile-menu-toggle {
     display: none;
-    background: rgba(255,255,255,0.1);
+    background: transparent;
     border: none;
-    color: white;
+    color: #004080;
     width: 40px;
     height: 40px;
     border-radius: 8px;
@@ -137,12 +137,12 @@ body.dashboard-layout {
 }
 
 .mobile-menu-toggle:hover {
-    background: rgba(255,255,255,0.2);
+    background: rgba(0, 64, 128, 0.1);
 }
 
 .header-logo-link {
     text-decoration: none;
-    color: white;
+    color: #004080;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -152,11 +152,12 @@ body.dashboard-layout {
     width: 42px;
     height: 42px;
     object-fit: contain;
+    filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
 }
 
 .header-bar-left h2 {
     margin: 0;
-    color: white;
+    color: #004080;
     font-size: 1.3rem;
     font-weight: 600;
 }
@@ -181,7 +182,7 @@ body.dashboard-layout {
 .header-notification,
 .header-messages {
     position: relative;
-    color: white;
+    color: #004080;
     cursor: pointer;
     padding: 8px;
     border-radius: 8px;
@@ -356,12 +357,12 @@ body.dashboard-layout {
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255,255,255,0.5);
+    border: 2px solid #004080;
     transition: var(--transition);
 }
 
 .header-bar-profile:hover .header-bar-profile-pic {
-    border-color: white;
+    border-color: #004080;
 }
 
 .header-bar-info {
@@ -370,13 +371,13 @@ body.dashboard-layout {
 
 .header-bar-info-name {
     font-weight: 600;
-    color: white;
+    color: #004080;
     font-size: 0.95rem;
 }
 
 .header-bar-info-role {
     font-size: 0.75rem;
-    color: rgba(255,255,255,0.7);
+    color: rgba(0, 64, 128, 0.7);
     text-transform: capitalize;
 }
 
@@ -2235,6 +2236,7 @@ body.dashboard-layout {
     .header-logo {
         width: 32px;
         height: 32px;
+        filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
     }
     
     .header-bar-profile-pic {
@@ -2735,6 +2737,7 @@ body.dashboard-layout {
     .header-logo {
         width: 28px;
         height: 28px;
+        filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
     }
     
     .header-bar-profile-pic {
@@ -2887,6 +2890,7 @@ body.dashboard-layout {
     .header-logo {
         width: 24px;
         height: 24px;
+        filter: drop-shadow(0 10px 20px rgba(0,64,128,0.16));
     }
     
     .header-bar-profile-pic {
