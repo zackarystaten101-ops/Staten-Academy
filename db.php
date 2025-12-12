@@ -1325,12 +1325,54 @@ $sql = "CREATE TABLE IF NOT EXISTS whiteboard_operations (
 $conn->query($sql);
 
 // Create video_sessions table for classroom sessions
+// #region agent log
+$log_data = ['step' => 'before_video_sessions_create', 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
+// Check if table exists and get column types
+$table_exists = $conn->query("SHOW TABLES LIKE 'video_sessions'");
+$existing_video_cols = [];
+if ($table_exists && $table_exists->num_rows > 0) {
+    $cols_result = $conn->query("SHOW COLUMNS FROM video_sessions");
+    if ($cols_result) {
+        while($row = $cols_result->fetch_assoc()) {
+            $existing_video_cols[$row['Field']] = $row['Type'];
+        }
+    }
+}
+
+// #region agent log
+$log_data = ['step' => 'check_existing_video_sessions', 'table_exists' => ($table_exists && $table_exists->num_rows > 0), 'columns' => $existing_video_cols, 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
+// Check users and lessons table column types
+$users_cols = $conn->query("SHOW COLUMNS FROM users WHERE Field='id'");
+$users_id_type = null;
+if ($users_cols && $users_cols->num_rows > 0) {
+    $row = $users_cols->fetch_assoc();
+    $users_id_type = $row['Type'];
+}
+
+$lessons_cols = $conn->query("SHOW COLUMNS FROM lessons WHERE Field='id'");
+$lessons_id_type = null;
+if ($lessons_cols && $lessons_cols->num_rows > 0) {
+    $row = $lessons_cols->fetch_assoc();
+    $lessons_id_type = $row['Type'];
+}
+
+// #region agent log
+$log_data = ['step' => 'check_referenced_types', 'users_id_type' => $users_id_type, 'lessons_id_type' => $lessons_id_type, 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
 $sql = "CREATE TABLE IF NOT EXISTS video_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id VARCHAR(255) UNIQUE NOT NULL,
-    lesson_id INT NULL,
-    teacher_id INT NOT NULL,
-    student_id INT NOT NULL,
+    lesson_id INT(6) UNSIGNED NULL,
+    teacher_id INT(6) UNSIGNED NOT NULL,
+    student_id INT(6) UNSIGNED NOT NULL,
     status ENUM('active', 'ended', 'cancelled') DEFAULT 'active',
     is_test_session BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1340,22 +1382,81 @@ $sql = "CREATE TABLE IF NOT EXISTS video_sessions (
     INDEX idx_status (status),
     INDEX idx_session (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-$conn->query($sql);
+$create_result = $conn->query($sql);
+
+// #region agent log
+$log_data = ['step' => 'create_video_sessions_table', 'success' => ($create_result !== false), 'error' => $conn->error ?? null, 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
+// If table exists with wrong column types, alter them
+if ($table_exists && $table_exists->num_rows > 0) {
+    if (isset($existing_video_cols['teacher_id']) && $existing_video_cols['teacher_id'] !== 'int(6) unsigned') {
+        $alter_result = $conn->query("ALTER TABLE video_sessions MODIFY COLUMN teacher_id INT(6) UNSIGNED NOT NULL");
+        // #region agent log
+        $log_data = ['step' => 'alter_teacher_id', 'success' => ($alter_result !== false), 'error' => $conn->error ?? null, 'old_type' => $existing_video_cols['teacher_id'] ?? 'none', 'timestamp' => time()];
+        file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+        // #endregion
+    }
+    if (isset($existing_video_cols['student_id']) && $existing_video_cols['student_id'] !== 'int(6) unsigned') {
+        $alter_result = $conn->query("ALTER TABLE video_sessions MODIFY COLUMN student_id INT(6) UNSIGNED NOT NULL");
+        // #region agent log
+        $log_data = ['step' => 'alter_student_id', 'success' => ($alter_result !== false), 'error' => $conn->error ?? null, 'old_type' => $existing_video_cols['student_id'] ?? 'none', 'timestamp' => time()];
+        file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+        // #endregion
+    }
+    if (isset($existing_video_cols['lesson_id']) && $existing_video_cols['lesson_id'] !== 'int(6) unsigned') {
+        $alter_result = $conn->query("ALTER TABLE video_sessions MODIFY COLUMN lesson_id INT(6) UNSIGNED NULL");
+        // #region agent log
+        $log_data = ['step' => 'alter_lesson_id', 'success' => ($alter_result !== false), 'error' => $conn->error ?? null, 'old_type' => $existing_video_cols['lesson_id'] ?? 'none', 'timestamp' => time()];
+        file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+        // #endregion
+    }
+}
 
 // Add foreign keys for video_sessions
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='teacher_id' AND REFERENCED_TABLE_NAME='users'");
+// #region agent log
+$log_data = ['step' => 'check_fk_teacher', 'fk_exists' => ($fk_check && $fk_check->num_rows > 0), 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
 if (!$fk_check || $fk_check->num_rows == 0) {
-    $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+    $fk_result = $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_teacher FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE");
+    // #region agent log
+    $log_data = ['step' => 'add_fk_teacher', 'success' => ($fk_result !== false), 'error' => $conn->error ?? null, 'timestamp' => time()];
+    file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+    // #endregion
 }
+
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='student_id' AND REFERENCED_TABLE_NAME='users'");
+// #region agent log
+$log_data = ['step' => 'check_fk_student', 'fk_exists' => ($fk_check && $fk_check->num_rows > 0), 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
 if (!$fk_check || $fk_check->num_rows == 0) {
-    $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+    $fk_result = $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE");
+    // #region agent log
+    $log_data = ['step' => 'add_fk_student', 'success' => ($fk_result !== false), 'error' => $conn->error ?? null, 'timestamp' => time()];
+    file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+    // #endregion
 }
+
 $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='video_sessions' AND COLUMN_NAME='lesson_id' AND REFERENCED_TABLE_NAME='lessons'");
+// #region agent log
+$log_data = ['step' => 'check_fk_lesson', 'fk_exists' => ($fk_check && $fk_check->num_rows > 0), 'timestamp' => time()];
+file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+// #endregion
+
 if (!$fk_check || $fk_check->num_rows == 0) {
     $lesson_table_check = $conn->query("SHOW TABLES LIKE 'lessons'");
     if ($lesson_table_check && $lesson_table_check->num_rows > 0) {
-        $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL");
+        $fk_result = $conn->query("ALTER TABLE video_sessions ADD CONSTRAINT fk_video_sessions_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL");
+        // #region agent log
+        $log_data = ['step' => 'add_fk_lesson', 'success' => ($fk_result !== false), 'error' => $conn->error ?? null, 'timestamp' => time()];
+        file_put_contents(__DIR__ . '/.cursor/debug.log', json_encode($log_data) . "\n", FILE_APPEND);
+        // #endregion
     }
 }
 
