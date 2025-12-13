@@ -101,3 +101,4 @@ try {
     echo json_encode(['error' => 'Failed to create lesson']);
 }
 
+

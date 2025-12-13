@@ -81,3 +81,4 @@ try {
     echo json_encode(['error' => 'Failed to cancel lesson']);
 }
 
+

@@ -259,3 +259,4 @@ CREATE TRIGGER update_classes_updated_at BEFORE UPDATE ON classes FOR EACH ROW E
 CREATE TRIGGER update_slot_requests_updated_at BEFORE UPDATE ON slot_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_recurrence_groups_updated_at BEFORE UPDATE ON recurrence_groups FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+

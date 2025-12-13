@@ -564,6 +564,9 @@ $active_tab = 'overview';
     <meta name="theme-color" content="#004080">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Teacher Dashboard - Staten Academy</title>
+    <link rel="icon" type="image/png" href="<?php echo getAssetPath('logo.png'); ?>">
+    <link rel="shortcut icon" type="image/png" href="<?php echo getAssetPath('logo.png'); ?>">
+    <link rel="apple-touch-icon" href="<?php echo getAssetPath('logo.png'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
@@ -1548,33 +1551,62 @@ $active_tab = 'overview';
             }
             $stmt->close();
             
+            // Fetch all lessons for calendar (past 30 days and future)
+            $all_lessons_for_calendar = [];
+            $calendar_stmt = $conn->prepare("
+                SELECT l.*, u.name as student_name, u.profile_pic as student_pic, l.category, l.status
+                FROM lessons l
+                JOIN users u ON l.student_id = u.id
+                WHERE l.teacher_id = ? 
+                AND l.lesson_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                ORDER BY l.lesson_date ASC, l.start_time ASC
+            ");
+            $calendar_stmt->bind_param("i", $teacher_id);
+            $calendar_stmt->execute();
+            $calendar_result = $calendar_stmt->get_result();
+            while ($row = $calendar_result->fetch_assoc()) {
+                $all_lessons_for_calendar[] = $row;
+            }
+            $calendar_stmt->close();
+            
             // Prepare calendar events JSON
             $calendar_events = [];
             foreach ($all_lessons_for_calendar as $lesson) {
-                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['lesson_time'];
-                $end_time = date('H:i:s', strtotime($lesson['lesson_time'] . ' + ' . ($lesson['duration'] ?? 60) . ' minutes'));
-                $end_datetime = $lesson['lesson_date'] . 'T' . $end_time;
+                // Skip if required fields are missing
+                if (empty($lesson['lesson_date']) || empty($lesson['start_time']) || empty($lesson['end_time'])) {
+                    continue;
+                }
+                
+                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['start_time'];
+                $end_datetime = $lesson['lesson_date'] . 'T' . $lesson['end_time'];
+                
+                // Calculate duration in minutes
+                $start_timestamp = strtotime('2000-01-01 ' . $lesson['start_time']);
+                $end_timestamp = strtotime('2000-01-01 ' . $lesson['end_time']);
+                $duration = ($start_timestamp && $end_timestamp && $end_timestamp > $start_timestamp) 
+                    ? round(($end_timestamp - $start_timestamp) / 60) 
+                    : 60; // Default to 60 minutes if calculation fails
                 
                 // Color coding by status and category
                 $color = '#0b6cf5'; // Default blue
-                if ($lesson['status'] === 'completed') $color = '#28a745';
-                elseif ($lesson['status'] === 'cancelled') $color = '#dc3545';
-                elseif ($lesson['is_trial']) $color = '#ffc107';
-                elseif ($lesson['category'] === 'young_learners') $color = '#17a2b8';
-                elseif ($lesson['category'] === 'coding') $color = '#6f42c1';
+                if (!empty($lesson['status']) && $lesson['status'] === 'completed') $color = '#28a745';
+                elseif (!empty($lesson['status']) && $lesson['status'] === 'cancelled') $color = '#dc3545';
+                elseif (!empty($lesson['is_trial']) && $lesson['is_trial']) $color = '#ffc107';
+                elseif (!empty($lesson['category']) && $lesson['category'] === 'young_learners') $color = '#17a2b8';
+                elseif (!empty($lesson['category']) && $lesson['category'] === 'coding') $color = '#6f42c1';
                 
                 $calendar_events[] = [
                     'id' => $lesson['id'],
-                    'title' => $lesson['student_name'] . ($lesson['is_trial'] ? ' (Trial)' : ''),
+                    'title' => (!empty($lesson['student_name']) ? $lesson['student_name'] : 'Student') . (!empty($lesson['is_trial']) && $lesson['is_trial'] ? ' (Trial)' : ''),
                     'start' => $start_datetime,
                     'end' => $end_datetime,
                     'color' => $color,
                     'extendedProps' => [
-                        'student_name' => $lesson['student_name'],
-                        'category' => $lesson['category'],
-                        'status' => $lesson['status'],
-                        'is_trial' => $lesson['is_trial'] ?? 0,
-                        'duration' => $lesson['duration'] ?? 60
+                        'student_name' => $lesson['student_name'] ?? '',
+                        'category' => $lesson['category'] ?? '',
+                        'status' => $lesson['status'] ?? 'scheduled',
+                        'is_trial' => !empty($lesson['is_trial']) ? 1 : 0,
+                        'duration' => $duration
                     ]
                 ];
             }
@@ -1894,11 +1926,26 @@ $active_tab = 'overview';
             </div>
         </div>
 
-        <!-- Resources Tab -->
-        <div id="resources" class="tab-content">
-            <h1>Resource Library</h1>
+        <!-- Materials Tab -->
+        <div id="materials" class="tab-content">
+            <h1><i class="fas fa-folder-open"></i> Materials</h1>
+            <p style="color: var(--gray); margin-bottom: 30px;">Manage your teaching resources and shared materials.</p>
             
-            <div class="card">
+            <!-- Sub-tab Navigation -->
+            <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
+                <button onclick="switchMaterialsSubTab('resources')" class="btn-outline" id="mat-resources-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-book"></i> My Resources
+                </button>
+                <button onclick="switchMaterialsSubTab('shared-materials')" class="btn-outline" id="mat-shared-btn">
+                    <i class="fas fa-share-alt"></i> Shared Materials
+                </button>
+            </div>
+            
+            <!-- Resources Sub-tab -->
+            <div id="materials-resources" class="materials-subtab">
+                <h2>Resource Library</h2>
+                
+                <div class="card">
                 <h2><i class="fas fa-upload"></i> Upload Resource</h2>
                 <form method="POST" action="api/resources.php" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="upload">
@@ -1932,41 +1979,42 @@ $active_tab = 'overview';
                 </form>
             </div>
 
-            <h2 style="margin-top: 30px;">Your Resources</h2>
-            <?php if (count($resources) > 0): ?>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
-                    <?php foreach ($resources as $res): ?>
-                    <div class="card" style="margin: 0;">
-                        <div class="material-icon" style="margin-bottom: 10px;">
-                            <i class="fas fa-file-alt"></i>
+                <h2 style="margin-top: 30px;">Your Resources</h2>
+                <?php if (count($resources) > 0): ?>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                        <?php foreach ($resources as $res): ?>
+                        <div class="card" style="margin: 0;">
+                            <div class="material-icon" style="margin-bottom: 10px;">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <h3 style="border: none; padding: 0; font-size: 1rem;"><?php echo h($res['title']); ?></h3>
+                            <span class="tag"><?php echo ucfirst($res['category']); ?></span>
+                            <?php if ($res['description']): ?>
+                            <p style="font-size: 0.9rem; color: var(--gray); margin: 10px 0;"><?php echo h($res['description']); ?></p>
+                            <?php endif; ?>
+                            <a href="<?php echo h($res['file_path'] ?: $res['external_url']); ?>" target="_blank" class="btn-outline btn-sm" style="margin-top: 10px;">
+                                <i class="fas fa-external-link-alt"></i> Open
+                            </a>
                         </div>
-                        <h3 style="border: none; padding: 0; font-size: 1rem;"><?php echo h($res['title']); ?></h3>
-                        <span class="tag"><?php echo ucfirst($res['category']); ?></span>
-                        <?php if ($res['description']): ?>
-                        <p style="font-size: 0.9rem; color: var(--gray); margin: 10px 0;"><?php echo h($res['description']); ?></p>
-                        <?php endif; ?>
-                        <a href="<?php echo h($res['file_path'] ?: $res['external_url']); ?>" target="_blank" class="btn-outline btn-sm" style="margin-top: 10px;">
-                            <i class="fas fa-external-link-alt"></i> Open
-                        </a>
+                        <?php endforeach; ?>
                     </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-folder-open"></i>
-                    <h3>No Resources Yet</h3>
-                    <p>Upload teaching materials to share with your students.</p>
-                </div>
-            <?php endif; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <h3>No Resources Yet</h3>
+                        <p>Upload teaching materials to share with your students.</p>
+                    </div>
+                <?php endif; ?>
             </div>
             
+            <!-- Shared Materials Sub-tab -->
             <div id="materials-shared-materials" class="materials-subtab" style="display: none;">
                 <h2>Shared Materials Library</h2>
-            <p style="color: var(--gray); margin-bottom: 20px;">
-                All teachers can add materials here. All materials are visible to all teachers for use during lessons.
-            </p>
-            
-            <div class="card" style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 2px solid #0b6cf5;">
+                <p style="color: var(--gray); margin-bottom: 20px;">
+                    All teachers can add materials here. All materials are visible to all teachers for use during lessons.
+                </p>
+                
+                <div class="card" style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 2px solid #0b6cf5;">
                 <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
                     <div style="width: 50px; height: 50px; border-radius: 12px; background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
                         <i class="fas fa-upload"></i>
@@ -2046,23 +2094,24 @@ $active_tab = 'overview';
                 </form>
             </div>
 
-            <div style="margin-top: 30px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                    <h2 style="margin: 0;">All Shared Materials</h2>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <select id="material-category-filter" onchange="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;">
-                            <option value="">All Categories</option>
-                            <option value="general">General</option>
-                            <option value="kids">Kids Classes</option>
-                            <option value="adults">Adult Classes</option>
-                            <option value="coding">English for Coding</option>
-                        </select>
-                        <input type="text" id="material-search" placeholder="Search materials..." onkeyup="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; min-width: 200px;">
+                <div style="margin-top: 30px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <h2 style="margin: 0;">All Shared Materials</h2>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <select id="material-category-filter" onchange="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;">
+                                <option value="">All Categories</option>
+                                <option value="general">General</option>
+                                <option value="kids">Kids Classes</option>
+                                <option value="adults">Adult Classes</option>
+                                <option value="coding">English for Coding</option>
+                            </select>
+                            <input type="text" id="material-search" placeholder="Search materials..." onkeyup="filterMaterials()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; min-width: 200px;">
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div id="materials-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
-                <!-- Materials will be loaded here via JavaScript -->
+                <div id="materials-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                    <!-- Materials will be loaded here via JavaScript -->
+                </div>
             </div>
         </div>
 
@@ -2705,16 +2754,37 @@ function switchPerformanceSubTab(subTab) {
 }
 
 function switchMaterialsSubTab(subTab) {
+    // Hide all subtabs
     document.querySelectorAll('.materials-subtab').forEach(el => el.style.display = 'none');
+    
+    // Reset all button styles
     document.querySelectorAll('#materials-resources, #materials-shared-materials').forEach(el => {
         const btn = document.getElementById('mat-' + (el.id === 'materials-resources' ? 'resources' : 'shared') + '-btn');
         if (btn) btn.style.borderBottom = 'none';
     });
     
-    const targetTab = document.getElementById('materials-' + (subTab === 'shared-materials' ? 'shared-materials' : subTab));
-    const targetBtn = document.getElementById('mat-' + (subTab === 'shared-materials' ? 'shared' : subTab) + '-btn');
-    if (targetTab) targetTab.style.display = 'block';
-    if (targetBtn) targetBtn.style.borderBottom = '3px solid #0b6cf5';
+    // Determine target tab ID
+    const targetTabId = subTab === 'shared-materials' ? 'materials-shared-materials' : 'materials-resources';
+    const targetTab = document.getElementById(targetTabId);
+    
+    // Determine target button ID
+    const targetBtnId = 'mat-' + (subTab === 'shared-materials' ? 'shared' : 'resources') + '-btn';
+    const targetBtn = document.getElementById(targetBtnId);
+    
+    // Show target tab and update button
+    if (targetTab) {
+        targetTab.style.display = 'block';
+    } else {
+        // Fallback: if target tab not found, show resources as default
+        const fallbackTab = document.getElementById('materials-resources');
+        if (fallbackTab) {
+            fallbackTab.style.display = 'block';
+        }
+    }
+    
+    if (targetBtn) {
+        targetBtn.style.borderBottom = '3px solid #0b6cf5';
+    }
     
     // Load shared materials if switching to that tab
     if (subTab === 'shared-materials') {
@@ -3124,6 +3194,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (hashParts.length > 1 && (hashParts[1] === 'resources' || hashParts[1] === 'shared')) {
                 switchMaterialsSubTab(hashParts[1] === 'shared' ? 'shared-materials' : 'resources');
             } else {
+                // Always ensure default subtab is shown, even if clicking Materials again
                 switchMaterialsSubTab('resources'); // Default to resources
             }
         }
@@ -3366,10 +3437,32 @@ function handleMaterialFileChange(input) {
     
     if (!input || !input.files || input.files.length === 0) {
         if (fileInfo) fileInfo.textContent = '';
+        if (dropzone) {
+            dropzone.style.borderColor = 'var(--primary-light)';
+            dropzone.style.background = '#ffffff';
+        }
         return;
     }
     
     const file = input.files[0];
+    
+    // Validate file size (50MB max)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+        if (typeof toast !== 'undefined') {
+            toast.error('File size exceeds 50MB limit.');
+        } else {
+            alert('File size exceeds 50MB limit.');
+        }
+        input.value = '';
+        if (fileInfo) fileInfo.textContent = '';
+        if (dropzone) {
+            dropzone.style.borderColor = 'var(--primary-light)';
+            dropzone.style.background = '#ffffff';
+        }
+        return;
+    }
+    
     const fileSize = (file.size / (1024 * 1024)).toFixed(2); // Size in MB
     
     if (fileInfo) {
@@ -3382,36 +3475,6 @@ function handleMaterialFileChange(input) {
     if (dropzone) {
         dropzone.style.borderColor = '#28a745';
         dropzone.style.background = '#f0fff4';
-    }
-}
-    // Handle both normal file selection and drag-drop fallback
-    const file = input.files && input.files[0] ? input.files[0] : 
-                 (input._droppedFiles && input._droppedFiles[0] ? input._droppedFiles[0] : null);
-    const fileInfo = document.getElementById('material-file-info');
-    
-    if (!file) {
-        if (fileInfo) fileInfo.textContent = '';
-        return;
-    }
-    
-    // Validate file size (50MB max)
-    const maxSize = 50 * 1024 * 1024;
-    if (file.size > maxSize) {
-        if (typeof toast !== 'undefined') {
-            toast.error('File size exceeds 50MB limit.');
-        } else {
-            alert('File size exceeds 50MB limit.');
-        }
-        input.value = '';
-        if (fileInfo) fileInfo.textContent = '';
-        return;
-    }
-    
-    // Show file info
-    if (fileInfo) {
-        const fileSize = (file.size / (1024 * 1024)).toFixed(2);
-        fileInfo.innerHTML = `<i class="fas fa-file"></i> ${file.name} (${fileSize} MB)`;
-        fileInfo.style.color = 'var(--primary)';
     }
 }
 </script>

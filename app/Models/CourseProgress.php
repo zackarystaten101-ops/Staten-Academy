@@ -106,3 +106,4 @@ class CourseProgress extends Model {
 
 
 
+

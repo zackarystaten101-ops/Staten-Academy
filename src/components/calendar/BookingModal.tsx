@@ -158,3 +158,4 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
 export default BookingModal;
 
+
