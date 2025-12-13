@@ -564,9 +564,15 @@ $active_tab = 'overview';
     <meta name="theme-color" content="#004080">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Teacher Dashboard - Staten Academy</title>
-    <link rel="icon" type="image/png" href="<?php echo getAssetPath('logo.png'); ?>">
-    <link rel="shortcut icon" type="image/png" href="<?php echo getAssetPath('logo.png'); ?>">
-    <link rel="apple-touch-icon" href="<?php echo getAssetPath('logo.png'); ?>">
+    <?php
+    // Use the same logo function as the header to get the correct logo
+    $logo_path = getLogoPath();
+    $logo_ext = pathinfo($logo_path, PATHINFO_EXTENSION);
+    $logo_type = ($logo_ext === 'svg') ? 'image/svg+xml' : 'image/png';
+    ?>
+    <link rel="icon" type="<?php echo $logo_type; ?>" href="<?php echo $logo_path; ?>">
+    <link rel="shortcut icon" type="<?php echo $logo_type; ?>" href="<?php echo $logo_path; ?>">
+    <link rel="apple-touch-icon" href="<?php echo $logo_path; ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
