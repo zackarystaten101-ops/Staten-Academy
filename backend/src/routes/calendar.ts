@@ -106,3 +106,4 @@ router.get('/availability/:teacherId', async (req: AuthRequest, res) => {
 export default router;
 
 
+

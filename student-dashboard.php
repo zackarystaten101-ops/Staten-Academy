@@ -357,6 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
             LIMIT 1
         ");
     }
+    */
     
     // Note: Teacher assignment removed - students now select teachers themselves
     $_SESSION['success_message'] = 'Learning needs submitted! You can now browse and select teachers in your category.';
