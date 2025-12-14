@@ -107,7 +107,9 @@ $stmt->close();
 // Get favorite teachers
 $favorite_teachers = [];
 $stmt = $conn->prepare("
-    SELECT u.id, u.name, u.profile_pic, u.specialty, u.avg_rating, u.review_count
+    SELECT u.id, u.name, u.profile_pic, u.specialty, 
+           (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating, 
+           (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count
     FROM favorite_teachers ft
     JOIN users u ON ft.teacher_id = u.id
     WHERE ft.student_id = ?
