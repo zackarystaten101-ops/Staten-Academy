@@ -15,11 +15,16 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 require_once __DIR__ . '/app/Models/SubscriptionPlan.php';
+require_once __DIR__ . '/app/Services/TeacherService.php';
 
 // Ensure getAssetPath function is available
 if (!function_exists('getAssetPath')) {
     require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 }
+
+// Get approved teachers for coding section
+$teacherService = new TeacherService($conn);
+$teachers = $teacherService->getTeachersByCategory('coding', []);
 
 $planModel = new SubscriptionPlan($conn);
 $plans = $planModel->getPlansByTrack('coding');
@@ -307,7 +312,71 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         </div>
     </section>
 
-    <div class="plans-container">
+    <!-- Approved Teachers Section -->
+    <?php if (!empty($teachers)): ?>
+    <section class="teachers-section" style="background: white; padding: 60px 20px; margin-top: 40px;">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 15px; color: #28a745; font-weight: 700;">
+                <i class="fas fa-chalkboard-teacher"></i> Our Approved Teachers
+            </h2>
+            <p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto;">
+                Meet our experienced teachers approved for English for Coding classes. Click on any teacher to view their profile and select a plan.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; margin-top: 40px;">
+                <?php foreach ($teachers as $teacher): ?>
+                    <div class="teacher-card" style="background: white; border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(40, 167, 69, 0.15); transition: all 0.3s ease; text-align: center; cursor: pointer;" onclick="window.location.href='teacher-profile.php?id=<?php echo intval($teacher['id']); ?>'">
+                        <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                             alt="<?php echo htmlspecialchars($teacher['name']); ?>" 
+                             style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto 20px; border: 4px solid #28a745;">
+                        <h3 style="font-size: 1.3rem; font-weight: 700; color: #28a745; margin-bottom: 10px;">
+                            <?php echo htmlspecialchars($teacher['name']); ?>
+                        </h3>
+                        <?php if ($teacher['specialty']): ?>
+                            <p style="color: #666; font-size: 0.95rem; margin-bottom: 15px;">
+                                <?php echo htmlspecialchars($teacher['specialty']); ?>
+                            </p>
+                        <?php endif; ?>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 15px;">
+                            <?php 
+                            $rating = floatval($teacher['avg_rating'] ?? 0);
+                            if ($rating > 0): 
+                                $full_stars = floor($rating);
+                                $half_star = ($rating - $full_stars) >= 0.5;
+                                for ($i = 0; $i < $full_stars; $i++) {
+                                    echo '<i class="fas fa-star" style="color: #ffa500;"></i>';
+                                }
+                                if ($half_star) {
+                                    echo '<i class="fas fa-star-half-alt" style="color: #ffa500;"></i>';
+                                }
+                                for ($i = $full_stars + ($half_star ? 1 : 0); $i < 5; $i++) {
+                                    echo '<i class="far fa-star" style="color: #ddd;"></i>';
+                                }
+                            ?>
+                                <span style="color: #666; font-size: 0.9rem; margin-left: 5px;">
+                                    <?php echo number_format($rating, 1); ?> (<?php echo intval($teacher['review_count'] ?? 0); ?>)
+                                </span>
+                            <?php else: ?>
+                                <span style="color: #999; font-size: 0.9rem;">No ratings yet</span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($teacher['bio']): ?>
+                            <p style="color: #555; font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                <?php echo htmlspecialchars(substr($teacher['bio'], 0, 120)); ?>...
+                            </p>
+                        <?php endif; ?>
+                        <a href="teacher-profile.php?id=<?php echo intval($teacher['id']); ?>" 
+                           class="btn-primary" 
+                           style="display: inline-block; padding: 12px 24px; border-radius: 25px; text-decoration: none; font-weight: 600; background: linear-gradient(135deg, #28a745, #20c997); color: white; transition: transform 0.2s;">
+                            View Profile
+                        </a>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <div class="plans-container" style="display: none;">
         <div class="plans-grid">
             <?php foreach ($plans as $index => $plan): ?>
             <div class="plan-card <?php echo $index === 1 ? 'featured' : ''; ?>">

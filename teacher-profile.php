@@ -15,6 +15,8 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
 require_once __DIR__ . '/app/Services/TeacherService.php';
+require_once __DIR__ . '/app/Models/SubscriptionPlan.php';
+require_once __DIR__ . '/app/Services/TimezoneService.php';
 
 // Ensure getAssetPath function is available
 if (!function_exists('getAssetPath')) {
@@ -46,9 +48,44 @@ $start_date = date('Y-m-d');
 $end_date = date('Y-m-d', strtotime('+30 days'));
 $availability = $teacherService->getTeacherAvailability($teacher_id, $start_date, $end_date);
 
-// Get user info
+// Get teacher's categories and convert to tracks for plans
+$teacher_categories = [];
+if (!empty($teacher['categories'])) {
+    $teacher_categories = explode(',', $teacher['categories']);
+}
+// Map categories to tracks: young_learners -> kids, adults -> adults, coding -> coding
+$category_to_track = ['young_learners' => 'kids', 'adults' => 'adults', 'coding' => 'coding'];
+$teacher_tracks = [];
+foreach ($teacher_categories as $cat) {
+    $cat = trim($cat);
+    if (isset($category_to_track[$cat])) {
+        $teacher_tracks[] = $category_to_track[$cat];
+    }
+}
+// If no categories, default to adults
+if (empty($teacher_tracks)) {
+    $teacher_tracks = ['adults'];
+}
+
+// Get plans for teacher's sections
+$planModel = new SubscriptionPlan($conn);
+$all_plans = [];
+foreach ($teacher_tracks as $track) {
+    $track_plans = $planModel->getPlansByTrack($track);
+    foreach ($track_plans as $plan) {
+        $plan['track'] = $track;
+        $all_plans[] = $plan;
+    }
+}
+
+// Get user info and timezone
 $user_role = $_SESSION['user_role'] ?? 'guest';
 $user_id = $_SESSION['user_id'] ?? null;
+$student_timezone = 'UTC'; // Default
+if ($user_id && ($user_role === 'student' || $user_role === 'new_student')) {
+    $tzService = new TimezoneService($conn);
+    $student_timezone = $tzService->getUserTimezone($user_id) ?? 'UTC';
+}
 
 // Check if user has used trial
 $trial_used = false;
@@ -476,6 +513,134 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Plans Section -->
+            <?php if (!empty($all_plans) && ($user_role === 'student' || $user_role === 'new_student')): ?>
+                <div class="profile-card plans-section" style="margin-top: 30px;">
+                    <h2 style="color: #004080; margin-bottom: 20px;">
+                        <i class="fas fa-credit-card"></i> Subscription Plans
+                    </h2>
+                    <p style="color: #666; margin-bottom: 30px;">
+                        Choose a plan to get started with <?php echo htmlspecialchars($teacher['name']); ?>. Plans are universal for this section and cannot be modified by teachers.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px;">
+                        <?php foreach ($all_plans as $plan): ?>
+                            <div class="plan-card-mini" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border: 2px solid #e0e0e0; border-radius: 12px; padding: 25px; text-align: center; transition: all 0.3s;">
+                                <h3 style="color: #004080; font-size: 1.5rem; margin-bottom: 10px;">
+                                    <?php echo htmlspecialchars($plan['name']); ?>
+                                </h3>
+                                <div style="font-size: 2rem; font-weight: 700; color: #0b6cf5; margin: 15px 0;">
+                                    $<?php echo number_format($plan['price'] ?? 0, 2); ?>
+                                    <span style="font-size: 1rem; color: #666; font-weight: normal;">/month</span>
+                                </div>
+                                <ul style="list-style: none; padding: 0; margin: 20px 0; text-align: left;">
+                                    <?php if (isset($plan['one_on_one_classes_per_week'])): ?>
+                                        <li style="padding: 8px 0; color: #555;">
+                                            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>
+                                            <strong><?php echo intval($plan['one_on_one_classes_per_week']); ?></strong> one-on-one class<?php echo $plan['one_on_one_classes_per_week'] > 1 ? 'es' : ''; ?> per week
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if (isset($plan['group_classes_per_week'])): ?>
+                                        <li style="padding: 8px 0; color: #555;">
+                                            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>
+                                            <strong><?php echo intval($plan['group_classes_per_week']); ?></strong> group class<?php echo $plan['group_classes_per_week'] > 1 ? 'es' : ''; ?> per week
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if (isset($plan['group_practice_sessions_per_week'])): ?>
+                                        <li style="padding: 8px 0; color: #555;">
+                                            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>
+                                            <strong><?php echo intval($plan['group_practice_sessions_per_week']); ?></strong> group practice session<?php echo $plan['group_practice_sessions_per_week'] > 1 ? 's' : ''; ?> per week
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if (isset($plan['video_courses']) && $plan['video_courses'] > 0): ?>
+                                        <li style="padding: 8px 0; color: #555;">
+                                            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 8px;"></i>
+                                            Video courses access
+                                        </li>
+                                    <?php endif; ?>
+                                </ul>
+                                <a href="create_checkout_session.php?plan_id=<?php echo intval($plan['id']); ?>&teacher_id=<?php echo intval($teacher_id); ?>&track=<?php echo htmlspecialchars($plan['track']); ?>" 
+                                   class="btn-action btn-book-lesson" 
+                                   style="width: 100%; margin-top: 15px; text-align: center;">
+                                    Select Plan
+                                </a>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Availability Section (Timezone-aware) -->
+            <?php if (!empty($availability) && ($user_role === 'student' || $user_role === 'new_student')): ?>
+                <div class="profile-card availability-section" style="margin-top: 30px;">
+                    <h2 style="color: #004080; margin-bottom: 20px;">
+                        <i class="fas fa-clock"></i> Teacher Availability
+                    </h2>
+                    <p style="color: #666; margin-bottom: 15px;">
+                        Available times shown in your timezone: <strong><?php echo htmlspecialchars($student_timezone); ?></strong>
+                    </p>
+                    <?php
+                    // Get teacher's timezone (default to UTC if not set)
+                    $teacher_timezone = 'UTC';
+                    if (!empty($teacher['timezone'])) {
+                        $teacher_timezone = $teacher['timezone'];
+                    }
+                    
+                    // Group availability by day
+                    $availability_by_day = [];
+                    if (!empty($availability)) {
+                        $tzService = new TimezoneService($conn);
+                        foreach ($availability as $slot) {
+                            $day = $slot['day_of_week'];
+                        if (!isset($availability_by_day[$day])) {
+                            $availability_by_day[$day] = [];
+                        }
+                        // Convert time from teacher's timezone to student's timezone
+                        $start_time = $slot['start_time'];
+                        $end_time = $slot['end_time'];
+                        
+                        // Create a reference date (today) to convert times properly
+                        $reference_date = date('Y-m-d');
+                        try {
+                            // Create datetime objects assuming times are in teacher's timezone
+                            $start_dt = new DateTime($reference_date . ' ' . $start_time, new DateTimeZone($teacher_timezone));
+                            $end_dt = new DateTime($reference_date . ' ' . $end_time, new DateTimeZone($teacher_timezone));
+                            
+                            // Convert to student's timezone
+                            $start_dt->setTimezone(new DateTimeZone($student_timezone));
+                            $end_dt->setTimezone(new DateTimeZone($student_timezone));
+                            
+                            $slot['start_time_display'] = $start_dt->format('g:i A');
+                            $slot['end_time_display'] = $end_dt->format('g:i A');
+                        } catch (Exception $e) {
+                            // Fallback: just format the time as-is
+                            $slot['start_time_display'] = date('g:i A', strtotime($start_time));
+                            $slot['end_time_display'] = date('g:i A', strtotime($end_time));
+                        }
+                        $availability_by_day[$day][] = $slot;
+                        }
+                    }
+                    $day_names = ['Monday' => 'Mon', 'Tuesday' => 'Tue', 'Wednesday' => 'Wed', 'Thursday' => 'Thu', 'Friday' => 'Fri', 'Saturday' => 'Sat', 'Sunday' => 'Sun'];
+                    ?>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <?php foreach ($day_names as $full_day => $short_day): ?>
+                            <?php if (isset($availability_by_day[$full_day]) && !empty($availability_by_day[$full_day])): ?>
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                                    <h4 style="color: #004080; margin: 0 0 10px 0; font-size: 1rem;">
+                                        <?php echo $short_day; ?>
+                                    </h4>
+                                    <?php foreach ($availability_by_day[$full_day] as $slot): ?>
+                                        <div style="color: #555; font-size: 0.9rem; margin-bottom: 5px;">
+                                            <i class="fas fa-clock" style="color: #0b6cf5; margin-right: 5px;"></i>
+                                            <?php echo htmlspecialchars($slot['start_time_display']); ?> - <?php echo htmlspecialchars($slot['end_time_display']); ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>

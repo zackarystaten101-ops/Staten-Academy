@@ -255,6 +255,218 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_category'])) {
     exit();
 }
 
+// Handle Section Approval Management
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approvals'])) {
+    $teacher_id = intval($_POST['teacher_id']);
+    $kids_status = $_POST['kids_status'] ?? 'none';
+    $adults_status = $_POST['adults_status'] ?? 'none';
+    $coding_status = $_POST['coding_status'] ?? 'none';
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    $conn->begin_transaction();
+    try {
+        // Map section statuses to categories
+        $sections = [
+            'kids' => ['status' => $kids_status, 'category' => 'young_learners'],
+            'adults' => ['status' => $adults_status, 'category' => 'adults'],
+            'coding' => ['status' => $coding_status, 'category' => 'coding']
+        ];
+        
+        // Remove all existing category assignments for this teacher
+        $stmt = $conn->prepare("DELETE FROM teacher_categories WHERE teacher_id = ?");
+        $stmt->bind_param("i", $teacher_id);
+        $stmt->execute();
+        $stmt->close();
+        
+        // Add approved categories
+        $approved_categories = [];
+        foreach ($sections as $section => $data) {
+            if ($data['status'] === 'approved') {
+                $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category, is_active) VALUES (?, ?, TRUE)");
+                $stmt->bind_param("is", $teacher_id, $data['category']);
+                $stmt->execute();
+                $stmt->close();
+                $approved_categories[] = $data['category'];
+            }
+        }
+        
+        // Log to audit log
+        $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                     VALUES (?, 'section_approval', 'teacher', ?, ?, ?)";
+        $audit_stmt = $conn->prepare($audit_sql);
+        $details = json_encode([
+            'kids' => $kids_status,
+            'adults' => $adults_status,
+            'coding' => $coding_status,
+            'approved_categories' => $approved_categories
+        ]);
+        $audit_stmt->bind_param("iiss", $admin_id, $teacher_id, $details, $ip_address);
+        $audit_stmt->execute();
+        $audit_stmt->close();
+        
+        $conn->commit();
+        $user_msg = "Section approvals updated successfully";
+    } catch (Exception $e) {
+        $conn->rollback();
+        $user_error = "Error: " . $e->getMessage();
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#users");
+    exit();
+}
+
+// Handle Plan Price Updates
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_plan_prices'])) {
+    $plan_ids = $_POST['plan_ids'] ?? [];
+    $plan_prices = $_POST['plan_prices'] ?? [];
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    if (count($plan_ids) !== count($plan_prices)) {
+        $user_error = "Mismatch between plan IDs and prices";
+    } else {
+        $conn->begin_transaction();
+        try {
+            $updated_count = 0;
+            foreach ($plan_ids as $index => $plan_id) {
+                $plan_id = intval($plan_id);
+                $price = floatval($plan_prices[$index]);
+                
+                if ($plan_id > 0 && $price >= 0) {
+                    $stmt = $conn->prepare("UPDATE subscription_plans SET price = ? WHERE id = ?");
+                    $stmt->bind_param("di", $price, $plan_id);
+                    $stmt->execute();
+                    $stmt->close();
+                    $updated_count++;
+                }
+            }
+            
+            // Log to audit log
+            $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                         VALUES (?, 'plan_price_update', 'plans', NULL, ?, ?)";
+            $audit_stmt = $conn->prepare($audit_sql);
+            $details = json_encode(['updated_count' => $updated_count, 'plan_ids' => $plan_ids, 'prices' => $plan_prices]);
+            $audit_stmt->bind_param("iss", $admin_id, $details, $ip_address);
+            $audit_stmt->execute();
+            $audit_stmt->close();
+            
+            $conn->commit();
+            $user_msg = "Updated prices for {$updated_count} plan(s) successfully";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $user_error = "Error: " . $e->getMessage();
+        }
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#settings");
+    exit();
+}
+
+// Handle Teacher Salary Updates
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_teacher_salaries'])) {
+    $default_commission_rate = floatval($_POST['default_commission_rate'] ?? 50);
+    $teacher_ids = $_POST['teacher_ids'] ?? [];
+    $commission_rates = $_POST['commission_rates'] ?? [];
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    // Ensure default commission is between 0-100
+    if ($default_commission_rate < 0 || $default_commission_rate > 100) {
+        $user_error = "Default commission rate must be between 0 and 100";
+    } else {
+        $conn->begin_transaction();
+        try {
+            // Ensure admin_settings table exists
+            $conn->query("CREATE TABLE IF NOT EXISTS admin_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(100) UNIQUE NOT NULL,
+                value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+            
+            // Save default commission rate to admin_settings
+            $check_stmt = $conn->prepare("SELECT id FROM admin_settings WHERE setting_key = 'default_commission_rate'");
+            $check_stmt->execute();
+            $exists = $check_stmt->get_result()->num_rows > 0;
+            $check_stmt->close();
+            
+            if ($exists) {
+                $stmt = $conn->prepare("UPDATE admin_settings SET value = ? WHERE setting_key = 'default_commission_rate'");
+                $stmt->bind_param("d", $default_commission_rate);
+                $stmt->execute();
+                $stmt->close();
+            } else {
+                $stmt = $conn->prepare("INSERT INTO admin_settings (setting_key, value) VALUES ('default_commission_rate', ?)");
+                $stmt->bind_param("d", $default_commission_rate);
+                $stmt->execute();
+                $stmt->close();
+            }
+            
+            // Ensure teacher_salary_settings table exists
+            $conn->query("CREATE TABLE IF NOT EXISTS teacher_salary_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                commission_rate DECIMAL(5,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_teacher (teacher_id),
+                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+            )");
+            
+            // Update individual teacher commission rates
+            $updated_count = 0;
+            foreach ($teacher_ids as $index => $teacher_id) {
+                $teacher_id = intval($teacher_id);
+                $commission_rate = trim($commission_rates[$index]);
+                
+                if ($teacher_id > 0) {
+                    if ($commission_rate !== '' && is_numeric($commission_rate)) {
+                        $rate = floatval($commission_rate);
+                        if ($rate >= 0 && $rate <= 100) {
+                            // Use INSERT ... ON DUPLICATE KEY UPDATE
+                            $stmt = $conn->prepare("INSERT INTO teacher_salary_settings (teacher_id, commission_rate) VALUES (?, ?) 
+                                                   ON DUPLICATE KEY UPDATE commission_rate = ?");
+                            $stmt->bind_param("idd", $teacher_id, $rate, $rate);
+                            $stmt->execute();
+                            $stmt->close();
+                            $updated_count++;
+                        }
+                    } else {
+                        // Remove custom rate (use default)
+                        $stmt = $conn->prepare("DELETE FROM teacher_salary_settings WHERE teacher_id = ?");
+                        $stmt->bind_param("i", $teacher_id);
+                        $stmt->execute();
+                        $stmt->close();
+                    }
+                }
+            }
+            
+            // Log to audit log
+            $audit_sql = "INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip_address) 
+                         VALUES (?, 'salary_update', 'teachers', NULL, ?, ?)";
+            $audit_stmt = $conn->prepare($audit_sql);
+            $details = json_encode([
+                'default_commission_rate' => $default_commission_rate,
+                'updated_teachers' => $updated_count
+            ]);
+            $audit_stmt->bind_param("iss", $admin_id, $details, $ip_address);
+            $audit_stmt->execute();
+            $audit_stmt->close();
+            
+            $conn->commit();
+            $user_msg = "Salary settings updated successfully. Default commission: {$default_commission_rate}%, Updated {$updated_count} teacher(s)";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $user_error = "Error: " . $e->getMessage();
+        }
+    }
+    
+    ob_end_clean();
+    header("Location: admin-dashboard.php#settings");
+    exit();
+}
+
 // Handle Account Suspension/Activation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_account_status'])) {
     $target_user_id = intval($_POST['user_id']);
@@ -2160,6 +2372,9 @@ $all_users_stmt->close();
                 <button onclick="switchAdminSettingsSubTab('global')" class="btn-outline" id="adm-set-global-btn">
                     <i class="fas fa-cog"></i> Global Settings
                 </button>
+                <button onclick="switchAdminSettingsSubTab('pricing')" class="btn-outline" id="adm-set-pricing-btn">
+                    <i class="fas fa-dollar-sign"></i> Pricing & Plans
+                </button>
             </div>
             
             <div id="settings-profile" class="admin-settings-subtab active">
@@ -2279,6 +2494,147 @@ $all_users_stmt->close();
                     <?php endwhile; ?>
                 </tbody>
             </table>
+        </div>
+        
+        <div id="settings-pricing" class="admin-settings-subtab" style="display: none;">
+            <h2><i class="fas fa-dollar-sign"></i> Pricing & Plans Management</h2>
+            <p style="color: #666; margin-bottom: 30px;">Manage subscription plan prices for all sections. Plans are universal per section and cannot be modified by teachers.</p>
+            
+            <?php
+            require_once __DIR__ . '/app/Models/SubscriptionPlan.php';
+            $planModel = new SubscriptionPlan($conn);
+            $all_plans = [];
+            foreach (['kids', 'adults', 'coding'] as $track) {
+                $track_plans = $planModel->getPlansByTrack($track);
+                foreach ($track_plans as $plan) {
+                    $plan['track'] = $track;
+                    $all_plans[] = $plan;
+                }
+            }
+            ?>
+            
+            <div class="card">
+                <h3>Edit Plan Prices</h3>
+                <form method="POST" id="pricingForm">
+                    <input type="hidden" name="update_plan_prices" value="1">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Plan Name</th>
+                                <th>Track</th>
+                                <th>Current Price</th>
+                                <th>New Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($all_plans as $plan): ?>
+                                <tr>
+                                    <td><strong><?php echo htmlspecialchars($plan['name']); ?></strong></td>
+                                    <td>
+                                        <span class="badge badge-info">
+                                            <?php echo ucfirst($plan['track']); ?>
+                                        </span>
+                                    </td>
+                                    <td>$<?php echo number_format($plan['price'] ?? 0, 2); ?>/month</td>
+                                    <td>
+                                        <input type="hidden" name="plan_ids[]" value="<?php echo intval($plan['id']); ?>">
+                                        <input type="number" 
+                                               name="plan_prices[]" 
+                                               value="<?php echo number_format($plan['price'] ?? 0, 2); ?>" 
+                                               step="0.01" 
+                                               min="0" 
+                                               style="width: 120px; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i> Save All Prices
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="card" style="margin-top: 30px;">
+                <h3><i class="fas fa-money-bill-wave"></i> Teacher Salary & Commission Management</h3>
+                <p style="color: #666; margin-bottom: 20px;">Set salary rates and commission percentages for teachers. These can be set per teacher or per section.</p>
+                
+                <form method="POST" id="salaryForm">
+                    <input type="hidden" name="update_teacher_salaries" value="1">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">Default Commission Rate (%)</label>
+                        <input type="number" 
+                               name="default_commission_rate" 
+                               value="<?php 
+                               try {
+                                   $default_commission = $conn->query("SELECT value FROM admin_settings WHERE setting_key = 'default_commission_rate'");
+                                   echo $default_commission && $default_commission->num_rows > 0 ? floatval($default_commission->fetch_assoc()['value']) : 50;
+                               } catch (Exception $e) {
+                                   echo 50; // Default fallback
+                               }
+                               ?>" 
+                               step="0.1" 
+                               min="0" 
+                               max="100"
+                               style="width: 200px; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                        <small style="display: block; color: #666; margin-top: 5px;">Default commission percentage for all teachers (can be overridden per teacher)</small>
+                    </div>
+                    
+                    <h4 style="margin-top: 30px; margin-bottom: 15px;">Per-Teacher Salary Settings</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Teacher</th>
+                                <th>Hourly Rate</th>
+                                <th>Commission Rate (%)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $teachers_for_salary = $conn->query("SELECT id, name, hourly_rate FROM users WHERE role = 'teacher' AND application_status = 'approved' ORDER BY name");
+                            if ($teachers_for_salary && $teachers_for_salary->num_rows > 0):
+                                while($t = $teachers_for_salary->fetch_assoc()): 
+                                    $salary_info = $conn->query("SELECT commission_rate FROM teacher_salary_settings WHERE teacher_id = " . intval($t['id']));
+                                    $commission_rate = $salary_info && $salary_info->num_rows > 0 ? floatval($salary_info->fetch_assoc()['commission_rate']) : null;
+                            ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($t['name']); ?></td>
+                                    <td>$<?php echo number_format($t['hourly_rate'] ?? 0, 2); ?>/hr</td>
+                                    <td>
+                                        <input type="hidden" name="teacher_ids[]" value="<?php echo intval($t['id']); ?>">
+                                        <input type="number" 
+                                               name="commission_rates[]" 
+                                               value="<?php echo $commission_rate !== null ? $commission_rate : ''; ?>" 
+                                               placeholder="Use default"
+                                               step="0.1" 
+                                               min="0" 
+                                               max="100"
+                                               style="width: 120px; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                                    </td>
+                                    <td>
+                                        <a href="admin-dashboard.php?tab=users&teacher_id=<?php echo intval($t['id']); ?>" class="btn-outline btn-sm">View Details</a>
+                                    </td>
+                                </tr>
+                            <?php 
+                                endwhile;
+                            else:
+                            ?>
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #666; padding: 20px;">No approved teachers found</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i> Save Salary Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Security Tab -->
@@ -2535,33 +2891,90 @@ function closeRoleModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// Category Assignment Modal
+// Section Approval Modal
 function showCategoryModal(teacherId, currentCategories) {
     let modal = document.getElementById('categoryModal');
     if (!modal) {
         const modalHtml = `
             <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
-                <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 10px;">
+                <div class="modal-content" style="background-color: #fefefe; margin: 5% auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 10px; max-height: 90vh; overflow-y: auto;">
                     <span class="close" onclick="closeCategoryModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
-                    <h2>Assign Teacher Category</h2>
+                    <h2><i class="fas fa-tags"></i> Section Approval Management</h2>
+                    <p style="color: #666; margin-bottom: 20px;">Approve or reject this teacher for specific sections (Kids, Adults, Coding).</p>
                     <form method="POST" id="categoryForm">
-                        <input type="hidden" name="assign_category" value="1">
+                        <input type="hidden" name="manage_section_approvals" value="1">
                         <input type="hidden" name="teacher_id" id="categoryTeacherId">
-                        <div style="margin-bottom: 20px;">
-                            <label>Category</label>
-                            <select name="category" id="categorySelect" class="form-control" required>
-                                <option value="">Select Category</option>
-                                <option value="young_learners">Young Learners</option>
-                                <option value="adults">Adults</option>
-                                <option value="coding">English for Coding/Tech</option>
-                            </select>
-                            <small style="color: #666; display: block; margin-top: 5px;">
-                                Note: Assigning a new category will replace existing categories.
-                            </small>
+                        <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
+                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
+                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                    <div>
+                                        <strong style="color: #ff6b9d;"><i class="fas fa-child"></i> Kids Classes</strong>
+                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">Young Learners (ages 3-11)</p>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
+                                            <input type="radio" name="kids_status" value="approved" style="display: none;">
+                                            <i class="fas fa-check"></i> Approve
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
+                                            <input type="radio" name="kids_status" value="rejected" style="display: none;">
+                                            <i class="fas fa-times"></i> Reject
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
+                                            <input type="radio" name="kids_status" value="none" checked style="display: none;">
+                                            <i class="fas fa-minus"></i> None
+                                        </label>
+                                    </div>
+                                </label>
+                            </div>
+                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
+                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                    <div>
+                                        <strong style="color: #004080;"><i class="fas fa-user-graduate"></i> Adults Classes</strong>
+                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">General English for adults</p>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
+                                            <input type="radio" name="adults_status" value="approved" style="display: none;">
+                                            <i class="fas fa-check"></i> Approve
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
+                                            <input type="radio" name="adults_status" value="rejected" style="display: none;">
+                                            <i class="fas fa-times"></i> Reject
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
+                                            <input type="radio" name="adults_status" value="none" checked style="display: none;">
+                                            <i class="fas fa-minus"></i> None
+                                        </label>
+                                    </div>
+                                </label>
+                            </div>
+                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
+                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                    <div>
+                                        <strong style="color: #28a745;"><i class="fas fa-code"></i> Coding Classes</strong>
+                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">English for Coding/Tech</p>
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
+                                            <input type="radio" name="coding_status" value="approved" style="display: none;">
+                                            <i class="fas fa-check"></i> Approve
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
+                                            <input type="radio" name="coding_status" value="rejected" style="display: none;">
+                                            <i class="fas fa-times"></i> Reject
+                                        </label>
+                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
+                                            <input type="radio" name="coding_status" value="none" checked style="display: none;">
+                                            <i class="fas fa-minus"></i> None
+                                        </label>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 10px; justify-content: flex-end;">
                             <button type="button" onclick="closeCategoryModal()" class="btn-outline">Cancel</button>
-                            <button type="submit" class="btn-primary">Assign Category</button>
+                            <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Save Approvals</button>
                         </div>
                     </form>
                 </div>
@@ -2572,10 +2985,26 @@ function showCategoryModal(teacherId, currentCategories) {
     }
     document.getElementById('categoryTeacherId').value = teacherId;
     const cats = currentCategories ? currentCategories.split(',') : [];
-    if (cats.length > 0) {
-        document.getElementById('categorySelect').value = cats[0];
+    // Set current status for each section
+    const kidsApproved = cats.includes('young_learners');
+    const adultsApproved = cats.includes('adults');
+    const codingApproved = cats.includes('coding');
+    
+    // Set radio buttons based on current categories
+    if (kidsApproved) {
+        document.querySelector('input[name="kids_status"][value="approved"]').checked = true;
     } else {
-        document.getElementById('categorySelect').value = '';
+        document.querySelector('input[name="kids_status"][value="none"]').checked = true;
+    }
+    if (adultsApproved) {
+        document.querySelector('input[name="adults_status"][value="approved"]').checked = true;
+    } else {
+        document.querySelector('input[name="adults_status"][value="none"]').checked = true;
+    }
+    if (codingApproved) {
+        document.querySelector('input[name="coding_status"][value="approved"]').checked = true;
+    } else {
+        document.querySelector('input[name="coding_status"][value="none"]').checked = true;
     }
     modal.style.display = 'block';
 }

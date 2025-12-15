@@ -237,8 +237,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
     $preferred_schedule = trim($_POST['preferred_schedule'] ?? '');
     $special_requirements = trim($_POST['special_requirements'] ?? '');
     
-    if (!$track || !in_array($track, ['kids', 'adults', 'coding'])) {
-        $_SESSION['error_message'] = 'Please select a learning track.';
+    // Track is optional - only validate if provided
+    if ($track && !in_array($track, ['kids', 'adults', 'coding'])) {
+        $_SESSION['error_message'] = 'Invalid learning track selected.';
         header("Location: student-dashboard.php#learning-needs");
         exit();
     }
@@ -275,11 +276,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
         $insert_stmt->close();
     }
     
-    // Update user's track
-    $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
-    $track_stmt->bind_param("si", $track, $student_id);
-    $track_stmt->execute();
-    $track_stmt->close();
+    // Update user's track if provided
+    if ($track) {
+        $track_stmt = $conn->prepare("UPDATE users SET learning_track = ? WHERE id = ?");
+        $track_stmt->bind_param("si", $track, $student_id);
+        $track_stmt->execute();
+        $track_stmt->close();
+    }
     
     // Save preferred times
     // First, delete existing preferred times
@@ -362,9 +365,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
     */
     
     // Note: Teacher assignment removed - students now select teachers themselves
-    $_SESSION['success_message'] = 'Learning needs submitted! You can now browse and select teachers in your category.';
+    $_SESSION['success_message'] = 'Learning preferences saved! You can update them anytime.';
     
-    header("Location: student-dashboard.php#overview");
+    header("Location: student-dashboard.php#learning-needs");
     exit();
 }
 
@@ -698,43 +701,56 @@ $active_tab = 'overview';
             $has_learning_needs = $learning_needs_stmt->get_result()->num_rows > 0;
             $learning_needs_stmt->close();
             
-            // Show TODO list if student hasn't completed onboarding
-            if (!$has_plan || !$has_learning_needs):
+            // Show optional plan selection prompt if no plan (not mandatory)
+            if (!$has_plan):
             ?>
-            <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border: 2px solid #dc3545; margin-bottom: 30px;">
-                <h2 style="color: #dc3545; margin-bottom: 20px;">
-                    <i class="fas fa-tasks"></i> Complete Your Setup
+            <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
+                <h2 style="color: #856404; margin-bottom: 20px;">
+                    <i class="fas fa-lightbulb"></i> Get Started
                 </h2>
-                <div style="display: flex; flex-direction: column; gap: 15px;">
-                    <?php if (!$has_plan): ?>
-                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ffc107;">
-                        <div style="flex: 1;">
-                            <h3 style="margin: 0 0 5px 0; color: #856404;">
-                                <i class="fas fa-credit-card"></i> Step 1: Select Your Plan
-                            </h3>
-                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Choose a subscription plan to get started with your learning journey.</p>
-                        </div>
+                <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ffc107;">
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 5px 0; color: #856404;">
+                            <i class="fas fa-credit-card"></i> Select a Plan (Optional)
+                        </h3>
+                        <p style="margin: 0; color: #666; font-size: 0.9rem;">Choose a subscription plan to unlock all features, or browse teachers directly.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
                         <a href="<?php echo $user['learning_track'] ? ($user['learning_track'] . '-plans.php') : 'index.php'; ?>" 
                            class="btn-primary" style="white-space: nowrap;">
-                            Select Plan
+                            Browse Plans
+                        </a>
+                        <?php 
+                        // Get student's preferred category to link to teachers
+                        $student_category = ($user && isset($user['preferred_category'])) ? $user['preferred_category'] : 'adults';
+                        $category_map = ['young_learners' => 'kids', 'adults' => 'adults', 'coding' => 'coding'];
+                        $track_for_link = $category_map[$student_category] ?? 'adults';
+                        ?>
+                        <a href="category-teachers.php?category=<?php echo htmlspecialchars($student_category); ?>" 
+                           class="btn-outline" style="white-space: nowrap;">
+                            Browse Teachers
                         </a>
                     </div>
-                    <?php endif; ?>
-                    
-                    <?php if ($has_plan && !$has_learning_needs): ?>
-                    <div class="todo-item" style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #0b6cf5;">
-                        <div style="flex: 1;">
-                            <h3 style="margin: 0 0 5px 0; color: #004080;">
-                                <i class="fas fa-user-graduate"></i> Step 2: Add Your Learning Needs
-                            </h3>
-                            <p style="margin: 0; color: #666; font-size: 0.9rem;">Tell us about your learning goals and preferences so we can assign the perfect teacher for you.</p>
-                        </div>
-                        <a href="#" onclick="switchTab('learning-needs')" class="btn-primary" style="white-space: nowrap;">
-                            Add Needs
-                        </a>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Optional Learning Preferences Card -->
+            <?php if (!$has_learning_needs): ?>
+            <div class="card" style="background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 2px solid #0b6cf5; margin-bottom: 30px;">
+                <h2 style="color: #004080; margin-bottom: 20px;">
+                    <i class="fas fa-user-graduate"></i> Learning Preferences (Optional)
+                </h2>
+                <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #0b6cf5;">
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 5px 0; color: #004080;">
+                            <i class="fas fa-sliders-h"></i> Customize Your Experience
+                        </h3>
+                        <p style="margin: 0; color: #666; font-size: 0.9rem;">Tell us about your learning goals and preferred times to help us personalize your experience.</p>
                     </div>
-                    <?php endif; ?>
-                    
+                    <a href="#" onclick="switchTab('learning-needs')" class="btn-outline" style="white-space: nowrap;">
+                        Add Preferences
+                    </a>
                 </div>
             </div>
             <?php endif; ?>
@@ -1291,13 +1307,13 @@ $active_tab = 'overview';
                 <form method="POST" action="student-dashboard.php#learning-needs" id="learningNeedsForm">
                     <div class="form-group">
                         <label style="font-weight: 600; color: #004080; margin-bottom: 8px; display: block;">
-                            <i class="fas fa-graduation-cap"></i> Learning Track *
+                            <i class="fas fa-graduation-cap"></i> Learning Track (Optional)
                         </label>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                             <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;" 
                                    onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
                                    onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
-                                <input type="radio" name="track" value="kids" required 
+                                <input type="radio" name="track" value="kids" 
                                        <?php echo ($existing_needs && $existing_needs['track'] === 'kids') || $user['learning_track'] === 'kids' ? 'checked' : ''; ?>
                                        style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
                                 <div>
@@ -1308,7 +1324,7 @@ $active_tab = 'overview';
                             <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;"
                                    onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
                                    onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
-                                <input type="radio" name="track" value="adults" required
+                                <input type="radio" name="track" value="adults"
                                        <?php echo ($existing_needs && $existing_needs['track'] === 'adults') || $user['learning_track'] === 'adults' ? 'checked' : ''; ?>
                                        style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
                                 <div>
@@ -1319,7 +1335,7 @@ $active_tab = 'overview';
                             <label style="display: flex; align-items: center; padding: 15px; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; transition: all 0.3s; background: white;"
                                    onmouseover="this.style.borderColor='#0b6cf5'; this.style.background='#f0f7ff';" 
                                    onmouseout="this.style.borderColor='#ddd'; this.style.background='white';">
-                                <input type="radio" name="track" value="coding" required
+                                <input type="radio" name="track" value="coding"
                                        <?php echo ($existing_needs && $existing_needs['track'] === 'coding') || $user['learning_track'] === 'coding' ? 'checked' : ''; ?>
                                        style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
                                 <div>

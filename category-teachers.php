@@ -32,12 +32,53 @@ if (!in_array($category, $valid_categories)) {
 $filters = [
     'min_rating' => isset($_GET['min_rating']) ? floatval($_GET['min_rating']) : null,
     'max_price' => isset($_GET['max_price']) ? floatval($_GET['max_price']) : null,
-    'has_availability' => isset($_GET['has_availability']) && $_GET['has_availability'] == '1'
+    'has_availability' => isset($_GET['has_availability']) && $_GET['has_availability'] == '1',
+    'specialty' => isset($_GET['specialty']) ? trim($_GET['specialty']) : null
 ];
+$sort_by = isset($_GET['sort_by']) ? $_GET['sort_by'] : 'rating'; // rating, price, name, availability
 
 // Get teachers
 $teacherService = new TeacherService($conn);
 $teachers = $teacherService->getTeachersByCategory($category, $filters);
+
+// Filter by specialty if provided
+if (!empty($filters['specialty'])) {
+    $teachers = array_filter($teachers, function($teacher) use ($filters) {
+        return stripos($teacher['specialty'] ?? '', $filters['specialty']) !== false;
+    });
+}
+
+// Sort teachers
+if ($sort_by === 'rating') {
+    usort($teachers, function($a, $b) {
+        $rating_a = floatval($a['avg_rating'] ?? 0);
+        $rating_b = floatval($b['avg_rating'] ?? 0);
+        if ($rating_a == $rating_b) {
+            return intval($b['review_count'] ?? 0) - intval($a['review_count'] ?? 0);
+        }
+        return $rating_b <=> $rating_a;
+    });
+} elseif ($sort_by === 'price') {
+    usort($teachers, function($a, $b) {
+        $price_a = floatval($a['hourly_rate'] ?? 999999);
+        $price_b = floatval($b['hourly_rate'] ?? 999999);
+        return $price_a <=> $price_b;
+    });
+} elseif ($sort_by === 'name') {
+    usort($teachers, function($a, $b) {
+        return strcmp($a['name'] ?? '', $b['name'] ?? '');
+    });
+} elseif ($sort_by === 'availability') {
+    // Sort by availability status (has availability first)
+    usort($teachers, function($a, $b) use ($teacherService) {
+        $a_has = $teacherService->hasAvailableSlots($a['id']);
+        $b_has = $teacherService->hasAvailableSlots($b['id']);
+        if ($a_has == $b_has) {
+            return floatval($b['avg_rating'] ?? 0) <=> floatval($a['avg_rating'] ?? 0);
+        }
+        return $b_has ? -1 : 1;
+    });
+}
 
 // Category display names
 $category_names = [
@@ -311,29 +352,47 @@ if ($user_id) {
                 <input type="hidden" name="category" value="<?php echo htmlspecialchars($category); ?>">
                 <div class="filters-grid">
                     <div class="filter-group">
-                        <label for="min_rating">Minimum Rating</label>
+                        <label for="min_rating"><i class="fas fa-star"></i> Minimum Rating</label>
                         <select name="min_rating" id="min_rating">
                             <option value="">Any Rating</option>
                             <option value="4.5" <?php echo $filters['min_rating'] == 4.5 ? 'selected' : ''; ?>>4.5+ Stars</option>
                             <option value="4.0" <?php echo $filters['min_rating'] == 4.0 ? 'selected' : ''; ?>>4.0+ Stars</option>
                             <option value="3.5" <?php echo $filters['min_rating'] == 3.5 ? 'selected' : ''; ?>>3.5+ Stars</option>
+                            <option value="3.0" <?php echo $filters['min_rating'] == 3.0 ? 'selected' : ''; ?>>3.0+ Stars</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label for="max_price">Max Price/Hour</label>
+                        <label for="max_price"><i class="fas fa-dollar-sign"></i> Max Price/Hour</label>
                         <input type="number" name="max_price" id="max_price" 
                                value="<?php echo $filters['max_price'] ? htmlspecialchars($filters['max_price']) : ''; ?>" 
                                placeholder="Any price" min="0" step="0.01">
                     </div>
                     <div class="filter-group">
+                        <label for="specialty"><i class="fas fa-search"></i> Specialty Search</label>
+                        <input type="text" name="specialty" id="specialty" 
+                               value="<?php echo $filters['specialty'] ? htmlspecialchars($filters['specialty']) : ''; ?>" 
+                               placeholder="e.g., Business, Conversation">
+                    </div>
+                    <div class="filter-group">
+                        <label for="sort_by"><i class="fas fa-sort"></i> Sort By</label>
+                        <select name="sort_by" id="sort_by">
+                            <option value="rating" <?php echo $sort_by === 'rating' ? 'selected' : ''; ?>>Best Rated</option>
+                            <option value="price" <?php echo $sort_by === 'price' ? 'selected' : ''; ?>>Price (Low to High)</option>
+                            <option value="availability" <?php echo $sort_by === 'availability' ? 'selected' : ''; ?>>Available Now</option>
+                            <option value="name" <?php echo $sort_by === 'name' ? 'selected' : ''; ?>>Name (A-Z)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <div class="filter-checkbox">
                             <input type="checkbox" name="has_availability" id="has_availability" value="1" 
                                    <?php echo $filters['has_availability'] ? 'checked' : ''; ?>>
-                            <label for="has_availability">Available Now</label>
+                            <label for="has_availability"><i class="fas fa-calendar-check"></i> Available Now</label>
                         </div>
                     </div>
                     <div class="filter-group">
-                        <button type="submit" class="btn-apply-filters">Apply Filters</button>
+                        <button type="submit" class="btn-apply-filters">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
                     </div>
                 </div>
             </form>
