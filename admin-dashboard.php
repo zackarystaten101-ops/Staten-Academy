@@ -160,17 +160,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['adjust_wallet'])) {
             $audit_stmt->close();
             
             $conn->commit();
-            $wallet_msg = "Wallet adjusted successfully";
+            $user_msg = "Wallet adjusted successfully";
         } else {
             throw new Exception("Failed to adjust wallet");
         }
     } catch (Exception $e) {
         $conn->rollback();
-        $wallet_error = "Error: " . $e->getMessage();
+        $user_error = "Error: " . $e->getMessage();
     }
     
     ob_end_clean();
-    header("Location: admin-dashboard.php#wallet-reconciliation");
+    header("Location: admin-dashboard.php#users");
     exit();
 }
 
@@ -569,10 +569,51 @@ if (!$applications) {
     $applications = new mysqli_result($conn);
 }
 
-$students = $conn->query("SELECT * FROM users WHERE role='student' ORDER BY reg_date DESC");
+// Build students query with wallet balance
+$students_sql = "SELECT u.*, 
+    COALESCE((SELECT SUM(amount) FROM wallet_transactions WHERE student_id = u.id AND status = 'confirmed'), 0) as wallet_balance
+    FROM users u WHERE u.role='student'";
+    
+// Apply search filter if provided
+if (!empty($user_search)) {
+    $search_term = $conn->real_escape_string($user_search);
+    $students_sql .= " AND (u.name LIKE '%{$search_term}%' OR u.email LIKE '%{$search_term}%')";
+}
+
+$students_sql .= " ORDER BY u.reg_date DESC";
+
+$students = $conn->query($students_sql);
 if (!$students) {
     error_log("Error fetching students: " . $conn->error);
     $students = new mysqli_result($conn);
+}
+
+// Build all users query (for unified view)
+$all_users_sql = "SELECT u.*,
+    (SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id) as avg_rating,
+    (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
+    COALESCE((SELECT GROUP_CONCAT(category SEPARATOR ',') FROM teacher_categories WHERE teacher_id = u.id AND is_active = TRUE), '') as categories,
+    COALESCE((SELECT SUM(amount) FROM wallet_transactions WHERE student_id = u.id AND status = 'confirmed'), 0) as wallet_balance
+    FROM users u WHERE 1=1";
+    
+// Apply search filter if provided
+if (!empty($user_search)) {
+    $search_term = $conn->real_escape_string($user_search);
+    $all_users_sql .= " AND (u.name LIKE '%{$search_term}%' OR u.email LIKE '%{$search_term}%')";
+}
+
+// Apply role filter if provided
+if (!empty($user_role_filter)) {
+    $role_filter = $conn->real_escape_string($user_role_filter);
+    $all_users_sql .= " AND u.role = '{$role_filter}'";
+}
+
+$all_users_sql .= " ORDER BY u.reg_date DESC";
+
+$all_users = $conn->query($all_users_sql);
+if (!$all_users) {
+    error_log("Error fetching all users: " . $conn->error);
+    $all_users = new mysqli_result($conn);
 }
 
 // Build teachers query with categories
@@ -1402,7 +1443,10 @@ $all_users_stmt->close();
             </div>
             
             <div style="display: flex; gap: 15px; margin-bottom: 30px; border-bottom: 2px solid #dee2e6; padding-bottom: 15px;">
-                <button onclick="switchUsersSubTab('teachers')" class="btn-outline" id="usr-teachers-btn" style="border-bottom: 3px solid #0b6cf5;">
+                <button onclick="switchUsersSubTab('all')" class="btn-outline" id="usr-all-btn" style="border-bottom: 3px solid #0b6cf5;">
+                    <i class="fas fa-users"></i> All Users
+                </button>
+                <button onclick="switchUsersSubTab('teachers')" class="btn-outline" id="usr-teachers-btn">
                     <i class="fas fa-chalkboard-teacher"></i> Teachers
                 </button>
                 <button onclick="switchUsersSubTab('students')" class="btn-outline" id="usr-students-btn">
@@ -1421,7 +1465,113 @@ $all_users_stmt->close();
                 </div>
             <?php endif; ?>
             
-            <div id="users-teachers" class="users-subtab active">
+            <!-- All Users Tab -->
+            <div id="users-all" class="users-subtab active">
+                <h2>All Users Management</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Categories</th>
+                            <th>Wallet Balance</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $all_users->data_seek(0);
+                        while($u = $all_users->fetch_assoc()): 
+                            $categories = isset($u['categories']) && !empty($u['categories']) ? explode(',', $u['categories']) : [];
+                            $is_suspended = ($u['application_status'] ?? 'approved') === 'rejected';
+                            $wallet_balance = floatval($u['wallet_balance'] ?? 0);
+                        ?>
+                        <tr>
+                            <td data-label="User">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="<?php echo h($u['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
+                                         alt="<?php echo h($u['name']); ?>" 
+                                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                                         onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                                    <?php echo h($u['name']); ?>
+                                </div>
+                            </td>
+                            <td data-label="Email"><?php echo h($u['email']); ?></td>
+                            <td data-label="Role">
+                                <span class="badge badge-info"><?php echo ucfirst($u['role']); ?></span>
+                            </td>
+                            <td data-label="Categories">
+                                <?php if ($u['role'] === 'teacher'): ?>
+                                    <?php if (!empty($categories)): ?>
+                                        <?php foreach ($categories as $cat): ?>
+                                            <span class="badge badge-info" style="margin-right: 5px;">
+                                                <?php echo ucfirst(str_replace('_', ' ', $cat)); ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <span style="color: #999;">Not assigned</span>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span style="color: #999;">N/A</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Wallet">
+                                <?php if ($u['role'] === 'student' || $u['role'] === 'new_student'): ?>
+                                    $<?php echo number_format($wallet_balance, 2); ?>
+                                <?php else: ?>
+                                    <span style="color: #999;">N/A</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Status">
+                                <?php if ($is_suspended): ?>
+                                    <span class="badge badge-danger">Suspended</span>
+                                <?php else: ?>
+                                    <span class="badge badge-success">Active</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Joined"><?php echo date('M d, Y', strtotime($u['reg_date'])); ?></td>
+                            <td data-label="Actions">
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <a href="profile.php?id=<?php echo $u['id']; ?>" class="btn-outline btn-sm">View</a>
+                                    <?php if ($u['role'] === 'teacher'): ?>
+                                        <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" class="btn-outline btn-sm">
+                                            <i class="fas fa-tags"></i> Categories
+                                        </button>
+                                    <?php endif; ?>
+                                    <?php if ($u['role'] === 'student' || $u['role'] === 'new_student'): ?>
+                                        <button onclick="showWalletModal(<?php echo $u['id']; ?>, '<?php echo h($u['name']); ?>', <?php echo $wallet_balance; ?>)" class="btn-outline btn-sm">
+                                            <i class="fas fa-wallet"></i> Wallet
+                                        </button>
+                                    <?php endif; ?>
+                                    <?php if ($is_suspended): ?>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this user account?');">
+                                            <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
+                                            <input type="hidden" name="action_type" value="activate">
+                                            <button type="submit" name="toggle_account_status" class="btn-success btn-sm">
+                                                <i class="fas fa-check"></i> Activate
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Suspend this user account?');">
+                                            <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
+                                            <input type="hidden" name="action_type" value="suspend">
+                                            <button type="submit" name="toggle_account_status" class="btn-danger btn-sm">
+                                                <i class="fas fa-ban"></i> Suspend
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="users-teachers" class="users-subtab" style="display: none;">
                 <h2>Teacher Management</h2>
             <table class="data-table">
                 <thead>
@@ -1524,18 +1674,7 @@ $all_users_stmt->close();
                     <?php 
                     $students->data_seek(0);
                     while($s = $students->fetch_assoc()): 
-                        // Get wallet balance
-                        $wallet_stmt = $conn->prepare("SELECT balance FROM student_wallet WHERE student_id = ?");
-                        $wallet_balance = 0;
-                        if ($wallet_stmt) {
-                            $wallet_stmt->bind_param("i", $s['id']);
-                            $wallet_stmt->execute();
-                            $wallet_result = $wallet_stmt->get_result();
-                            if ($wallet_row = $wallet_result->fetch_assoc()) {
-                                $wallet_balance = $wallet_row['balance'];
-                            }
-                            $wallet_stmt->close();
-                        }
+                        $wallet_balance = floatval($s['wallet_balance'] ?? 0);
                         $is_suspended = ($s['application_status'] ?? 'approved') === 'rejected';
                     ?>
                     <tr>
@@ -1569,6 +1708,9 @@ $all_users_stmt->close();
                                 <a href="profile.php?id=<?php echo $s['id']; ?>" class="btn-outline btn-sm">View</a>
                                 <button onclick="showRoleModal(<?php echo $s['id']; ?>, '<?php echo h($s['role']); ?>')" class="btn-outline btn-sm">
                                     <i class="fas fa-user-tag"></i> Role
+                                </button>
+                                <button onclick="showWalletModal(<?php echo $s['id']; ?>, '<?php echo h($s['name']); ?>', <?php echo $wallet_balance; ?>)" class="btn-outline btn-sm">
+                                    <i class="fas fa-wallet"></i> Wallet
                                 </button>
                                 <?php if ($is_suspended): ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this student account?');">
@@ -3012,21 +3154,49 @@ function showCategoryModal(teacherId, currentCategories) {
     const codingApproved = cats.includes('coding');
     
     // Set radio buttons based on current categories
-    if (kidsApproved) {
-        document.querySelector('input[name="kids_status"][value="approved"]').checked = true;
-    } else {
-        document.querySelector('input[name="kids_status"][value="none"]').checked = true;
+    const kidsApprovedRadio = modal.querySelector('input[name="kids_status"][value="approved"]');
+    const kidsNoneRadio = modal.querySelector('input[name="kids_status"][value="none"]');
+    const adultsApprovedRadio = modal.querySelector('input[name="adults_status"][value="approved"]');
+    const adultsNoneRadio = modal.querySelector('input[name="adults_status"][value="none"]');
+    const codingApprovedRadio = modal.querySelector('input[name="coding_status"][value="approved"]');
+    const codingNoneRadio = modal.querySelector('input[name="coding_status"][value="none"]');
+    
+    if (kidsApproved && kidsApprovedRadio) {
+        kidsApprovedRadio.checked = true;
+        kidsApprovedRadio.closest('label').style.background = '#28a745';
+    } else if (kidsNoneRadio) {
+        kidsNoneRadio.checked = true;
     }
-    if (adultsApproved) {
-        document.querySelector('input[name="adults_status"][value="approved"]').checked = true;
-    } else {
-        document.querySelector('input[name="adults_status"][value="none"]').checked = true;
+    
+    if (adultsApproved && adultsApprovedRadio) {
+        adultsApprovedRadio.checked = true;
+        adultsApprovedRadio.closest('label').style.background = '#28a745';
+    } else if (adultsNoneRadio) {
+        adultsNoneRadio.checked = true;
     }
-    if (codingApproved) {
-        document.querySelector('input[name="coding_status"][value="approved"]').checked = true;
-    } else {
-        document.querySelector('input[name="coding_status"][value="none"]').checked = true;
+    
+    if (codingApproved && codingApprovedRadio) {
+        codingApprovedRadio.checked = true;
+        codingApprovedRadio.closest('label').style.background = '#28a745';
+    } else if (codingNoneRadio) {
+        codingNoneRadio.checked = true;
     }
+    
+    // Add visual feedback for radio button selection
+    modal.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const label = this.closest('label');
+            const parent = label.parentElement;
+            parent.querySelectorAll('label').forEach(l => {
+                const input = l.querySelector('input[type="radio"]');
+                if (input) {
+                    l.style.background = input.value === 'approved' ? '#28a745' : 
+                                        input.value === 'rejected' ? '#dc3545' : '#6c757d';
+                }
+            });
+        });
+    });
+    
     modal.style.display = 'block';
 }
 
@@ -3035,15 +3205,70 @@ function closeCategoryModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// Wallet Management Modal
+function showWalletModal(studentId, studentName, currentBalance) {
+    let modal = document.getElementById('walletModal');
+    if (!modal) {
+        const modalHtml = `
+            <div id="walletModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+                <div class="modal-content" style="background-color: #fefefe; margin: 10% auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 10px;">
+                    <span class="close" onclick="closeWalletModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+                    <h2><i class="fas fa-wallet"></i> Wallet Management</h2>
+                    <p style="color: #666; margin-bottom: 20px;">Manage wallet balance for <strong id="walletStudentName"></strong></p>
+                    <p style="font-size: 1.2rem; margin-bottom: 20px;">Current Balance: <strong id="walletCurrentBalance" style="color: #0b6cf5;"></strong></p>
+                    <form method="POST" id="walletForm">
+                        <input type="hidden" name="adjust_wallet" value="1">
+                        <input type="hidden" name="student_id" id="walletStudentId">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Action</label>
+                            <select name="adjustment_type" id="walletAdjustmentType" class="form-control" required>
+                                <option value="add">Add Funds</option>
+                                <option value="deduct">Deduct Funds</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount ($)</label>
+                            <input type="number" name="amount" step="0.01" min="0.01" class="form-control" required placeholder="0.00">
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Reason</label>
+                            <textarea name="reason" class="form-control" rows="3" placeholder="Reason for this adjustment...">Manual adjustment by admin</textarea>
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" onclick="closeWalletModal()" class="btn-outline">Cancel</button>
+                            <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Apply Adjustment</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('walletModal');
+    }
+    document.getElementById('walletStudentId').value = studentId;
+    document.getElementById('walletStudentName').textContent = studentName;
+    document.getElementById('walletCurrentBalance').textContent = '$' + parseFloat(currentBalance).toFixed(2);
+    modal.style.display = 'block';
+}
+
+function closeWalletModal() {
+    const modal = document.getElementById('walletModal');
+    if (modal) modal.style.display = 'none';
+}
+
 // Close modals when clicking outside
 window.onclick = function(event) {
     const roleModal = document.getElementById('roleModal');
     const categoryModal = document.getElementById('categoryModal');
+    const walletModal = document.getElementById('walletModal');
     if (event.target == roleModal) {
         closeRoleModal();
     }
     if (event.target == categoryModal) {
         closeCategoryModal();
+    }
+    if (event.target == walletModal) {
+        closeWalletModal();
     }
 }
 
@@ -3062,7 +3287,7 @@ function highlightLesson(lessonId) {
 
 function switchUsersSubTab(subTab) {
     document.querySelectorAll('.users-subtab').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('#usr-teachers-btn, #usr-students-btn').forEach(btn => {
+    document.querySelectorAll('#usr-all-btn, #usr-teachers-btn, #usr-students-btn').forEach(btn => {
         if (btn) btn.style.borderBottom = 'none';
     });
     
