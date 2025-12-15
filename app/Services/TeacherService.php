@@ -21,8 +21,10 @@ class TeacherService {
         $category = $this->conn->real_escape_string($category);
         
         $sql = "SELECT DISTINCT u.id, u.name, u.email, u.profile_pic, u.bio, u.about_text, 
-                       u.video_url, u.specialty, u.hourly_rate, u.total_lessons, 
-                       u.avg_rating, u.review_count,
+                       u.video_url, u.specialty, u.hourly_rate,
+                       (SELECT COUNT(*) FROM lessons WHERE teacher_id = u.id) as total_lessons,
+                       (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating,
+                       (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
                        tc.category, tc.is_active
                 FROM users u
                 INNER JOIN teacher_categories tc ON u.id = tc.teacher_id
@@ -32,15 +34,21 @@ class TeacherService {
                 AND u.application_status = 'approved'";
         
         // Apply filters
+        $having_clauses = [];
+        
         if (isset($filters['min_rating']) && is_numeric($filters['min_rating'])) {
-            $sql .= " AND (u.avg_rating IS NULL OR u.avg_rating >= " . floatval($filters['min_rating']) . ")";
+            $having_clauses[] = "avg_rating >= " . floatval($filters['min_rating']);
         }
         
         if (isset($filters['max_price']) && is_numeric($filters['max_price'])) {
             $sql .= " AND (u.hourly_rate IS NULL OR u.hourly_rate <= " . floatval($filters['max_price']) . ")";
         }
         
-        $sql .= " ORDER BY u.avg_rating DESC, u.review_count DESC, u.name ASC";
+        if (!empty($having_clauses)) {
+            $sql .= " HAVING " . implode(" AND ", $having_clauses);
+        }
+        
+        $sql .= " ORDER BY avg_rating DESC, review_count DESC, u.name ASC";
         
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
