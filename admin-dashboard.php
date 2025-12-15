@@ -262,19 +262,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_category'])) {
 // Handle Section Approval Management
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approvals'])) {
     $teacher_id = intval($_POST['teacher_id']);
-    $kids_status = $_POST['kids_status'] ?? 'none';
-    $adults_status = $_POST['adults_status'] ?? 'none';
-    $coding_status = $_POST['coding_status'] ?? 'none';
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    // Get checkbox values (they'll be set if checked, not set if unchecked)
+    $kids_approved = isset($_POST['category_kids']) && $_POST['category_kids'] === 'young_learners';
+    $adults_approved = isset($_POST['category_adults']) && $_POST['category_adults'] === 'adults';
+    $coding_approved = isset($_POST['category_coding']) && $_POST['category_coding'] === 'coding';
     
     $conn->begin_transaction();
     try {
-        // Map section statuses to categories
-        $sections = [
-            'kids' => ['status' => $kids_status, 'category' => 'young_learners'],
-            'adults' => ['status' => $adults_status, 'category' => 'adults'],
-            'coding' => ['status' => $coding_status, 'category' => 'coding']
-        ];
+        // Map checkboxes to categories
+        $categories_to_add = [];
+        if ($kids_approved) {
+            $categories_to_add[] = 'young_learners';
+        }
+        if ($adults_approved) {
+            $categories_to_add[] = 'adults';
+        }
+        if ($coding_approved) {
+            $categories_to_add[] = 'coding';
+        }
         
         // Remove all existing category assignments for this teacher
         $stmt = $conn->prepare("DELETE FROM teacher_categories WHERE teacher_id = ?");
@@ -283,15 +290,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approv
         $stmt->close();
         
         // Add approved categories
-        $approved_categories = [];
-        foreach ($sections as $section => $data) {
-            if ($data['status'] === 'approved') {
-                $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category, is_active) VALUES (?, ?, TRUE)");
-                $stmt->bind_param("is", $teacher_id, $data['category']);
-                $stmt->execute();
-                $stmt->close();
-                $approved_categories[] = $data['category'];
-            }
+        foreach ($categories_to_add as $category) {
+            $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category, is_active) VALUES (?, ?, TRUE)");
+            $stmt->bind_param("is", $teacher_id, $category);
+            $stmt->execute();
+            $stmt->close();
         }
         
         // Log to audit log
@@ -299,20 +302,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approv
                      VALUES (?, 'section_approval', 'teacher', ?, ?, ?)";
         $audit_stmt = $conn->prepare($audit_sql);
         $details = json_encode([
-            'kids' => $kids_status,
-            'adults' => $adults_status,
-            'coding' => $coding_status,
-            'approved_categories' => $approved_categories
+            'kids' => $kids_approved ? 'approved' : 'none',
+            'adults' => $adults_approved ? 'approved' : 'none',
+            'coding' => $coding_approved ? 'approved' : 'none',
+            'approved_categories' => $categories_to_add
         ]);
         $audit_stmt->bind_param("iiss", $admin_id, $teacher_id, $details, $ip_address);
         $audit_stmt->execute();
         $audit_stmt->close();
         
         $conn->commit();
-        $user_msg = "Section approvals updated successfully";
+        $user_msg = "Teacher categories updated successfully!";
     } catch (Exception $e) {
         $conn->rollback();
-        $user_error = "Error: " . $e->getMessage();
+        $user_error = "Error updating categories: " . $e->getMessage();
+        error_log("Category update error: " . $e->getMessage());
     }
     
     ob_end_clean();
@@ -3059,85 +3063,95 @@ function showCategoryModal(teacherId, currentCategories) {
     let modal = document.getElementById('categoryModal');
     if (!modal) {
         const modalHtml = `
-            <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
-                <div class="modal-content" style="background-color: #fefefe; margin: 5% auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 10px; max-height: 90vh; overflow-y: auto;">
-                    <span class="close" onclick="closeCategoryModal()" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
-                    <h2><i class="fas fa-tags"></i> Section Approval Management</h2>
-                    <p style="color: #666; margin-bottom: 20px;">Approve or reject this teacher for specific sections (Kids, Adults, Coding).</p>
-                    <form method="POST" id="categoryForm">
+            <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
+                <div class="modal-content" style="background-color: #ffffff; margin: 3% auto; padding: 0; border: none; width: 90%; max-width: 700px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px 30px; color: white;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;"><i class="fas fa-tags"></i> Manage Teacher Categories</h2>
+                                <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 0.95rem;">Select which sections this teacher is approved to teach</p>
+                            </div>
+                            <span class="close" onclick="closeCategoryModal()" style="color: white; font-size: 32px; font-weight: bold; cursor: pointer; opacity: 0.8; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">&times;</span>
+                        </div>
+                    </div>
+                    <form method="POST" id="categoryForm" style="padding: 30px;">
                         <input type="hidden" name="manage_section_approvals" value="1">
                         <input type="hidden" name="teacher_id" id="categoryTeacherId">
-                        <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
-                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
-                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                                    <div>
-                                        <strong style="color: #ff6b9d;"><i class="fas fa-child"></i> Kids Classes</strong>
-                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">Young Learners (ages 3-11)</p>
+                        
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #667eea;">
+                            <p style="margin: 0; color: #495057; font-size: 0.9rem;">
+                                <i class="fas fa-info-circle" style="color: #667eea;"></i> 
+                                <strong>Tip:</strong> Teachers can be approved for multiple sections. Check the boxes for all sections this teacher should teach.
+                            </p>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 30px;">
+                            <!-- Kids Section -->
+                            <div class="category-card" style="border: 2px solid #e9ecef; border-radius: 10px; padding: 20px; transition: all 0.3s; background: white;" 
+                                 onmouseover="this.style.borderColor='#ff6b9d'; this.style.boxShadow='0 4px 12px rgba(255,107,157,0.15)'" 
+                                 onmouseout="this.style.borderColor='#e9ecef'; this.style.boxShadow='none'">
+                                <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                                    <input type="checkbox" name="category_kids" value="young_learners" id="category_kids" 
+                                           style="width: 24px; height: 24px; margin-right: 15px; cursor: pointer; accent-color: #ff6b9d;">
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                            <i class="fas fa-child" style="color: #ff6b9d; font-size: 1.3rem;"></i>
+                                            <strong style="color: #333; font-size: 1.1rem;">Kids Classes</strong>
+                                        </div>
+                                        <p style="margin: 0; color: #666; font-size: 0.9rem;">Young Learners (ages 3-11) - General English for children</p>
                                     </div>
-                                    <div style="display: flex; gap: 10px;">
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
-                                            <input type="radio" name="kids_status" value="approved" style="display: none;">
-                                            <i class="fas fa-check"></i> Approve
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
-                                            <input type="radio" name="kids_status" value="rejected" style="display: none;">
-                                            <i class="fas fa-times"></i> Reject
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
-                                            <input type="radio" name="kids_status" value="none" checked style="display: none;">
-                                            <i class="fas fa-minus"></i> None
-                                        </label>
-                                    </div>
-                                </label>
-                            </div>
-                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
-                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                                    <div>
-                                        <strong style="color: #004080;"><i class="fas fa-user-graduate"></i> Adults Classes</strong>
-                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">General English for adults</p>
-                                    </div>
-                                    <div style="display: flex; gap: 10px;">
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
-                                            <input type="radio" name="adults_status" value="approved" style="display: none;">
-                                            <i class="fas fa-check"></i> Approve
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
-                                            <input type="radio" name="adults_status" value="rejected" style="display: none;">
-                                            <i class="fas fa-times"></i> Reject
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
-                                            <input type="radio" name="adults_status" value="none" checked style="display: none;">
-                                            <i class="fas fa-minus"></i> None
-                                        </label>
+                                    <div id="kids_status_badge" style="margin-left: 15px; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; background: #e9ecef; color: #6c757d;">
+                                        Not Approved
                                     </div>
                                 </label>
                             </div>
-                            <div style="border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px;">
-                                <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                                    <div>
-                                        <strong style="color: #28a745;"><i class="fas fa-code"></i> Coding Classes</strong>
-                                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9rem;">English for Coding/Tech</p>
+                            
+                            <!-- Adults Section -->
+                            <div class="category-card" style="border: 2px solid #e9ecef; border-radius: 10px; padding: 20px; transition: all 0.3s; background: white;" 
+                                 onmouseover="this.style.borderColor='#004080'; this.style.boxShadow='0 4px 12px rgba(0,64,128,0.15)'" 
+                                 onmouseout="this.style.borderColor='#e9ecef'; this.style.boxShadow='none'">
+                                <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                                    <input type="checkbox" name="category_adults" value="adults" id="category_adults" 
+                                           style="width: 24px; height: 24px; margin-right: 15px; cursor: pointer; accent-color: #004080;">
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                            <i class="fas fa-user-graduate" style="color: #004080; font-size: 1.3rem;"></i>
+                                            <strong style="color: #333; font-size: 1.1rem;">Adults Classes</strong>
+                                        </div>
+                                        <p style="margin: 0; color: #666; font-size: 0.9rem;">General English for adults - All levels</p>
                                     </div>
-                                    <div style="display: flex; gap: 10px;">
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #28a745; color: white; margin: 0;">
-                                            <input type="radio" name="coding_status" value="approved" style="display: none;">
-                                            <i class="fas fa-check"></i> Approve
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #dc3545; color: white; margin: 0;">
-                                            <input type="radio" name="coding_status" value="rejected" style="display: none;">
-                                            <i class="fas fa-times"></i> Reject
-                                        </label>
-                                        <label style="cursor: pointer; padding: 8px 15px; border-radius: 5px; background: #6c757d; color: white; margin: 0;">
-                                            <input type="radio" name="coding_status" value="none" checked style="display: none;">
-                                            <i class="fas fa-minus"></i> None
-                                        </label>
+                                    <div id="adults_status_badge" style="margin-left: 15px; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; background: #e9ecef; color: #6c757d;">
+                                        Not Approved
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <!-- Coding Section -->
+                            <div class="category-card" style="border: 2px solid #e9ecef; border-radius: 10px; padding: 20px; transition: all 0.3s; background: white;" 
+                                 onmouseover="this.style.borderColor='#28a745'; this.style.boxShadow='0 4px 12px rgba(40,167,69,0.15)'" 
+                                 onmouseout="this.style.borderColor='#e9ecef'; this.style.boxShadow='none'">
+                                <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
+                                    <input type="checkbox" name="category_coding" value="coding" id="category_coding" 
+                                           style="width: 24px; height: 24px; margin-right: 15px; cursor: pointer; accent-color: #28a745;">
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                            <i class="fas fa-code" style="color: #28a745; font-size: 1.3rem;"></i>
+                                            <strong style="color: #333; font-size: 1.1rem;">Coding Classes</strong>
+                                        </div>
+                                        <p style="margin: 0; color: #666; font-size: 0.9rem;">English for Coding/Tech - Technical English for developers</p>
+                                    </div>
+                                    <div id="coding_status_badge" style="margin-left: 15px; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; background: #e9ecef; color: #6c757d;">
+                                        Not Approved
                                     </div>
                                 </label>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                            <button type="button" onclick="closeCategoryModal()" class="btn-outline">Cancel</button>
-                            <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Save Approvals</button>
+                        
+                        <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                            <button type="button" onclick="closeCategoryModal()" class="btn-outline" style="padding: 10px 24px; font-size: 0.95rem;">Cancel</button>
+                            <button type="submit" class="btn-primary" style="padding: 10px 24px; font-size: 0.95rem;">
+                                <i class="fas fa-save"></i> Save Categories
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -3146,56 +3160,61 @@ function showCategoryModal(teacherId, currentCategories) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         modal = document.getElementById('categoryModal');
     }
+    
+    // Helper function for badge updates
+    function updateBadge(checkbox, badgeId) {
+        const badge = document.getElementById(badgeId);
+        if (badge && checkbox) {
+            if (checkbox.checked) {
+                badge.textContent = 'Approved';
+                badge.style.background = '#d4edda';
+                badge.style.color = '#155724';
+            } else {
+                badge.textContent = 'Not Approved';
+                badge.style.background = '#e9ecef';
+                badge.style.color = '#6c757d';
+            }
+        }
+    }
+    
+    // Set teacher ID
     document.getElementById('categoryTeacherId').value = teacherId;
-    const cats = currentCategories ? currentCategories.split(',') : [];
-    // Set current status for each section
+    
+    // Parse current categories
+    const cats = currentCategories ? currentCategories.split(',').map(c => c.trim()) : [];
     const kidsApproved = cats.includes('young_learners');
     const adultsApproved = cats.includes('adults');
     const codingApproved = cats.includes('coding');
     
-    // Set radio buttons based on current categories
-    const kidsApprovedRadio = modal.querySelector('input[name="kids_status"][value="approved"]');
-    const kidsNoneRadio = modal.querySelector('input[name="kids_status"][value="none"]');
-    const adultsApprovedRadio = modal.querySelector('input[name="adults_status"][value="approved"]');
-    const adultsNoneRadio = modal.querySelector('input[name="adults_status"][value="none"]');
-    const codingApprovedRadio = modal.querySelector('input[name="coding_status"][value="approved"]');
-    const codingNoneRadio = modal.querySelector('input[name="coding_status"][value="none"]');
+    // Get checkbox elements
+    const kidsCheckbox = document.getElementById('category_kids');
+    const adultsCheckbox = document.getElementById('category_adults');
+    const codingCheckbox = document.getElementById('category_coding');
     
-    if (kidsApproved && kidsApprovedRadio) {
-        kidsApprovedRadio.checked = true;
-        kidsApprovedRadio.closest('label').style.background = '#28a745';
-    } else if (kidsNoneRadio) {
-        kidsNoneRadio.checked = true;
-    }
-    
-    if (adultsApproved && adultsApprovedRadio) {
-        adultsApprovedRadio.checked = true;
-        adultsApprovedRadio.closest('label').style.background = '#28a745';
-    } else if (adultsNoneRadio) {
-        adultsNoneRadio.checked = true;
-    }
-    
-    if (codingApproved && codingApprovedRadio) {
-        codingApprovedRadio.checked = true;
-        codingApprovedRadio.closest('label').style.background = '#28a745';
-    } else if (codingNoneRadio) {
-        codingNoneRadio.checked = true;
-    }
-    
-    // Add visual feedback for radio button selection
-    modal.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const label = this.closest('label');
-            const parent = label.parentElement;
-            parent.querySelectorAll('label').forEach(l => {
-                const input = l.querySelector('input[type="radio"]');
-                if (input) {
-                    l.style.background = input.value === 'approved' ? '#28a745' : 
-                                        input.value === 'rejected' ? '#dc3545' : '#6c757d';
-                }
-            });
+    // Set checkbox states
+    if (kidsCheckbox) {
+        kidsCheckbox.checked = kidsApproved;
+        kidsCheckbox.addEventListener('change', function() {
+            updateBadge(this, 'kids_status_badge');
         });
-    });
+        updateBadge(kidsCheckbox, 'kids_status_badge');
+    }
+    
+    if (adultsCheckbox) {
+        adultsCheckbox.checked = adultsApproved;
+        adultsCheckbox.addEventListener('change', function() {
+            updateBadge(this, 'adults_status_badge');
+        });
+        updateBadge(adultsCheckbox, 'adults_status_badge');
+    }
+    
+    if (codingCheckbox) {
+        codingCheckbox.checked = codingApproved;
+        codingCheckbox.addEventListener('change', function() {
+            updateBadge(this, 'coding_status_badge');
+        });
+        updateBadge(codingCheckbox, 'coding_status_badge');
+    }
     
     modal.style.display = 'block';
 }
