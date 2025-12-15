@@ -25,6 +25,12 @@ $admin_id = $_SESSION['user_id'];
 $user = getUserById($conn, $admin_id);
 $user_role = 'admin';
 
+// Retrieve session messages
+$user_msg = $_SESSION['user_msg'] ?? null;
+$user_error = $_SESSION['user_error'] ?? null;
+// Clear session messages after retrieving
+unset($_SESSION['user_msg'], $_SESSION['user_error']);
+
 // Initialize search/filter variables early (before any HTML output)
 $user_search = $_GET['user_search'] ?? '';
 $user_role_filter = $_GET['user_role_filter'] ?? '';
@@ -261,13 +267,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_category'])) {
 
 // Handle Section Approval Management
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approvals'])) {
-    $teacher_id = intval($_POST['teacher_id']);
+    $teacher_id = intval($_POST['teacher_id'] ?? 0);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    if ($teacher_id <= 0) {
+        $_SESSION['user_error'] = "Invalid teacher ID";
+        ob_end_clean();
+        header("Location: admin-dashboard.php#users-teachers");
+        exit();
+    }
     
     // Get checkbox values (they'll be set if checked, not set if unchecked)
     $kids_approved = isset($_POST['category_kids']) && $_POST['category_kids'] === 'young_learners';
     $adults_approved = isset($_POST['category_adults']) && $_POST['category_adults'] === 'adults';
     $coding_approved = isset($_POST['category_coding']) && $_POST['category_coding'] === 'coding';
+    
+    // Debug logging
+    error_log("Category update - Teacher ID: $teacher_id, Kids: " . ($kids_approved ? 'yes' : 'no') . ", Adults: " . ($adults_approved ? 'yes' : 'no') . ", Coding: " . ($coding_approved ? 'yes' : 'no'));
     
     $conn->begin_transaction();
     try {
@@ -312,15 +328,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approv
         $audit_stmt->close();
         
         $conn->commit();
-        $user_msg = "Teacher categories updated successfully!";
+        $_SESSION['user_msg'] = "Teacher categories updated successfully!";
     } catch (Exception $e) {
         $conn->rollback();
-        $user_error = "Error updating categories: " . $e->getMessage();
+        $_SESSION['user_error'] = "Error updating categories: " . $e->getMessage();
         error_log("Category update error: " . $e->getMessage());
     }
     
     ob_end_clean();
-    header("Location: admin-dashboard.php#users");
+    header("Location: admin-dashboard.php#users-teachers");
     exit();
 }
 
@@ -3074,7 +3090,7 @@ function showCategoryModal(teacherId, currentCategories) {
                             <span class="close" onclick="closeCategoryModal()" style="color: white; font-size: 32px; font-weight: bold; cursor: pointer; opacity: 0.8; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">&times;</span>
                         </div>
                     </div>
-                    <form method="POST" id="categoryForm" style="padding: 30px;">
+                    <form method="POST" id="categoryForm" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" style="padding: 30px;">
                         <input type="hidden" name="manage_section_approvals" value="1">
                         <input type="hidden" name="teacher_id" id="categoryTeacherId">
                         
@@ -3159,6 +3175,38 @@ function showCategoryModal(teacherId, currentCategories) {
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         modal = document.getElementById('categoryModal');
+        
+        // Add form submit handler
+        const form = document.getElementById('categoryForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                // Debug: Log form data
+                const formData = new FormData(form);
+                console.log('Form submitting with data:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(key + ': ' + value);
+                }
+                
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                
+                // Verify teacher ID is set
+                const teacherId = document.getElementById('categoryTeacherId').value;
+                if (!teacherId || teacherId === '0') {
+                    e.preventDefault();
+                    alert('Error: Teacher ID is missing. Please try again.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                    return false;
+                }
+                
+                // Form will submit normally - no preventDefault needed
+                // The button will be re-enabled if there's an error and page reloads
+                return true;
+            });
+        }
     }
     
     // Helper function for badge updates
