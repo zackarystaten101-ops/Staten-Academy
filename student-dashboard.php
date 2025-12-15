@@ -474,7 +474,7 @@ $calendar_stmt = $conn->prepare("
     JOIN users u ON l.teacher_id = u.id
     WHERE l.student_id = ? 
     AND l.lesson_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-    ORDER BY l.lesson_date ASC, l.lesson_time ASC
+    ORDER BY l.lesson_date ASC, l.start_time ASC
 ");
 $calendar_stmt->bind_param("i", $student_id);
 $calendar_stmt->execute();
@@ -1543,8 +1543,8 @@ $active_tab = 'overview';
             // Prepare calendar events JSON
             $calendar_events = [];
             foreach ($all_lessons_for_calendar as $lesson) {
-                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['lesson_time'];
-                $end_time = date('H:i:s', strtotime($lesson['lesson_time'] . ' + ' . ($lesson['duration'] ?? 60) . ' minutes'));
+                $start_datetime = $lesson['lesson_date'] . 'T' . $lesson['start_time'];
+                $end_time = date('H:i:s', strtotime($lesson['start_time'] . ' + ' . ($lesson['duration'] ?? 60) . ' minutes'));
                 $end_datetime = $lesson['lesson_date'] . 'T' . $end_time;
                 
                 // Color coding by status
