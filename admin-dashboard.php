@@ -25,6 +25,10 @@ $admin_id = $_SESSION['user_id'];
 $user = getUserById($conn, $admin_id);
 $user_role = 'admin';
 
+// Initialize search/filter variables early (before any HTML output)
+$user_search = $_GET['user_search'] ?? '';
+$user_role_filter = $_GET['user_role_filter'] ?? '';
+
 // Get admin stats
 $admin_stats = getAdminStats($conn);
 
@@ -571,16 +575,12 @@ if (!$students) {
     $students = new mysqli_result($conn);
 }
 
-// Initialize search/filter variables
-$user_search = $_GET['user_search'] ?? '';
-$user_role_filter = $_GET['user_role_filter'] ?? '';
-
 // Build teachers query with categories
 $teachers_sql = "SELECT u.*, 
     (SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id) as avg_rating,
     (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
     (SELECT COUNT(DISTINCT student_id) FROM bookings WHERE teacher_id = u.id) as student_count,
-    (SELECT GROUP_CONCAT(category SEPARATOR ',') FROM teacher_categories WHERE teacher_id = u.id AND is_active = TRUE) as categories
+    COALESCE((SELECT GROUP_CONCAT(category SEPARATOR ',') FROM teacher_categories WHERE teacher_id = u.id AND is_active = TRUE), '') as categories
     FROM users u WHERE u.role='teacher'";
     
 // Apply search filter if provided
@@ -1440,7 +1440,7 @@ $all_users_stmt->close();
                     <?php 
                     $teachers->data_seek(0);
                     while($t = $teachers->fetch_assoc()): 
-                        $categories = !empty($t['categories']) ? explode(',', $t['categories']) : [];
+                        $categories = isset($t['categories']) && !empty($t['categories']) ? explode(',', $t['categories']) : [];
                         $is_suspended = ($t['application_status'] ?? 'approved') === 'rejected';
                     ?>
                     <tr>
