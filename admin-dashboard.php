@@ -710,7 +710,7 @@ $unread_support = $admin_stats['open_support'];
 $active_tab = 'dashboard';
 
 // Get all users for admin chat
-$all_users_stmt = $conn->prepare("
+$chat_users_stmt = $conn->prepare("
     SELECT DISTINCT u.id, u.name, u.email, u.role, u.profile_pic,
            COALESCE((SELECT COUNT(*) FROM messages m WHERE m.receiver_id = ? AND m.sender_id = u.id AND m.is_read = 0 AND m.message_type = 'direct'), 0) as unread_count,
            (SELECT MAX(sent_at) FROM messages m WHERE ((m.sender_id = ? AND m.receiver_id = u.id) OR (m.sender_id = u.id AND m.receiver_id = ?)) AND m.message_type = 'direct') as last_message_time
@@ -718,14 +718,14 @@ $all_users_stmt = $conn->prepare("
     WHERE u.id != ? AND u.role != 'admin'
     ORDER BY last_message_time IS NULL, last_message_time DESC, u.name ASC
 ");
-$all_users_stmt->bind_param("iiii", $admin_id, $admin_id, $admin_id, $admin_id);
-$all_users_stmt->execute();
-$all_users_result = $all_users_stmt->get_result();
-$all_users = [];
-while ($row = $all_users_result->fetch_assoc()) {
-    $all_users[] = $row;
+$chat_users_stmt->bind_param("iiii", $admin_id, $admin_id, $admin_id, $admin_id);
+$chat_users_stmt->execute();
+$chat_users_result = $chat_users_stmt->get_result();
+$chat_users = [];
+while ($row = $chat_users_result->fetch_assoc()) {
+    $chat_users[] = $row;
 }
-$all_users_stmt->close();
+$chat_users_stmt->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1990,8 +1990,8 @@ $all_users_stmt->close();
                 <div style="background: white; border-radius: 8px; padding: 15px; overflow-y: auto; border: 1px solid #ddd;">
                     <h3 style="margin-top: 0; font-size: 1.1rem; color: #004080;">All Users</h3>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <?php if (count($all_users) > 0): ?>
-                            <?php foreach ($all_users as $chat_user): ?>
+                        <?php if (count($chat_users) > 0): ?>
+                            <?php foreach ($chat_users as $chat_user): ?>
                                 <a href="message_threads.php?user_id=<?php echo $chat_user['id']; ?>" 
                                    style="display: flex; align-items: center; gap: 10px; padding: 12px; background: #f8f9fa; border-radius: 8px; text-decoration: none; color: inherit; transition: all 0.2s;"
                                    onmouseover="this.style.background='#f0f7ff'; this.style.transform='translateX(5px)';"
