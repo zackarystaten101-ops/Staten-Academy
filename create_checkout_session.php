@@ -1,4 +1,6 @@
 <?php
+// Start output buffering to prevent headers already sent errors
+ob_start();
 session_start();
 require_once 'config.php';
 require_once 'db.php';
@@ -76,6 +78,7 @@ if ($is_test_student) {
     }
     
     // Redirect to success page
+    ob_end_clean(); // Clear output buffer before redirect
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
     $domain = $protocol . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
     if (strpos($domain, ' ') !== false) {
@@ -268,9 +271,10 @@ if ($http_code !== 200) {
 
 // Redirect to Stripe Checkout
 if (isset($session['url'])) {
+    ob_end_clean(); // Clear output buffer before redirect
     header("Location: " . $session['url']);
     exit;
 } else {
+    ob_end_clean(); // Clear output buffer before error
     die("Error: No checkout URL returned from Stripe.");
 }
-?>

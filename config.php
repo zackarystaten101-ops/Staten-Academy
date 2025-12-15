@@ -14,4 +14,3 @@ if (!defined('STRIPE_SECRET_KEY')) {
 // Stripe keys are now defined in env.php:
 // - STRIPE_SECRET_KEY
 // - STRIPE_PUBLISHABLE_KEY
-?>
