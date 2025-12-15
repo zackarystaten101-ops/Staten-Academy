@@ -571,11 +571,32 @@ if (!$students) {
     $students = new mysqli_result($conn);
 }
 
-$teachers = $conn->query("SELECT u.*, 
+// Initialize search/filter variables
+$user_search = $_GET['user_search'] ?? '';
+$user_role_filter = $_GET['user_role_filter'] ?? '';
+
+// Build teachers query with categories
+$teachers_sql = "SELECT u.*, 
     (SELECT AVG(rating) FROM reviews WHERE teacher_id = u.id) as avg_rating,
     (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count,
-    (SELECT COUNT(DISTINCT student_id) FROM bookings WHERE teacher_id = u.id) as student_count
-    FROM users u WHERE u.role='teacher' ORDER BY u.id DESC");
+    (SELECT COUNT(DISTINCT student_id) FROM bookings WHERE teacher_id = u.id) as student_count,
+    (SELECT GROUP_CONCAT(category SEPARATOR ',') FROM teacher_categories WHERE teacher_id = u.id AND is_active = TRUE) as categories
+    FROM users u WHERE u.role='teacher'";
+    
+// Apply search filter if provided
+if (!empty($user_search)) {
+    $search_term = $conn->real_escape_string($user_search);
+    $teachers_sql .= " AND (u.name LIKE '%{$search_term}%' OR u.email LIKE '%{$search_term}%')";
+}
+
+// Apply role filter if provided (though teachers query already filters by role)
+if (!empty($user_role_filter) && $user_role_filter !== 'teacher') {
+    // If filtering for students, we'll handle that separately
+}
+
+$teachers_sql .= " ORDER BY u.id DESC";
+
+$teachers = $conn->query($teachers_sql);
 if (!$teachers) {
     error_log("Error fetching teachers: " . $conn->error);
     $teachers = new mysqli_result($conn);
@@ -1356,22 +1377,22 @@ $all_users_stmt->close();
                     <input type="hidden" name="tab" value="users">
                     <div>
                         <label>Search Users</label>
-                        <input type="text" name="user_search" value="<?php echo h($user_search); ?>" 
+                        <input type="text" name="user_search" value="<?php echo h($user_search ?? ''); ?>" 
                                placeholder="Search by name or email..." class="form-control">
                     </div>
                     <div>
                         <label>Filter by Role</label>
                         <select name="user_role_filter" class="form-control">
                             <option value="">All Roles</option>
-                            <option value="teacher" <?php echo $user_role_filter === 'teacher' ? 'selected' : ''; ?>>Teachers</option>
-                            <option value="student" <?php echo $user_role_filter === 'student' ? 'selected' : ''; ?>>Students</option>
+                            <option value="teacher" <?php echo ($user_role_filter ?? '') === 'teacher' ? 'selected' : ''; ?>>Teachers</option>
+                            <option value="student" <?php echo ($user_role_filter ?? '') === 'student' ? 'selected' : ''; ?>>Students</option>
                         </select>
                     </div>
                     <div>
                         <button type="submit" class="btn-primary">
                             <i class="fas fa-search"></i> Search
                         </button>
-                        <?php if ($user_search || $user_role_filter): ?>
+                        <?php if (!empty($user_search) || !empty($user_role_filter)): ?>
                         <a href="admin-dashboard.php#users" class="btn-outline" style="margin-left: 10px;">
                             <i class="fas fa-times"></i> Clear
                         </a>
@@ -1419,7 +1440,7 @@ $all_users_stmt->close();
                     <?php 
                     $teachers->data_seek(0);
                     while($t = $teachers->fetch_assoc()): 
-                        $categories = $t['categories'] ? explode(',', $t['categories']) : [];
+                        $categories = !empty($t['categories']) ? explode(',', $t['categories']) : [];
                         $is_suspended = ($t['application_status'] ?? 'approved') === 'rejected';
                     ?>
                     <tr>
