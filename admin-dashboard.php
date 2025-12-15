@@ -1754,7 +1754,7 @@ $chat_users_stmt->close();
                            FROM lessons l
                            JOIN users t ON l.teacher_id = t.id
                            JOIN users s ON l.student_id = s.id
-                           ORDER BY l.lesson_date DESC, l.lesson_time DESC
+                           ORDER BY l.lesson_date DESC, l.start_time DESC
                            LIMIT 100";
             $all_lessons = $conn->query($lessons_sql);
             if (!$all_lessons) {
@@ -1764,8 +1764,8 @@ $chat_users_stmt->close();
             
             // Get conflicts (overlapping lessons for same teacher)
             $conflicts_sql = "SELECT l1.id as lesson1_id, l2.id as lesson2_id,
-                             l1.teacher_id, l1.lesson_date, l1.lesson_time,
-                             l1.duration, t.name as teacher_name
+                             l1.teacher_id, l1.lesson_date, l1.start_time as lesson_time,
+                             TIMESTAMPDIFF(MINUTE, CONCAT(l1.lesson_date, ' ', l1.start_time), CONCAT(l1.lesson_date, ' ', l1.end_time)) as duration, t.name as teacher_name
                              FROM lessons l1
                              JOIN lessons l2 ON l1.teacher_id = l2.teacher_id 
                              AND l1.id < l2.id
@@ -1774,10 +1774,10 @@ $chat_users_stmt->close();
                              AND l1.status != 'cancelled'
                              AND l2.status != 'cancelled'
                              AND (
-                                 (l1.lesson_time <= l2.lesson_time AND ADDTIME(l1.lesson_time, SEC_TO_TIME(l1.duration * 60)) > l2.lesson_time)
-                                 OR (l2.lesson_time <= l1.lesson_time AND ADDTIME(l2.lesson_time, SEC_TO_TIME(l2.duration * 60)) > l1.lesson_time)
+                                 (l1.start_time <= l2.start_time AND l1.end_time > l2.start_time)
+                                 OR (l2.start_time <= l1.start_time AND l2.end_time > l1.start_time)
                              )
-                             ORDER BY l1.lesson_date DESC, l1.lesson_time DESC";
+                             ORDER BY l1.lesson_date DESC, l1.start_time DESC";
             $conflicts = $conn->query($conflicts_sql);
             if (!$conflicts) {
                 error_log("Error fetching conflicts: " . $conn->error);
@@ -1904,7 +1904,7 @@ $chat_users_stmt->close();
                                 <?php while ($lesson = $all_lessons->fetch_assoc()): ?>
                                 <tr id="lesson-<?php echo $lesson['id']; ?>" style="transition: background 0.3s;">
                                     <td><?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?></td>
-                                    <td><?php echo date('H:i', strtotime($lesson['lesson_time'])); ?></td>
+                                    <td><?php echo date('H:i', strtotime($lesson['start_time'])); ?></td>
                                     <td>
                                         <div><?php echo h($lesson['teacher_name']); ?></div>
                                         <small style="color: #666;"><?php echo h($lesson['teacher_email']); ?></small>
