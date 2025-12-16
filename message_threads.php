@@ -756,6 +756,9 @@ if ($conv_result) {
             try {
                 const response = await fetch('send_message.php', {
                     method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
                     body: formData
                 });
                 

@@ -633,8 +633,19 @@ $active_tab = 'overview';
         }
         
         function viewGroupClassStudents(classId) {
-            fetch('api/group-classes.php?action=details&class_id=' + classId)
-                .then(response => response.json())
+            fetch('api/group-classes.php?action=details&class_id=' + classId, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success && data.class.students) {
                         const students = data.class.students;
@@ -664,13 +675,14 @@ $active_tab = 'overview';
             
             fetch('api/group-classes.php?action=update-status', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({
                     class_id: classId,
                     status: status
-                }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -2643,8 +2655,19 @@ function displayMaterials(materials) {
 
 // Open material viewer
 function openMaterialViewer(materialId) {
-    fetch(`api/materials.php?action=view&id=${materialId}`)
-        .then(res => res.json())
+    fetch(`api/materials.php?action=view&id=${materialId}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        },
+        credentials: 'same-origin'
+    })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
         .then(data => {
             if (data.success) {
                 showMaterialModal(data.material);
@@ -2734,6 +2757,9 @@ async function deleteMaterial(materialId) {
     
     fetch('api/materials.php', {
         method: 'POST',
+        headers: {
+            'Accept': 'application/json'
+        },
         body: formData
     })
     .then(res => res.json())
@@ -2976,7 +3002,10 @@ async function acceptSlotRequest(requestId) {
         // Use relative path - works from root directory
         const response = await fetch('api/slot-requests.php?action=accept', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ request_id: requestId })
         });
         
@@ -3063,7 +3092,10 @@ async function rejectSlotRequest(requestId) {
             // Use relative path - works from root directory
             const response = await fetch('api/slot-requests.php?action=reject', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({ 
                     request_id: requestId,
                     reason: reason || null
@@ -3127,6 +3159,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch('api/materials.php', {
                 method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
                 body: formData
             })
             .then(res => res.json())

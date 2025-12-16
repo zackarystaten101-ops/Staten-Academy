@@ -3017,6 +3017,9 @@ async function sendSupportReply(supportId, receiverId, receiverName) {
         
         const response = await fetch('send_message.php', {
             method: 'POST',
+            headers: {
+                'Accept': 'application/json'
+            },
             body: formData
         });
         
@@ -3030,6 +3033,9 @@ async function sendSupportReply(supportId, receiverId, receiverName) {
             
             await fetch('admin-actions.php', {
                 method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
                 body: markReadForm
             });
             

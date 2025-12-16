@@ -659,6 +659,7 @@ $active_tab = 'overview';
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
                     class_id: classId
@@ -2010,7 +2011,10 @@ function toggleFavorite(teacherId, btn) {
     
     fetch('api/favorites.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+        },
         body: `teacher_id=${teacherId}&action=${action}`
     })
     .then(res => res.json())
@@ -2107,6 +2111,9 @@ function submitConfirmation(event) {
     
     fetch('api/lesson-confirmation.php', {
         method: 'POST',
+        headers: {
+            'Accept': 'application/json'
+        },
         body: formData
     })
     .then(res => res.json())

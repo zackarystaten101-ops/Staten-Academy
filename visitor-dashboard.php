@@ -387,7 +387,18 @@ async function startAdminChat(event) {
     if (event) event.preventDefault();
     
     try {
-        const response = await fetch('api/start-admin-chat.php');
+        const response = await fetch('api/start-admin-chat.php', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success) {

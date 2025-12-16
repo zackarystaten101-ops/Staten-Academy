@@ -760,8 +760,19 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
         timeSlotsList.innerHTML = '<p>Loading available times...</p>';
         
         // Fetch available times from server
-        fetch(`api/teacher-availability.php?teacher_id=<?php echo intval($teacher_id); ?>&date=${dateStr}`)
-            .then(response => response.json())
+        fetch(`api/teacher-availability.php?teacher_id=<?php echo intval($teacher_id); ?>&date=${dateStr}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success && data.times && data.times.length > 0) {
                     timeSlotsList.innerHTML = '';
