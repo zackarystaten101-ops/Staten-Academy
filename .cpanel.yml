@@ -1,0 +1,15 @@
+---
+deployment:
+  tasks:
+    - export DEPLOY_TARGET=/home/okhtpdzt/public_html
+    - /bin/cp -R * $DEPLOY_TARGET/
+    - /bin/chmod -R 755 $DEPLOY_TARGET
+    - /bin/chmod 644 $DEPLOY_TARGET/*.php
+    - /bin/chmod 644 $DEPLOY_TARGET/*.html
+    - /bin/chmod 644 $DEPLOY_TARGET/*.css
+    - /bin/chmod 644 $DEPLOY_TARGET/*.js
+    - /bin/chmod 755 $DEPLOY_TARGET/api
+    - /bin/chmod 755 $DEPLOY_TARGET/app
+    - /bin/chmod 755 $DEPLOY_TARGET/migrations
+    - /bin/chmod 755 $DEPLOY_TARGET/public
+
