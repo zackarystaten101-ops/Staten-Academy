@@ -1,5 +1,9 @@
 <?php
-header('Content-Type: application/json');
+// Set headers first, before any output
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+    header('Accept: application/json');
+}
 session_start();
 require_once 'db.php';
 require_once 'google-calendar-config.php';
@@ -30,8 +34,19 @@ if ($_SESSION['user_role'] !== 'student' && $_SESSION['user_role'] !== 'new_stud
 
 $student_id = $_SESSION['user_id'];
 
-// Get JSON input
-$input = json_decode(file_get_contents('php://input'), true);
+// Get JSON input - check Content-Type first
+$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+$input = null;
+
+if (strpos($contentType, 'application/json') !== false) {
+    $rawInput = file_get_contents('php://input');
+    $input = json_decode($rawInput, true);
+} else {
+    // If Content-Type is not JSON, return 415 error
+    http_response_code(415);
+    echo json_encode(['error' => 'Unsupported Media Type. This endpoint requires Content-Type: application/json']);
+    exit();
+}
 
 if (!isset($input['teacher_id']) || !isset($input['lesson_date']) || !isset($input['start_time']) || !isset($input['end_time'])) {
     http_response_code(400);

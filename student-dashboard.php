@@ -674,8 +674,8 @@ $active_tab = 'overview';
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
+                console.error('Error enrolling in group class:', error);
+                alert('Error: Failed to enroll in group class. Please try again.');
             });
         }
     </script>
@@ -2146,7 +2146,37 @@ async function startAdminChat(event) {
     if (event) event.preventDefault();
     
     try {
-        const response = await fetch('api/start-admin-chat.php');
+        const response = await fetch('api/start-admin-chat.php', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = 'Failed to start chat';
+            
+            if (response.status === 415) {
+                errorMessage = 'Server configuration error. Please contact support.';
+            } else {
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.error || errorMessage;
+                } catch (e) {
+                    errorMessage = `Error ${response.status}: ${errorText.substring(0, 100)}`;
+                }
+            }
+            
+            if (typeof toast !== 'undefined') {
+                toast.error(errorMessage);
+            } else {
+                alert('Error: ' + errorMessage);
+            }
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.success) {
@@ -2159,11 +2189,11 @@ async function startAdminChat(event) {
             }
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error starting admin chat:', error);
         if (typeof toast !== 'undefined') {
-            toast.error('An error occurred. Please try again.');
+            toast.error('Network error. Please check your connection and try again.');
         } else {
-            alert('An error occurred. Please try again.');
+            alert('Network error. Please check your connection and try again.');
         }
     }
 }

@@ -4,10 +4,14 @@
  * Creates a message thread between user and admin
  */
 
+// Set headers first, before any output
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+    header('Accept: application/json');
+}
+
 session_start();
 require_once '../db.php';
-
-header('Content-Type: application/json');
 
 // Check authentication
 if (!isset($_SESSION['user_id'])) {

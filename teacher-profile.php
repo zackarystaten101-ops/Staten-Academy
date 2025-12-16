@@ -811,7 +811,7 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
         })
         .catch(error => {
             console.error('Error booking lesson:', error);
-            alert('Error booking lesson. Please try again.');
+            alert('Error booking lesson. Please check your connection and try again.');
         });
     }
     

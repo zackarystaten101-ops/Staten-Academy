@@ -4,7 +4,11 @@
  * Handles group class management and enrollment
  */
 
-header('Content-Type: application/json');
+// Set headers first, before any output
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+    header('Accept: application/json');
+}
 
 // Start session
 if (session_status() === PHP_SESSION_NONE) {
@@ -115,7 +119,28 @@ function handleGet($action, $userId, $userRole, $groupClassModel) {
 function handlePost($action, $userId, $userRole, $groupClassModel) {
     global $conn;
     
-    $input = json_decode(file_get_contents('php://input'), true);
+    // Check Content-Type header
+    $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (strpos($contentType, 'application/json') === false && strpos($contentType, 'application/x-www-form-urlencoded') === false) {
+        // If no proper Content-Type, try to read JSON anyway
+        $rawInput = file_get_contents('php://input');
+        $input = json_decode($rawInput, true);
+        
+        // If JSON decode failed and we have POST data, use that instead
+        if ($input === null && !empty($_POST)) {
+            $input = $_POST;
+        } elseif ($input === null) {
+            http_response_code(415);
+            echo json_encode(['error' => 'Unsupported Media Type. Please send JSON with Content-Type: application/json']);
+            return;
+        }
+    } else {
+        // Content-Type is correct, read JSON
+        $input = json_decode(file_get_contents('php://input'), true);
+        if ($input === null && !empty($_POST)) {
+            $input = $_POST;
+        }
+    }
     
     switch ($action) {
         case 'create':
