@@ -940,6 +940,9 @@ if (!in_array('one_on_one_classes_per_week', $existing_plan_cols)) $conn->query(
 if (!in_array('group_classes_included', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN group_classes_included BOOLEAN DEFAULT FALSE AFTER one_on_one_classes_per_week");
 if (!in_array('group_classes_per_month', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN group_classes_per_month INT DEFAULT 0 AFTER group_classes_included");
 if (!in_array('track_specific_features', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN track_specific_features JSON NULL AFTER group_classes_per_month");
+if (!in_array('stripe_product_id', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN stripe_product_id VARCHAR(255) NULL AFTER stripe_price_id");
+if (!in_array('one_on_one_classes_per_month', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN one_on_one_classes_per_month INT DEFAULT 0 AFTER one_on_one_classes_per_week");
+if (!in_array('is_best_value', $existing_plan_cols)) $conn->query("ALTER TABLE subscription_plans ADD COLUMN is_best_value BOOLEAN DEFAULT FALSE AFTER track_specific_features");
 
 // Create user_selected_courses table
 $sql = "CREATE TABLE IF NOT EXISTS user_selected_courses (

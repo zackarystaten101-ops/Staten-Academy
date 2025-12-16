@@ -29,17 +29,6 @@ $teachers = $teacherService->getTeachersByCategory('young_learners', []);
 $planModel = new SubscriptionPlan($conn);
 $plans = $planModel->getPlansByTrack('kids');
 
-// If no plans exist, create placeholder plans
-if (empty($plans)) {
-    $placeholderPlans = [
-        ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'group_classes_per_week' => 1, 'price' => 99.00, 'display_order' => 1],
-        ['name' => 'Basic', 'one_on_one_classes_per_week' => 2, 'group_classes_per_week' => 2, 'price' => 179.00, 'display_order' => 2],
-        ['name' => 'Pro', 'one_on_one_classes_per_week' => 3, 'group_classes_per_week' => 3, 'price' => 249.00, 'display_order' => 3],
-        ['name' => 'Mega', 'one_on_one_classes_per_week' => 4, 'group_classes_per_week' => 3, 'price' => 319.00, 'display_order' => 4],
-    ];
-    $plans = $placeholderPlans;
-}
-
 $user_role = $_SESSION['user_role'] ?? 'guest';
 ?>
 <!DOCTYPE html>
@@ -105,22 +94,26 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
             box-shadow: 0 20px 60px rgba(255, 107, 157, 0.3);
             border-color: #ff6b9d;
         }
-        .plan-card.featured {
+        .plan-card.best-value {
             border-color: #ff6b9d;
+            border-width: 3px;
             background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%);
+            box-shadow: 0 15px 50px rgba(255, 107, 157, 0.3);
         }
-        .plan-card.featured::before {
-            content: 'POPULAR';
+        .plan-card.best-value::before {
+            content: 'BEST VALUE';
             position: absolute;
             top: -15px;
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, #ff6b9d, #ffa500);
             color: white;
-            padding: 5px 20px;
+            padding: 6px 24px;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: bold;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.4);
         }
         .plan-name {
             font-size: 1.8rem;
@@ -357,47 +350,59 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     </section>
     <?php endif; ?>
 
-    <div class="plans-container" style="display: none;">
+    <div class="plans-container">
         <div class="plans-grid">
-            <?php foreach ($plans as $index => $plan): ?>
-            <div class="plan-card <?php echo $index === 1 ? 'featured' : ''; ?>">
-                <h3 class="plan-name"><?php echo htmlspecialchars($plan['name']); ?></h3>
-                <div class="plan-price">
-                    $<?php echo number_format($plan['price'] ?? 0, 2); ?>
-                    <span>/month</span>
+            <?php if (empty($plans)): ?>
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <p style="font-size: 1.2rem; color: #666;">No plans available at this time. Please check back later.</p>
                 </div>
-                <ul class="plan-features">
-                    <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_week'] ?? 1; ?></strong> one-on-one class<?php echo ($plan['one_on_one_classes_per_week'] ?? 1) > 1 ? 'es' : ''; ?> per week</li>
+            <?php else: ?>
+                <?php foreach ($plans as $plan): ?>
+                <div class="plan-card <?php echo ($plan['is_best_value'] ?? false) ? 'best-value' : ''; ?>">
+                    <h3 class="plan-name"><?php echo htmlspecialchars($plan['name']); ?></h3>
+                    <div class="plan-price">
+                        $<?php echo number_format($plan['price'] ?? 0, 2); ?>
+                        <span>/month</span>
+                    </div>
+                    <ul class="plan-features">
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_month'] ?? 0; ?></strong> × 1-on-1 classes per month</li>
+                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['group_classes_per_month'] ?? 0; ?></strong> × group classes per month</li>
+                        <li><i class="fas fa-check-circle"></i> 50-minute sessions</li>
+                        <?php 
+                        // Display track-specific features
+                        $trackFeatures = [];
+                        if (!empty($plan['track_specific_features'])) {
+                            if (is_string($plan['track_specific_features'])) {
+                                $trackFeatures = json_decode($plan['track_specific_features'], true) ?: [];
+                            } else {
+                                $trackFeatures = $plan['track_specific_features'];
+                            }
+                        }
+                        foreach ($trackFeatures as $feature): ?>
+                            <li><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($feature); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
                     <?php 
-                    $group_classes = $plan['group_classes_per_week'] ?? 0;
-                    if ($group_classes > 0): ?>
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $group_classes; ?></strong> group class<?php echo $group_classes > 1 ? 'es' : ''; ?> per week</li>
+                    $plan_id = $plan['id'] ?? null;
+                    ?>
+                    <?php if (isset($_SESSION['user_id']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student' || $_SESSION['user_role'] === 'visitor')): ?>
+                        <!-- Logged in: Go directly to checkout -->
+                        <form action="create_checkout_session.php" method="POST" style="margin: 0; width: 100%;">
+                            <?php if ($plan_id): ?>
+                                <input type="hidden" name="plan_id" value="<?php echo (int)$plan_id; ?>">
+                            <?php endif; ?>
+                            <input type="hidden" name="track" value="kids">
+                            <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? ''); ?>">
+                            <input type="hidden" name="mode" value="subscription">
+                            <button type="submit" class="plan-cta" <?php echo empty($plan['stripe_price_id']) ? 'disabled' : ''; ?>>Choose This Plan</button>
+                        </form>
+                    <?php else: ?>
+                        <!-- Not logged in: Register first, then they'll see todo list -->
+                        <a href="register.php?track=kids<?php echo $plan_id ? '&plan_id=' . (int)$plan_id : ''; ?>" class="plan-cta">Get Started</a>
                     <?php endif; ?>
-                    <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
-                    <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
-                    <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
-                </ul>
-                <?php 
-                $plan_id = $plan['id'] ?? null;
-                $plan_index = $index + 1; // Use index as fallback for placeholder plans
-                ?>
-                <?php if (isset($_SESSION['user_id']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student' || $_SESSION['user_role'] === 'visitor')): ?>
-                    <!-- Logged in: Go directly to checkout -->
-                    <form action="create_checkout_session.php" method="POST" style="margin: 0; width: 100%;">
-                        <?php if ($plan_id): ?>
-                            <input type="hidden" name="plan_id" value="<?php echo (int)$plan_id; ?>">
-                        <?php endif; ?>
-                        <input type="hidden" name="track" value="kids">
-                        <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? 'price_PLACEHOLDER'); ?>">
-                        <input type="hidden" name="mode" value="subscription">
-                        <button type="submit" class="plan-cta">Choose This Plan</button>
-                    </form>
-                <?php else: ?>
-                    <!-- Not logged in: Register first, then they'll see todo list -->
-                    <a href="register.php?track=kids<?php echo $plan_id ? '&plan_id=' . (int)$plan_id : ''; ?>" class="plan-cta">Get Started</a>
-                <?php endif; ?>
-            </div>
-            <?php endforeach; ?>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </div>
 
