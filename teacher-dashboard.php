@@ -251,24 +251,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     // Only proceed if there's no upload error
     if (!isset($upload_error)) {
         // Submit to pending_updates table for admin approval
+        // Always insert/update even if bio, about_text, etc. are empty - admin needs to see the request
         $check_stmt = $conn->prepare("SELECT id FROM pending_updates WHERE user_id = ?");
         $check_stmt->bind_param("i", $teacher_id);
         $check_stmt->execute();
         $check = $check_stmt->get_result();
+        
+        $name = $_SESSION['user_name'] ?? $user['name'] ?? '';
+        $bio = $bio ?? '';
+        $about_text = $about_text ?? '';
+        $video_url = $video_url ?? '';
+        
         if ($check && $check->num_rows > 0) {
             $stmt = $conn->prepare("UPDATE pending_updates SET name = ?, bio = ?, profile_pic = ?, about_text = ?, video_url = ?, requested_at = NOW() WHERE user_id = ?");
-            $stmt->bind_param("sssssi", $_SESSION['user_name'], $bio, $profile_pic_pending, $about_text, $video_url, $teacher_id);
+            $stmt->bind_param("sssssi", $name, $bio, $profile_pic_pending, $about_text, $video_url, $teacher_id);
         } else {
-            $stmt = $conn->prepare("INSERT INTO pending_updates (user_id, name, bio, profile_pic, about_text, video_url) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("isssss", $teacher_id, $_SESSION['user_name'], $bio, $profile_pic_pending, $about_text, $video_url);
+            $stmt = $conn->prepare("INSERT INTO pending_updates (user_id, name, bio, profile_pic, about_text, video_url, requested_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->bind_param("isssss", $teacher_id, $name, $bio, $profile_pic_pending, $about_text, $video_url);
         }
-        $stmt->execute();
-        $stmt->close();
         
-        $msg = "Profile changes submitted for approval.";
+        if ($stmt->execute()) {
+            $msg = "Profile changes submitted for approval. An admin will review your changes shortly.";
+            error_log("Profile update submitted for teacher ID: $teacher_id");
+        } else {
+            $msg = "Error submitting profile changes. Please try again or contact support.";
+            error_log("Error submitting profile update for teacher ID $teacher_id: " . $stmt->error);
+        }
+        $stmt->close();
+        $check_stmt->close();
     } else {
         // Upload failed, don't update database
-        $msg = null; // Clear success message if upload failed
+        $msg = "Error: " . $upload_error;
     }
     
     // Update fields that don't need approval (only if no upload error)

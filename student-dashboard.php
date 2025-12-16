@@ -1,4 +1,6 @@
 <?php
+// Start output buffering to prevent headers already sent errors
+ob_start();
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
@@ -33,6 +35,7 @@ agent_debug_log('H1', 'student-dashboard.php:session', 'student dashboard entry'
 ]);
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['user_role'] !== 'student' && $_SESSION['user_role'] !== 'new_student')) {
+    ob_end_clean();
     header("Location: login.php");
     exit();
 }
@@ -44,6 +47,7 @@ $user_role = $_SESSION['user_role']; // Keep actual role (student or new_student
 // Verify user exists
 if (!$user) {
     session_destroy();
+    ob_end_clean();
     header("Location: login.php");
     exit();
 }
@@ -184,6 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $stmt->execute();
     $stmt->close();
     
+    ob_end_clean();
     header("Location: student-dashboard.php#profile");
     exit();
 }
@@ -224,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_goal'])) {
         $stmt->execute();
         $stmt->close();
     }
+    ob_end_clean();
     header("Location: student-dashboard.php#goals");
     exit();
 }
@@ -240,6 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
     // Track is optional - only validate if provided
     if ($track && !in_array($track, ['kids', 'adults', 'coding'])) {
         $_SESSION['error_message'] = 'Invalid learning track selected.';
+        ob_end_clean();
         header("Location: student-dashboard.php#learning-needs");
         exit();
     }
@@ -367,6 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_learning_needs
     // Note: Teacher assignment removed - students now select teachers themselves
     $_SESSION['success_message'] = 'Learning preferences saved! You can update them anytime.';
     
+    ob_end_clean();
     header("Location: student-dashboard.php#learning-needs");
     exit();
 }
@@ -387,6 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
     
     if (!$has_booking) {
         $_SESSION['error_message'] = 'You can only review teachers after booking a class with them.';
+        ob_end_clean();
         header("Location: student-dashboard.php#reviews");
         exit();
     }
@@ -431,6 +440,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
     createNotification($conn, $teacher_id, 'review', 'New Review', 
         $_SESSION['user_name'] . " left you a $rating-star review!", 'teacher-dashboard.php#reviews');
     
+    ob_end_clean();
     header("Location: student-dashboard.php#reviews");
     exit();
 }

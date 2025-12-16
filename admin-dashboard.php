@@ -576,8 +576,8 @@ if (isset($_GET['export_wallet_csv'])) {
     exit();
 }
 
-// Fetch data
-$pending_updates = $conn->query("SELECT p.*, u.email as user_email FROM pending_updates p JOIN users u ON p.user_id = u.id");
+// Fetch data - order by most recent first
+$pending_updates = $conn->query("SELECT p.*, u.email as user_email, u.name as current_name, u.role FROM pending_updates p JOIN users u ON p.user_id = u.id ORDER BY p.requested_at DESC");
 if (!$pending_updates) {
     error_log("Error fetching pending updates: " . $conn->error);
     $pending_updates = new mysqli_result($conn);
@@ -1260,49 +1260,111 @@ $chat_users_stmt->close();
             <?php endif; ?>
             
             <!-- Profile Update Requests Section -->
-            <?php if ($admin_stats['pending_updates'] > 0): ?>
-            <div>
+            <?php 
+            $pending_updates->data_seek(0); // Reset pointer
+            $pending_count = $pending_updates->num_rows;
+            ?>
+            <?php if ($pending_count > 0): ?>
+            <div style="margin-top: 30px;">
                 <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                     <i class="fas fa-edit" style="color: var(--primary);"></i> 
                     Profile Update Requests
-                    <span class="notification-badge" style="background: #dc3545; color: white; margin-left: 10px;"><?php echo $admin_stats['pending_updates']; ?></span>
+                    <span class="notification-badge" style="background: #dc3545; color: white; margin-left: 10px;"><?php echo $pending_count; ?></span>
                 </h2>
-                <?php 
-                $pending_updates->data_seek(0); // Reset pointer
-                if ($pending_updates->num_rows > 0): ?>
                 <div style="overflow-x: auto;">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>User</th>
-                            <th>Name</th>
+                            <th>Teacher</th>
+                            <th>Email</th>
+                            <th>Name Change</th>
                             <th>Bio</th>
                             <th>About</th>
                             <th>Picture</th>
+                            <th>Requested</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while($up = $pending_updates->fetch_assoc()): ?>
+                        <?php 
+                        $pending_updates->data_seek(0); // Reset again
+                        while($up = $pending_updates->fetch_assoc()): 
+                            $current_name = $up['current_name'] ?? '';
+                            $new_name = $up['name'] ?? '';
+                            $name_changed = $current_name !== $new_name;
+                        ?>
                         <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <?php if ($up['profile_pic']): ?>
+                                    <img src="<?php echo h($up['profile_pic']); ?>" alt="" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
+                                    <?php endif; ?>
+                                    <div>
+                                        <div style="font-weight: 600;"><?php echo h($current_name); ?></div>
+                                        <div style="font-size: 0.85rem; color: #666;"><?php echo h($up['role'] ?? 'teacher'); ?></div>
+                                    </div>
+                                </div>
+                            </td>
                             <td><?php echo h($up['user_email']); ?></td>
-                            <td><?php echo h($up['name']); ?></td>
-                            <td title="<?php echo h($up['bio'] ?? ''); ?>"><?php echo h(substr($up['bio'] ?? '', 0, 30)); ?><?php echo strlen($up['bio'] ?? '') > 30 ? '...' : ''; ?></td>
-                            <td title="<?php echo h($up['about_text'] ?? ''); ?>"><?php echo h(substr($up['about_text'] ?? '', 0, 30)); ?><?php echo strlen($up['about_text'] ?? '') > 30 ? '...' : ''; ?></td>
+                            <td>
+                                <?php if ($name_changed): ?>
+                                    <div style="color: #dc3545; font-weight: 600;"><?php echo h($current_name); ?></div>
+                                    <div style="color: #28a745;">→ <?php echo h($new_name); ?></div>
+                                <?php else: ?>
+                                    <span style="color: #999;">No change</span>
+                                <?php endif; ?>
+                            </td>
+                            <td title="<?php echo h($up['bio'] ?? ''); ?>">
+                                <?php if (!empty($up['bio'])): ?>
+                                    <?php echo h(substr($up['bio'], 0, 50)); ?><?php echo strlen($up['bio']) > 50 ? '...' : ''; ?>
+                                <?php else: ?>
+                                    <span style="color: #999;">No change</span>
+                                <?php endif; ?>
+                            </td>
+                            <td title="<?php echo h($up['about_text'] ?? ''); ?>">
+                                <?php if (!empty($up['about_text'])): ?>
+                                    <?php echo h(substr($up['about_text'], 0, 50)); ?><?php echo strlen($up['about_text']) > 50 ? '...' : ''; ?>
+                                <?php else: ?>
+                                    <span style="color: #999;">No change</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ($up['profile_pic']): ?>
-                                <a href="<?php echo h($up['profile_pic']); ?>" target="_blank">
-                                    <img src="<?php echo h($up['profile_pic']); ?>" alt="" style="width: 40px; height: 40px; border-radius: 5px; object-fit: cover;">
+                                <a href="<?php echo h($up['profile_pic']); ?>" target="_blank" title="Click to view full size">
+                                    <img src="<?php echo h($up['profile_pic']); ?>" alt="" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover; border: 2px solid #ddd;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
                                 </a>
                                 <?php else: ?>
-                                <span style="color: var(--gray);">None</span>
+                                <span style="color: var(--gray);">No change</span>
                                 <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php 
+                                $requested_at = $up['requested_at'] ?? '';
+                                if ($requested_at): 
+                                    $requested_date = new DateTime($requested_at);
+                                    $now = new DateTime();
+                                    $diff = $now->diff($requested_date);
+                                    if ($diff->days == 0) {
+                                        echo 'Today';
+                                    } elseif ($diff->days == 1) {
+                                        echo 'Yesterday';
+                                    } else {
+                                        echo $diff->days . ' days ago';
+                                    }
+                                else:
+                                    echo 'Unknown';
+                                endif; 
+                                ?>
                             </td>
                             <td>
                                 <form action="admin-actions.php" method="POST" style="display: inline-flex; gap: 5px;">
                                     <input type="hidden" name="update_id" value="<?php echo $up['id']; ?>">
-                                    <button type="submit" name="action" value="approve_profile" class="btn-success btn-sm">Approve</button>
-                                    <button type="submit" name="action" value="reject_profile" class="btn-danger btn-sm">Reject</button>
+                                    <button type="submit" name="action" value="approve_profile" class="btn-success btn-sm" title="Approve all changes">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button type="submit" name="action" value="reject_profile" class="btn-danger btn-sm" title="Reject all changes">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
                                 </form>
                             </td>
                         </tr>
@@ -1310,7 +1372,12 @@ $chat_users_stmt->close();
                     </tbody>
                 </table>
                 </div>
-                <?php endif; ?>
+            </div>
+            <?php else: ?>
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                <p style="color: #666; margin: 0;">
+                    <i class="fas fa-check-circle" style="color: #28a745;"></i> No pending profile update requests
+                </p>
             </div>
             <?php endif; ?>
             
@@ -3075,6 +3142,22 @@ function closeRoleModal() {
 }
 
 // Section Approval Modal
+// Helper function for badge updates (defined outside to avoid redefinition)
+function updateCategoryBadge(checkbox, badgeId) {
+    const badge = document.getElementById(badgeId);
+    if (badge && checkbox) {
+        if (checkbox.checked) {
+            badge.textContent = 'Approved';
+            badge.style.background = '#d4edda';
+            badge.style.color = '#155724';
+        } else {
+            badge.textContent = 'Not Approved';
+            badge.style.background = '#e9ecef';
+            badge.style.color = '#6c757d';
+        }
+    }
+}
+
 function showCategoryModal(teacherId, currentCategories) {
     let modal = document.getElementById('categoryModal');
     if (!modal) {
@@ -3176,25 +3259,18 @@ function showCategoryModal(teacherId, currentCategories) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         modal = document.getElementById('categoryModal');
         
-        // Add form submit handler
+        // Add form submit handler (only once when modal is created)
         const form = document.getElementById('categoryForm');
-        if (form) {
+        if (form && !form.dataset.handlerAdded) {
             form.addEventListener('submit', function(e) {
-                // Debug: Log form data
-                const formData = new FormData(form);
-                console.log('Form submitting with data:');
-                for (let [key, value] of formData.entries()) {
-                    console.log(key + ': ' + value);
-                }
-                
                 const submitBtn = form.querySelector('button[type="submit"]');
                 const originalText = submitBtn.innerHTML;
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
                 
                 // Verify teacher ID is set
-                const teacherId = document.getElementById('categoryTeacherId').value;
-                if (!teacherId || teacherId === '0') {
+                const teacherIdInput = document.getElementById('categoryTeacherId');
+                if (!teacherIdInput || !teacherIdInput.value || teacherIdInput.value === '0') {
                     e.preventDefault();
                     alert('Error: Teacher ID is missing. Please try again.');
                     submitBtn.disabled = false;
@@ -3202,66 +3278,66 @@ function showCategoryModal(teacherId, currentCategories) {
                     return false;
                 }
                 
-                // Form will submit normally - no preventDefault needed
-                // The button will be re-enabled if there's an error and page reloads
+                // Log form data for debugging
+                const formData = new FormData(form);
+                console.log('Category form submitting:');
+                for (let [key, value] of formData.entries()) {
+                    console.log('  ' + key + ': ' + value);
+                }
+                
+                // Form will submit normally
                 return true;
             });
-        }
-    }
-    
-    // Helper function for badge updates
-    function updateBadge(checkbox, badgeId) {
-        const badge = document.getElementById(badgeId);
-        if (badge && checkbox) {
-            if (checkbox.checked) {
-                badge.textContent = 'Approved';
-                badge.style.background = '#d4edda';
-                badge.style.color = '#155724';
-            } else {
-                badge.textContent = 'Not Approved';
-                badge.style.background = '#e9ecef';
-                badge.style.color = '#6c757d';
-            }
+            form.dataset.handlerAdded = 'true';
         }
     }
     
     // Set teacher ID
-    document.getElementById('categoryTeacherId').value = teacherId;
+    const teacherIdInput = document.getElementById('categoryTeacherId');
+    if (teacherIdInput) {
+        teacherIdInput.value = teacherId;
+    }
     
     // Parse current categories
-    const cats = currentCategories ? currentCategories.split(',').map(c => c.trim()) : [];
+    const cats = currentCategories ? currentCategories.split(',').map(c => c.trim()).filter(c => c) : [];
     const kidsApproved = cats.includes('young_learners');
     const adultsApproved = cats.includes('adults');
     const codingApproved = cats.includes('coding');
     
-    // Get checkbox elements
+    // Get checkbox elements and update them
     const kidsCheckbox = document.getElementById('category_kids');
     const adultsCheckbox = document.getElementById('category_adults');
     const codingCheckbox = document.getElementById('category_coding');
     
-    // Set checkbox states
+    // Remove old event listeners by cloning and replacing
     if (kidsCheckbox) {
-        kidsCheckbox.checked = kidsApproved;
-        kidsCheckbox.addEventListener('change', function() {
-            updateBadge(this, 'kids_status_badge');
+        const newKidsCheckbox = kidsCheckbox.cloneNode(true);
+        kidsCheckbox.parentNode.replaceChild(newKidsCheckbox, kidsCheckbox);
+        newKidsCheckbox.checked = kidsApproved;
+        newKidsCheckbox.addEventListener('change', function() {
+            updateCategoryBadge(this, 'kids_status_badge');
         });
-        updateBadge(kidsCheckbox, 'kids_status_badge');
+        updateCategoryBadge(newKidsCheckbox, 'kids_status_badge');
     }
     
     if (adultsCheckbox) {
-        adultsCheckbox.checked = adultsApproved;
-        adultsCheckbox.addEventListener('change', function() {
-            updateBadge(this, 'adults_status_badge');
+        const newAdultsCheckbox = adultsCheckbox.cloneNode(true);
+        adultsCheckbox.parentNode.replaceChild(newAdultsCheckbox, adultsCheckbox);
+        newAdultsCheckbox.checked = adultsApproved;
+        newAdultsCheckbox.addEventListener('change', function() {
+            updateCategoryBadge(this, 'adults_status_badge');
         });
-        updateBadge(adultsCheckbox, 'adults_status_badge');
+        updateCategoryBadge(newAdultsCheckbox, 'adults_status_badge');
     }
     
     if (codingCheckbox) {
-        codingCheckbox.checked = codingApproved;
-        codingCheckbox.addEventListener('change', function() {
-            updateBadge(this, 'coding_status_badge');
+        const newCodingCheckbox = codingCheckbox.cloneNode(true);
+        codingCheckbox.parentNode.replaceChild(newCodingCheckbox, codingCheckbox);
+        newCodingCheckbox.checked = codingApproved;
+        newCodingCheckbox.addEventListener('change', function() {
+            updateCategoryBadge(this, 'coding_status_badge');
         });
-        updateBadge(codingCheckbox, 'coding_status_badge');
+        updateCategoryBadge(newCodingCheckbox, 'coding_status_badge');
     }
     
     modal.style.display = 'block';
