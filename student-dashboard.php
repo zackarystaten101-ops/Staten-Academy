@@ -184,9 +184,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     }
 
     $stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, backup_email = ?, age = ?, age_visibility = ? WHERE id = ?");
-    $stmt->bind_param("sssisi", $bio, $profile_pic, $backup_email, $age, $age_visibility, $student_id);
-    $stmt->execute();
-    $stmt->close();
+    if ($stmt) {
+        $stmt->bind_param("sssisi", $bio, $profile_pic, $backup_email, $age, $age_visibility, $student_id);
+        if ($stmt->execute()) {
+            error_log("Student profile updated successfully - Student ID: $student_id, Profile pic: " . ($profile_pic ?: 'no change'));
+            $_SESSION['success_message'] = "Profile updated successfully!";
+        } else {
+            error_log("Error updating student profile - Student ID: $student_id, Error: " . $stmt->error);
+            $_SESSION['error_message'] = "Error updating profile. Please try again.";
+        }
+        $stmt->close();
+    } else {
+        error_log("Error preparing student profile update statement - Student ID: $student_id, Error: " . $conn->error);
+        $_SESSION['error_message'] = "Error updating profile. Please try again.";
+    }
     
     ob_end_clean();
     header("Location: student-dashboard.php#profile");

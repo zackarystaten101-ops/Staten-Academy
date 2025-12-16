@@ -41,9 +41,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
          $stmt->bind_param("i", $user_id);
      } elseif ($action === 'approve_profile') {
          $update_id = intval($_POST['update_id']);
+         error_log("Admin approving profile update - Update ID: $update_id, Admin ID: " . ($_SESSION['user_id'] ?? 'unknown'));
          
          // Get pending update details
          $update_stmt = $conn->prepare("SELECT user_id, name, bio, profile_pic, about_text, video_url FROM pending_updates WHERE id = ?");
+         if (!$update_stmt) {
+             error_log("Error preparing approve_profile statement: " . $conn->error);
+             ob_end_clean();
+             header("Location: admin-dashboard.php?msg=error");
+             exit();
+         }
+         
          $update_stmt->bind_param("i", $update_id);
          $update_stmt->execute();
          $update_result = $update_stmt->get_result();
@@ -57,17 +65,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
              $about_text = $update['about_text'];
              $video_url = $update['video_url'];
              
+             error_log("Profile approval data - User ID: $user_id, Name: " . ($name ?: 'no change') . ", Bio length: " . strlen($bio) . ", About length: " . strlen($about_text) . ", Video URL: " . ($video_url ?: 'none') . ", Profile pic: " . ($profile_pic ?: 'none'));
+             
              // Apply approved changes
              $stmt = $conn->prepare("UPDATE users SET bio = ?, profile_pic = ?, about_text = ?, video_url = ? WHERE id = ?");
-             $stmt->bind_param("ssssi", $bio, $profile_pic, $about_text, $video_url, $user_id);
-             $stmt->execute();
-             $stmt->close();
-             
-             // Delete from pending
-             $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE id = ?");
-             $del_stmt->bind_param("i", $update_id);
-             $del_stmt->execute();
-             $del_stmt->close();
+             if ($stmt) {
+                 $stmt->bind_param("ssssi", $bio, $profile_pic, $about_text, $video_url, $user_id);
+                 if ($stmt->execute()) {
+                     error_log("Profile update approved successfully - User ID: $user_id");
+                     
+                     // Delete from pending
+                     $del_stmt = $conn->prepare("DELETE FROM pending_updates WHERE id = ?");
+                     if ($del_stmt) {
+                         $del_stmt->bind_param("i", $update_id);
+                         $del_stmt->execute();
+                         $del_stmt->close();
+                     }
+                     
+                     // Notify teacher
+                     if (function_exists('createNotification')) {
+                         require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+                         createNotification($conn, $user_id, 'profile_approved', 'Profile Update Approved', 
+                             "Your profile update has been approved by an administrator.", 
+                             'teacher-dashboard.php#profile');
+                     }
+                 } else {
+                     error_log("Error executing profile approval update - User ID: $user_id, Error: " . $stmt->error);
+                 }
+                 $stmt->close();
+             } else {
+                 error_log("Error preparing profile approval update statement - User ID: $user_id, Error: " . $conn->error);
+             }
+         } else {
+             error_log("Profile update not found - Update ID: $update_id");
          }
         $update_stmt->close();
         ob_end_clean(); // Clear output buffer before redirect
@@ -75,25 +105,60 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
      } elseif ($action === 'reject_profile') {
          $update_id = intval($_POST['update_id']);
+         error_log("Admin rejecting profile update - Update ID: $update_id, Admin ID: " . ($_SESSION['user_id'] ?? 'unknown'));
          
          // Get pending update to delete uploaded image if needed
-         $update_stmt = $conn->prepare("SELECT profile_pic FROM pending_updates WHERE id = ?");
+         $update_stmt = $conn->prepare("SELECT user_id, profile_pic FROM pending_updates WHERE id = ?");
+         if (!$update_stmt) {
+             error_log("Error preparing reject_profile statement: " . $conn->error);
+             ob_end_clean();
+             header("Location: admin-dashboard.php?msg=error");
+             exit();
+         }
+         
          $update_stmt->bind_param("i", $update_id);
          $update_stmt->execute();
          $update_result = $update_stmt->get_result();
          
          if ($update_result->num_rows > 0) {
              $update = $update_result->fetch_assoc();
-             // Delete uploaded image
-             if (file_exists($update['profile_pic'])) {
-                 unlink($update['profile_pic']);
+             $user_id = $update['user_id'] ?? 0;
+             
+             // Delete uploaded image if it exists
+             if (!empty($update['profile_pic'])) {
+                 $image_path = __DIR__ . $update['profile_pic'];
+                 if (file_exists($image_path)) {
+                     if (unlink($image_path)) {
+                         error_log("Deleted rejected profile image: " . $image_path);
+                     } else {
+                         error_log("Failed to delete rejected profile image: " . $image_path);
+                     }
+                 }
+             }
+             
+             // Notify teacher
+             if ($user_id && function_exists('createNotification')) {
+                 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+                 createNotification($conn, $user_id, 'profile_rejected', 'Profile Update Rejected', 
+                     "Your profile update has been rejected by an administrator. Please review and resubmit.", 
+                     'teacher-dashboard.php#profile');
              }
          }
          $update_stmt->close();
          
          // Delete from pending
          $stmt = $conn->prepare("DELETE FROM pending_updates WHERE id = ?");
-         $stmt->bind_param("i", $update_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $update_id);
+             if ($stmt->execute()) {
+                 error_log("Profile update rejected and deleted - Update ID: $update_id");
+             } else {
+                 error_log("Error deleting rejected profile update - Update ID: $update_id, Error: " . $stmt->error);
+             }
+             $stmt->close();
+         } else {
+             error_log("Error preparing delete statement for rejected profile - Update ID: $update_id, Error: " . $conn->error);
+         }
      } elseif ($action === 'create_slot_request') {
          $admin_id = $_SESSION['user_id'];
          $teacher_id = intval($_POST['teacher_id']);

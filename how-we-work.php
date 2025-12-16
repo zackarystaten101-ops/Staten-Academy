@@ -124,9 +124,9 @@ if (!function_exists('getAssetPath')) {
                         2
                     </div>
                     <div style="flex: 1;">
-                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Complete Your Learning Needs Assessment</h3>
+                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Optional: Share Your Learning Preferences</h3>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 15px;">
-                            Tell us about your:
+                            You can optionally share information about your:
                         </p>
                         <ul style="color: #666; line-height: 2; padding-left: 20px;">
                             <li>Current English level</li>
@@ -136,7 +136,7 @@ if (!function_exists('getAssetPath')) {
                             <li>Special requirements or learning style preferences</li>
                         </ul>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-top: 15px;">
-                            This helps us match you with the perfect teacher for your needs!
+                            <strong style="color: #004080;">Note:</strong> This step is optional. You can skip it and go directly to selecting a teacher, or complete it later from your dashboard to help personalize your learning experience.
                         </p>
                     </div>
                 </div>
@@ -147,18 +147,19 @@ if (!function_exists('getAssetPath')) {
                         3
                     </div>
                     <div style="flex: 1;">
-                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Get Matched with a Teacher</h3>
+                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Browse and Select Your Teacher</h3>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 15px;">
-                            Our smart matching system connects you with an expert teacher based on:
+                            Visit your chosen track's page (Kids Classes, Adult Classes, or English for Coding) to browse approved teachers. You can:
                         </p>
                         <ul style="color: #666; line-height: 2; padding-left: 20px;">
-                            <li>Your preferred time slots</li>
-                            <li>Your learning track</li>
-                            <li>Teacher availability and capacity</li>
-                            <li>Teacher ratings and expertise</li>
+                            <li>View teacher profiles, specialties, and ratings</li>
+                            <li>See teacher availability and timezone information</li>
+                            <li>Filter teachers by rating, price, or availability</li>
+                            <li>Read teacher bios and see their teaching experience</li>
+                            <li>Select the teacher that best fits your needs</li>
                         </ul>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-top: 15px;">
-                            Most students are matched within 24-48 hours!
+                            <strong style="color: #004080;">You're in control:</strong> Browse teachers approved for your track and choose the one that works best for you!
                         </p>
                     </div>
                 </div>
@@ -188,17 +189,21 @@ if (!function_exists('getAssetPath')) {
                         5
                     </div>
                     <div style="flex: 1;">
-                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Attend Classes on Zoom</h3>
+                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Attend Classes on Google Meet</h3>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 15px;">
-                            All classes are conducted via Zoom for a seamless, interactive learning experience:
+                            All classes are conducted via Google Meet for a seamless, interactive learning experience:
                         </p>
                         <ul style="color: #666; line-height: 2; padding-left: 20px;">
                             <li>High-quality video and audio</li>
                             <li>Interactive whiteboard and screen sharing</li>
                             <li>Real-time collaboration tools</li>
-                            <li>Record lessons for review (optional)</li>
+                            <li>Automatic calendar integration</li>
                             <li>Access from anywhere with internet</li>
+                            <li>Join directly from your dashboard</li>
                         </ul>
+                        <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-top: 15px;">
+                            <strong style="color: #004080;">Seamless integration:</strong> Your booked lessons automatically sync to your Google Calendar, and you can join classes with one click from your dashboard.
+                        </p>
                     </div>
                 </div>
 
@@ -288,12 +293,12 @@ if (!function_exists('getAssetPath')) {
         </div>
     </section>
 
-    <!-- Teacher Matching Process -->
+    <!-- Teacher Selection Process -->
     <section style="padding: 60px 20px; background: white;">
         <div class="container" style="max-width: 1000px; margin: 0 auto;">
-            <h2 style="font-size: 2.5rem; color: #004080; text-align: center; margin-bottom: 30px;">How Teacher Matching Works</h2>
+            <h2 style="font-size: 2.5rem; color: #004080; text-align: center; margin-bottom: 30px;">How Teacher Selection Works</h2>
             <p style="color: #666; line-height: 1.8; font-size: 1.1rem; text-align: center; margin-bottom: 40px;">
-                Our intelligent matching system considers multiple factors to find your perfect teacher:
+                You have full control over choosing your teacher. Here's what you can consider when selecting:
             </p>
             
             <div style="background: #f8f9fa; padding: 40px; border-radius: 12px; border-left: 5px solid #0b6cf5;">
@@ -302,30 +307,35 @@ if (!function_exists('getAssetPath')) {
                         <div style="font-size: 2.5rem; color: #0b6cf5; margin-bottom: 10px;">
                             <i class="fas fa-clock"></i>
                         </div>
-                        <h4 style="color: #004080; margin-bottom: 8px;">Preferred Times</h4>
-                        <p style="color: #666; font-size: 0.9rem;">Matches teachers with availability during your preferred time slots</p>
+                        <h4 style="color: #004080; margin-bottom: 8px;">Availability</h4>
+                        <p style="color: #666; font-size: 0.9rem;">View teacher availability in your timezone and find slots that work for you</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; color: #28a745; margin-bottom: 10px;">
                             <i class="fas fa-graduation-cap"></i>
                         </div>
-                        <h4 style="color: #004080; margin-bottom: 8px;">Learning Track</h4>
-                        <p style="color: #666; font-size: 0.9rem;">Connects you with teachers specializing in your chosen track</p>
+                        <h4 style="color: #004080; margin-bottom: 8px;">Track Approval</h4>
+                        <p style="color: #666; font-size: 0.9rem;">All teachers shown are pre-approved by admins for your chosen learning track</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; color: #ffc107; margin-bottom: 10px;">
                             <i class="fas fa-star"></i>
                         </div>
-                        <h4 style="color: #004080; margin-bottom: 8px;">Ratings</h4>
-                        <p style="color: #666; font-size: 0.9rem;">Prioritizes highly-rated teachers with proven track records</p>
+                        <h4 style="color: #004080; margin-bottom: 8px;">Ratings & Reviews</h4>
+                        <p style="color: #666; font-size: 0.9rem;">See ratings and read reviews from other students to help you decide</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; color: #dc3545; margin-bottom: 10px;">
-                            <i class="fas fa-users"></i>
+                            <i class="fas fa-user-tie"></i>
                         </div>
-                        <h4 style="color: #004080; margin-bottom: 8px;">Availability</h4>
-                        <p style="color: #666; font-size: 0.9rem;">Ensures teachers have capacity for new students</p>
+                        <h4 style="color: #004080; margin-bottom: 8px;">Specialty & Experience</h4>
+                        <p style="color: #666; font-size: 0.9rem;">Review teacher profiles, specialties, and teaching experience</p>
                     </div>
+                </div>
+                <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; text-align: center;">
+                    <p style="color: #666; line-height: 1.8; font-size: 1rem; margin: 0;">
+                        <strong style="color: #004080;">Your Choice:</strong> Browse approved teachers on your track's page, use filters to narrow down options, and select the teacher that best matches your learning style and schedule. You can book with multiple teachers if desired!
+                    </p>
                 </div>
             </div>
         </div>

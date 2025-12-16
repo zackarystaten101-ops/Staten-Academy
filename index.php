@@ -600,16 +600,16 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                         <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
                             2
                         </div>
-                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Assessment</h3>
-                        <p style="color: #666; line-height: 1.6;">Complete your learning needs assessment</p>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Optional Preferences</h3>
+                        <p style="color: #666; line-height: 1.6;">Optionally share your learning preferences</p>
                     </div>
 
                     <div style="text-align: center; position: relative;">
                         <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: bold; margin: 0 auto 20px;">
                             3
                         </div>
-                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Get Matched</h3>
-                        <p style="color: #666; line-height: 1.6;">We match you with the perfect teacher</p>
+                        <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Select Teacher</h3>
+                        <p style="color: #666; line-height: 1.6;">Browse and choose your teacher</p>
                     </div>
 
                     <div style="text-align: center; position: relative;">

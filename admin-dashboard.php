@@ -270,20 +270,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approv
     $teacher_id = intval($_POST['teacher_id'] ?? 0);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     
+    // Debug logging - log all POST data first
+    error_log("Category update POST data received: " . json_encode($_POST));
+    error_log("Category update - Teacher ID from POST: " . ($_POST['teacher_id'] ?? 'not set'));
+    
     if ($teacher_id <= 0) {
-        $_SESSION['user_error'] = "Invalid teacher ID";
+        $_SESSION['user_error'] = "Invalid teacher ID: " . ($_POST['teacher_id'] ?? 'not provided');
+        error_log("Category update failed: Invalid teacher ID");
         ob_end_clean();
         header("Location: admin-dashboard.php#users-teachers");
         exit();
     }
     
     // Get checkbox values (they'll be set if checked, not set if unchecked)
+    // Checkboxes send their value only when checked, so we check if the key exists
     $kids_approved = isset($_POST['category_kids']) && $_POST['category_kids'] === 'young_learners';
     $adults_approved = isset($_POST['category_adults']) && $_POST['category_adults'] === 'adults';
     $coding_approved = isset($_POST['category_coding']) && $_POST['category_coding'] === 'coding';
     
     // Debug logging
-    error_log("Category update - Teacher ID: $teacher_id, Kids: " . ($kids_approved ? 'yes' : 'no') . ", Adults: " . ($adults_approved ? 'yes' : 'no') . ", Coding: " . ($coding_approved ? 'yes' : 'no'));
+    error_log("Category update - Teacher ID: $teacher_id");
+    error_log("Category update - Kids: " . ($kids_approved ? 'approved' : 'not approved'));
+    error_log("Category update - Adults: " . ($adults_approved ? 'approved' : 'not approved'));
+    error_log("Category update - Coding: " . ($coding_approved ? 'approved' : 'not approved'));
     
     $conn->begin_transaction();
     try {
@@ -746,6 +755,32 @@ while ($row = $chat_users_result->fetch_assoc()) {
     $chat_users[] = $row;
 }
 $chat_users_stmt->close();
+
+// Get pending profile updates with current user data
+$pending_updates = $conn->query("
+    SELECT pu.*, 
+           u.name as current_name, 
+           u.email as user_email, 
+           u.role
+    FROM pending_updates pu
+    JOIN users u ON pu.user_id = u.id
+    ORDER BY pu.requested_at DESC
+");
+if (!$pending_updates) {
+    error_log("Error fetching pending updates: " . $conn->error);
+    $pending_updates = new mysqli_result($conn);
+}
+
+// Get teacher applications
+$applications = $conn->query("
+    SELECT * FROM users 
+    WHERE role = 'teacher' AND application_status = 'pending'
+    ORDER BY reg_date DESC
+");
+if (!$applications) {
+    error_log("Error fetching applications: " . $conn->error);
+    $applications = new mysqli_result($conn);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -3291,6 +3326,22 @@ function showCategoryModal(teacherId, currentCategories) {
                     console.log('  ' + key + ': ' + value);
                 }
                 
+                // Verify checkboxes are in form
+                const kidsCheck = document.getElementById('category_kids');
+                const adultsCheck = document.getElementById('category_adults');
+                const codingCheck = document.getElementById('category_coding');
+                
+                console.log('Checkbox states:', {
+                    kids: kidsCheck ? kidsCheck.checked : 'not found',
+                    adults: adultsCheck ? adultsCheck.checked : 'not found',
+                    coding: codingCheck ? codingCheck.checked : 'not found'
+                });
+                
+                // Ensure form action is correct
+                if (!form.action || form.action === '') {
+                    form.action = window.location.pathname;
+                }
+                
                 // Form will submit normally
                 return true;
             });
@@ -3311,40 +3362,44 @@ function showCategoryModal(teacherId, currentCategories) {
     const codingApproved = cats.includes('coding');
     
     // Get checkbox elements and update them
-    const kidsCheckbox = document.getElementById('category_kids');
-    const adultsCheckbox = document.getElementById('category_adults');
-    const codingCheckbox = document.getElementById('category_coding');
-    
-    // Remove old event listeners by cloning and replacing
-    if (kidsCheckbox) {
-        const newKidsCheckbox = kidsCheckbox.cloneNode(true);
-        kidsCheckbox.parentNode.replaceChild(newKidsCheckbox, kidsCheckbox);
-        newKidsCheckbox.checked = kidsApproved;
-        newKidsCheckbox.addEventListener('change', function() {
-            updateCategoryBadge(this, 'kids_status_badge');
-        });
-        updateCategoryBadge(newKidsCheckbox, 'kids_status_badge');
-    }
-    
-    if (adultsCheckbox) {
-        const newAdultsCheckbox = adultsCheckbox.cloneNode(true);
-        adultsCheckbox.parentNode.replaceChild(newAdultsCheckbox, adultsCheckbox);
-        newAdultsCheckbox.checked = adultsApproved;
-        newAdultsCheckbox.addEventListener('change', function() {
-            updateCategoryBadge(this, 'adults_status_badge');
-        });
-        updateCategoryBadge(newAdultsCheckbox, 'adults_status_badge');
-    }
-    
-    if (codingCheckbox) {
-        const newCodingCheckbox = codingCheckbox.cloneNode(true);
-        codingCheckbox.parentNode.replaceChild(newCodingCheckbox, codingCheckbox);
-        newCodingCheckbox.checked = codingApproved;
-        newCodingCheckbox.addEventListener('change', function() {
-            updateCategoryBadge(this, 'coding_status_badge');
-        });
-        updateCategoryBadge(newCodingCheckbox, 'coding_status_badge');
-    }
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(function() {
+        const kidsCheckbox = document.getElementById('category_kids');
+        const adultsCheckbox = document.getElementById('category_adults');
+        const codingCheckbox = document.getElementById('category_coding');
+        
+        // Setup checkboxes with proper event handlers
+        if (kidsCheckbox) {
+            kidsCheckbox.checked = kidsApproved;
+            // Remove existing listeners by replacing
+            const newKids = kidsCheckbox.cloneNode(true);
+            kidsCheckbox.parentNode.replaceChild(newKids, kidsCheckbox);
+            newKids.addEventListener('change', function() {
+                updateCategoryBadge(this, 'kids_status_badge');
+            });
+            updateCategoryBadge(newKids, 'kids_status_badge');
+        }
+        
+        if (adultsCheckbox) {
+            adultsCheckbox.checked = adultsApproved;
+            const newAdults = adultsCheckbox.cloneNode(true);
+            adultsCheckbox.parentNode.replaceChild(newAdults, adultsCheckbox);
+            newAdults.addEventListener('change', function() {
+                updateCategoryBadge(this, 'adults_status_badge');
+            });
+            updateCategoryBadge(newAdults, 'adults_status_badge');
+        }
+        
+        if (codingCheckbox) {
+            codingCheckbox.checked = codingApproved;
+            const newCoding = codingCheckbox.cloneNode(true);
+            codingCheckbox.parentNode.replaceChild(newCoding, codingCheckbox);
+            newCoding.addEventListener('change', function() {
+                updateCategoryBadge(this, 'coding_status_badge');
+            });
+            updateCategoryBadge(newCoding, 'coding_status_badge');
+        }
+    }, 100);
     
     modal.style.display = 'block';
 }

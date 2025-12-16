@@ -273,9 +273,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         if ($stmt->execute()) {
             $msg = "Profile changes submitted for approval. An admin will review your changes shortly.";
             error_log("Profile update submitted for teacher ID: $teacher_id");
+            error_log("Profile update data - Name: " . ($name ?: 'no change') . ", Bio length: " . strlen($bio) . ", About length: " . strlen($about_text) . ", Video URL: " . ($video_url ?: 'none') . ", Profile pic: " . ($profile_pic_pending ?: 'none'));
+            
+            // Create notification for admin
+            if (function_exists('createNotification')) {
+                require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+                // Get admin users
+                $admin_query = $conn->query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+                if ($admin_query && $admin_row = $admin_query->fetch_assoc()) {
+                    $admin_id = $admin_row['id'];
+                    createNotification($conn, $admin_id, 'profile_update', 'New Profile Update Request', 
+                        "Teacher " . htmlspecialchars($name) . " has submitted profile changes for approval.", 
+                        'admin-dashboard.php#profile-updates');
+                }
+            }
         } else {
             $msg = "Error submitting profile changes. Please try again or contact support.";
             error_log("Error submitting profile update for teacher ID $teacher_id: " . $stmt->error);
+            error_log("SQL Error details: " . print_r($stmt->error_list, true));
         }
         $stmt->close();
         $check_stmt->close();

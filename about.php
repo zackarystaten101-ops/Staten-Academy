@@ -154,7 +154,7 @@ if (!function_exists('getAssetPath')) {
                     <h3 style="color: #004080; margin-bottom: 10px;">Expert Teachers</h3>
                     <p style="color: #666; line-height: 1.7;">
                         Our teachers are experienced, certified, and passionate about helping you succeed. 
-                        They're carefully selected and continuously trained.
+                        All teachers are pre-approved by administrators for specific learning tracks, and you can browse and select the teacher that best fits your needs.
                     </p>
                 </div>
 
