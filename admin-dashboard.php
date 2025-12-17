@@ -1724,15 +1724,29 @@ if (!$applications) {
                         </td>
                         <td data-label="Email"><?php echo h($t['email']); ?></td>
                         <td data-label="Categories">
-                            <?php if (!empty($categories)): ?>
-                                <?php foreach ($categories as $cat): ?>
-                                    <span class="badge badge-info" style="margin-right: 5px;">
-                                        <?php echo ucfirst(str_replace('_', ' ', $cat)); ?>
+                            <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" 
+                                    class="btn-outline btn-sm" 
+                                    style="width: 100%; justify-content: center; cursor: pointer; background: <?php echo !empty($categories) ? '#e7f3ff' : '#fff'; ?>; border-color: <?php echo !empty($categories) ? '#0b6cf5' : '#ddd'; ?>;"
+                                    title="Click to manage teaching categories - Teachers with approved categories appear on category pages">
+                                <i class="fas fa-tags" style="color: <?php echo !empty($categories) ? '#0b6cf5' : '#999'; ?>;"></i>
+                                <?php if (!empty($categories)): ?>
+                                    <span style="margin-left: 5px; font-weight: 500;">
+                                        <?php 
+                                        $category_labels = array_map(function($cat) {
+                                            $labels = [
+                                                'young_learners' => 'Kids',
+                                                'adults' => 'Adults',
+                                                'coding' => 'Coding'
+                                            ];
+                                            return $labels[$cat] ?? ucfirst(str_replace('_', ' ', $cat));
+                                        }, $categories);
+                                        echo implode(', ', $category_labels);
+                                        ?>
                                     </span>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <span style="color: #999;">Not assigned</span>
-                            <?php endif; ?>
+                                <?php else: ?>
+                                    <span style="margin-left: 5px; color: #999; font-style: italic;">Click to Add</span>
+                                <?php endif; ?>
+                            </button>
                         </td>
                         <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
                         <td data-label="Students"><?php echo $t['student_count'] ?? 0; ?></td>
@@ -1749,9 +1763,6 @@ if (!$applications) {
                                 <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
                                 <button onclick="showRoleModal(<?php echo $t['id']; ?>, '<?php echo h($t['role']); ?>')" class="btn-outline btn-sm">
                                     <i class="fas fa-user-tag"></i> Role
-                                </button>
-                                <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" class="btn-outline btn-sm">
-                                    <i class="fas fa-tags"></i> Category
                                 </button>
                                 <?php if ($is_suspended): ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this teacher account?');">

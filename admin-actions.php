@@ -22,23 +22,44 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
      $action = $_POST['action'];
+     $admin_id = $_SESSION['user_id'] ?? 0;
 
      if ($action === 'make_teacher') {
          $user_id = intval($_POST['user_id']);
+         error_log("Admin making user a teacher - User ID: $user_id, Admin ID: $admin_id");
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
-         $stmt->bind_param("i", $user_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $user_id);
+         } else {
+             error_log("Error preparing make_teacher statement: " . $conn->error);
+         }
      } elseif ($action === 'make_student') {
          $user_id = intval($_POST['user_id']);
+         error_log("Admin making user a student - User ID: $user_id, Admin ID: $admin_id");
          $stmt = $conn->prepare("UPDATE users SET role = 'student' WHERE id = ?");
-         $stmt->bind_param("i", $user_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $user_id);
+         } else {
+             error_log("Error preparing make_student statement: " . $conn->error);
+         }
      } elseif ($action === 'approve_teacher') {
          $user_id = intval($_POST['user_id']);
+         error_log("Admin approving teacher application - User ID: $user_id, Admin ID: $admin_id");
          $stmt = $conn->prepare("UPDATE users SET role = 'teacher', application_status = 'approved' WHERE id = ?");
-         $stmt->bind_param("i", $user_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $user_id);
+         } else {
+             error_log("Error preparing approve_teacher statement: " . $conn->error);
+         }
      } elseif ($action === 'reject_teacher') {
          $user_id = intval($_POST['user_id']);
+         error_log("Admin rejecting teacher application - User ID: $user_id, Admin ID: $admin_id");
          $stmt = $conn->prepare("UPDATE users SET application_status = 'rejected' WHERE id = ?");
-         $stmt->bind_param("i", $user_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $user_id);
+         } else {
+             error_log("Error preparing reject_teacher statement: " . $conn->error);
+         }
      } elseif ($action === 'approve_profile') {
          $update_id = intval($_POST['update_id']);
          error_log("Admin approving profile update - Update ID: $update_id, Admin ID: " . ($_SESSION['user_id'] ?? 'unknown'));
@@ -199,21 +220,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
      } elseif ($action === 'mark_support_read') {
          $support_id = intval($_POST['support_id']);
          $stmt = $conn->prepare("UPDATE support_messages SET status = 'read' WHERE id = ?");
-         $stmt->bind_param("i", $support_id);
+         if ($stmt) {
+             $stmt->bind_param("i", $support_id);
+         } else {
+             error_log("Error preparing mark_support_read statement: " . $conn->error);
+         }
      } else {
+         error_log("Invalid action received: " . ($action ?? 'not set'));
+         ob_end_clean();
          die("Invalid action");
      }
 
-     if (isset($stmt)) {
+     // Execute statement for actions that use the common $stmt pattern
+     if (isset($stmt) && $stmt) {
          if ($stmt->execute()) {
+             error_log("Action '$action' executed successfully");
+             
+             // Send notification for teacher approval
+             if ($action === 'approve_teacher' && isset($user_id)) {
+                 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+                 if (function_exists('createNotification')) {
+                     createNotification($conn, $user_id, 'teacher_approved', 'Teacher Application Approved', 
+                         "Congratulations! Your teacher application has been approved. You can now access the teacher dashboard.", 
+                         'teacher-dashboard.php');
+                 }
+             }
+             
              ob_end_clean(); // Clear output buffer before redirect
              header("Location: admin-dashboard.php?msg=success");
              exit();
          } else {
+             error_log("Error executing action '$action': " . $stmt->error . " | Connection error: " . $conn->error);
              ob_end_clean(); // Clear output buffer before echo
-             echo "Error updating record: " . $conn->error;
+             echo "Error updating record: " . $stmt->error;
          }
          $stmt->close();
+     } else {
+         error_log("Statement not set for action '$action' - this should not happen");
+         ob_end_clean();
+         echo "Error: Could not prepare statement for action '$action'";
      }
  }
  ob_end_clean(); // Clear output buffer before closing
