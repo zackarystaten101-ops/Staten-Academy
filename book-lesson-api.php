@@ -254,14 +254,34 @@ try {
     
     // Create lesson record in database
     $google_event_id = null;
+    $is_trial_int = $is_trial ? 1 : 0;
+    $wallet_transaction_id = null; // Always NULL since we're using credit system now
+    
+    // Handle NULL category properly - validate it's a valid ENUM value or set to NULL
+    if (empty($student_category) || !in_array($student_category, ['young_learners', 'adults', 'coding'])) {
+        $student_category = null;
+    }
+    
     $stmt = $conn->prepare("
         INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, is_trial, wallet_transaction_id, category)
-        VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?)
+        VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)
     ");
-    $is_trial_int = $is_trial ? 1 : 0;
-    $stmt->bind_param("iisssis", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial_int, $student_category);
+    
+    if (!$stmt) {
+        error_log("Failed to prepare lesson insert statement: " . $conn->error);
+        throw new Exception("Database error preparing statement: " . $conn->error);
+    }
+    
+    // Use 'i' for integers (NULL is fine), 's' for strings/enums (NULL is fine for nullable columns)
+    $bind_result = $stmt->bind_param("iisssiss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial_int, $wallet_transaction_id, $student_category);
+    
+    if (!$bind_result) {
+        error_log("Failed to bind parameters for lesson insert: " . $stmt->error);
+        throw new Exception("Database error binding parameters: " . $stmt->error);
+    }
 
     if (!$stmt->execute()) {
+        error_log("Lesson creation failed - SQL Error: " . $stmt->error . " | Teacher ID: $teacher_id | Student ID: $student_id | Date: $lesson_date | Start: $start_time");
         throw new Exception("Failed to create lesson: " . $stmt->error);
     }
     
