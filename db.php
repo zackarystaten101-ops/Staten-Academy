@@ -1575,3 +1575,18 @@ if ($admin_check) {
         }
     }
 }
+
+// Create admin_settings table if it doesn't exist
+$admin_settings_check = $conn->query("SHOW TABLES LIKE 'admin_settings'");
+if (!$admin_settings_check || $admin_settings_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS admin_settings (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        setting_key VARCHAR(255) NOT NULL UNIQUE,
+        value TEXT,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_key (setting_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}

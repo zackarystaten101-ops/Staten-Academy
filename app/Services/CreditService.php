@@ -300,7 +300,19 @@ class CreditService {
             
             // If recipient exists, add credits to their account
             if ($recipient_id) {
-                $description = "Gift credits received from " . $recipient_email;
+                // Get purchaser email for description
+                $purchaser_stmt = $this->conn->prepare("SELECT email, name FROM users WHERE id = ?");
+                $purchaser_stmt->bind_param("i", $purchaser_id);
+                $purchaser_stmt->execute();
+                $purchaser_result = $purchaser_stmt->get_result();
+                $purchaser_email = '';
+                if ($purchaser_result->num_rows > 0) {
+                    $purchaser_data = $purchaser_result->fetch_assoc();
+                    $purchaser_email = $purchaser_data['email'] ?? $purchaser_data['name'] ?? 'a friend';
+                }
+                $purchaser_stmt->close();
+                
+                $description = "Gift credits received from " . $purchaser_email;
                 if (!$this->addCredits($recipient_id, $credits, 'gift_received', $description, $stripe_payment_id)) {
                     throw new Exception("Failed to add credits to recipient");
                 }

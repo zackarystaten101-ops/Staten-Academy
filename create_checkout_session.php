@@ -280,6 +280,9 @@ if ($is_trial) {
         $metadata['customer_id'] = $customer_id;
     }
     
+    // For subscriptions, subscription_id will be added by Stripe after checkout
+    // We'll get it from the webhook event
+    
     if ($payment_type === 'gift_credit' && !empty($gift_recipient_email)) {
         $metadata['recipient_email'] = $gift_recipient_email;
         // Get credits amount from gift product

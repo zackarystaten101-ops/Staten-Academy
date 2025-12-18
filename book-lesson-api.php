@@ -240,12 +240,9 @@ $conn->begin_transaction();
 
 try {
     // Deduct credit if not trial (1 credit per lesson)
-    $wallet_transaction_id = null;
-    $credit_transaction_id = null;
-    if (!$is_trial) {
-        // Note: We'll deduct credit after lesson is created to have the lesson_id
-        // For now, just check that we have enough credits (already checked above)
-    } elseif ($is_trial) {
+    // Note: We'll deduct credit after lesson is created to have the lesson_id
+    // Credit balance is already checked above
+    if ($is_trial) {
         // Deduct trial credit (existing logic)
         $update_trial = $conn->prepare("UPDATE student_wallet SET trial_credits = trial_credits - 1 WHERE student_id = ? AND trial_credits > 0");
         $update_trial->bind_param("i", $student_id);

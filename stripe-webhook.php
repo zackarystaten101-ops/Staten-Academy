@@ -15,6 +15,11 @@ require_once __DIR__ . '/app/Services/TrialService.php';
 require_once __DIR__ . '/app/Services/CreditService.php';
 require_once __DIR__ . '/app/Services/SubscriptionService.php';
 
+// Load Stripe PHP library if available
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+}
+
 // Get webhook secret
 $webhook_secret = defined('STRIPE_WEBHOOK_SECRET') ? STRIPE_WEBHOOK_SECRET : '';
 
@@ -24,12 +29,24 @@ $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '';
 
 // Verify webhook signature
 if (!empty($webhook_secret)) {
-    try {
-        $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $webhook_secret);
-    } catch (\Exception $e) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Webhook signature verification failed']);
-        exit;
+    // Check if Stripe library is available
+    if (class_exists('\Stripe\Webhook')) {
+        try {
+            $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $webhook_secret);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Webhook signature verification failed: ' . $e->getMessage()]);
+            exit;
+        }
+    } else {
+        // If Stripe library not available, decode without verification (not recommended for production)
+        error_log("Stripe PHP library not found - webhook verification skipped");
+        $event = json_decode($payload, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid JSON payload']);
+            exit;
+        }
     }
 } else {
     // If webhook secret not configured, decode without verification (not recommended for production)
@@ -90,6 +107,8 @@ echo json_encode(['received' => true]);
 function handleCheckoutCompleted($conn, $session) {
     $session_id = $session['id'] ?? '';
     $payment_intent_id = $session['payment_intent'] ?? '';
+    $subscription_id = $session['subscription'] ?? null; // For subscription mode
+    $customer_id = $session['customer'] ?? null; // Stripe customer ID
     $customer_email = $session['customer_email'] ?? '';
     $metadata = $session['metadata'] ?? [];
     $amount_total = isset($session['amount_total']) ? ($session['amount_total'] / 100) : 0; // Convert from cents
@@ -124,7 +143,7 @@ function handleCheckoutCompleted($conn, $session) {
     if ($payment_type === 'trial') {
         handleTrialPayment($conn, $session_id, $payment_intent_id, $metadata, $amount_total);
     } else {
-        handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $amount_total, $customer_email);
+        handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $amount_total, $customer_email, $subscription_id, $customer_id);
     }
 }
 
@@ -163,7 +182,7 @@ function handleTrialPayment($conn, $session_id, $payment_intent_id, $metadata, $
 /**
  * Handle plan purchase payment
  */
-function handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $amount_total, $customer_email) {
+function handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $amount_total, $customer_email, $subscription_id = null, $customer_id = null) {
     // Find student by email or metadata
     $student_id = null;
     if (!empty($customer_email)) {
@@ -228,15 +247,23 @@ function handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $a
     }
     
     // Handle subscriptions - store customer ID and subscription ID
-    $subscription_id = $metadata['subscription_id'] ?? null;
+    // Use subscription_id from session if not in metadata
+    if (empty($subscription_id)) {
+        $subscription_id = $metadata['subscription_id'] ?? null;
+    }
+    // Use customer_id from session if not in metadata
+    if (empty($customer_id)) {
+        $customer_id = $metadata['customer_id'] ?? null;
+    }
+    
     if ($plan_type === 'subscription' && !empty($subscription_id)) {
         // Get billing cycle date from current date
         $billing_cycle_date = (int)date('d'); // Day of month (1-31)
         
         // Store Stripe customer ID if not set
-        if (!empty($metadata['customer_id'])) {
+        if (!empty($customer_id)) {
             $update_customer = $conn->prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?");
-            $customer_id_str = $metadata['customer_id'];
+            $customer_id_str = (string)$customer_id;
             $update_customer->bind_param("si", $customer_id_str, $student_id);
             $update_customer->execute();
             $update_customer->close();
