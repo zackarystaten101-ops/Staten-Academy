@@ -2071,7 +2071,27 @@ if (!$applications) {
                                         <div><?php echo h($lesson['student_name']); ?></div>
                                         <small style="color: #666;"><?php echo h($lesson['student_email']); ?></small>
                                     </td>
-                                    <td><?php echo $lesson['duration']; ?> min</td>
+                                    <td>
+                                        <?php 
+                                        // Calculate duration from start_time and end_time
+                                        if (isset($lesson['start_time']) && isset($lesson['end_time']) && !empty($lesson['start_time']) && !empty($lesson['end_time'])) {
+                                            try {
+                                                $start_timestamp = strtotime($lesson['start_time']);
+                                                $end_timestamp = strtotime($lesson['end_time']);
+                                                // Handle case where end_time is next day (e.g., 23:00 to 01:00)
+                                                if ($end_timestamp < $start_timestamp) {
+                                                    $end_timestamp += 86400; // Add 24 hours
+                                                }
+                                                $minutes = round(($end_timestamp - $start_timestamp) / 60);
+                                                echo $minutes . ' min';
+                                            } catch (Exception $e) {
+                                                echo 'N/A';
+                                            }
+                                        } else {
+                                            echo 'N/A';
+                                        }
+                                        ?>
+                                    </td>
                                     <td>
                                         <span class="badge badge-info">
                                             <?php echo ucfirst(str_replace('_', ' ', $lesson['category'] ?? 'N/A')); ?>
