@@ -139,6 +139,14 @@ if (!in_array('subscription_status', $existing_cols)) $conn->query("ALTER TABLE 
 if (!in_array('subscription_start_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_start_date TIMESTAMP NULL AFTER subscription_status");
 if (!in_array('subscription_end_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_end_date TIMESTAMP NULL AFTER subscription_start_date");
 
+// Credit system columns
+if (!in_array('stripe_customer_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(255) NULL");
+if (!in_array('credits_balance', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN credits_balance INT DEFAULT 0");
+if (!in_array('credits_gifted', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN credits_gifted INT DEFAULT 0");
+if (!in_array('active_subscription_id', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN active_subscription_id VARCHAR(255) NULL");
+if (!in_array('subscription_billing_cycle_date', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_billing_cycle_date INT NULL");
+if (!in_array('subscription_payment_failed', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN subscription_payment_failed BOOLEAN DEFAULT FALSE");
+
 // Create pending profile updates table
 $sql = "CREATE TABLE IF NOT EXISTS pending_updates (
     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -1589,4 +1597,80 @@ if (!$admin_settings_check || $admin_settings_check->num_rows == 0) {
         INDEX idx_key (setting_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     $conn->query($sql);
+}
+
+// Create credit_transactions table if it doesn't exist
+$credit_transactions_check = $conn->query("SHOW TABLES LIKE 'credit_transactions'");
+if (!$credit_transactions_check || $credit_transactions_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS credit_transactions (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        student_id INT(6) UNSIGNED NOT NULL,
+        type ENUM('admin_add', 'admin_remove', 'purchase', 'subscription_renewal', 'gift_received', 'gift_sent', 'lesson_used') NOT NULL,
+        amount INT NOT NULL,
+        description TEXT,
+        reference_id VARCHAR(255) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_student (student_id),
+        INDEX idx_type (type),
+        FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}
+
+// Create gift_credit_purchases table if it doesn't exist
+$gift_purchases_check = $conn->query("SHOW TABLES LIKE 'gift_credit_purchases'");
+if (!$gift_purchases_check || $gift_purchases_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS gift_credit_purchases (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        purchaser_id INT(6) UNSIGNED NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_id INT(6) UNSIGNED NULL,
+        credits_amount INT NOT NULL,
+        stripe_payment_id VARCHAR(255) NOT NULL,
+        status ENUM('pending', 'completed', 'failed') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_purchaser (purchaser_id),
+        INDEX idx_recipient (recipient_id),
+        FOREIGN KEY (purchaser_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}
+
+// Create gift_credit_products table if it doesn't exist
+$gift_products_check = $conn->query("SHOW TABLES LIKE 'gift_credit_products'");
+if (!$gift_products_check || $gift_products_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS gift_credit_products (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        credits_amount INT NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        stripe_product_id VARCHAR(255) NOT NULL,
+        stripe_price_id VARCHAR(255) NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}
+
+// Update subscription_plans table to add credit system columns
+$plan_cols_check = $conn->query("SHOW TABLES LIKE 'subscription_plans'");
+if ($plan_cols_check && $plan_cols_check->num_rows > 0) {
+    $plan_cols = $conn->query("SHOW COLUMNS FROM subscription_plans");
+    $existing_plan_cols = [];
+    if ($plan_cols) {
+        while($row = $plan_cols->fetch_assoc()) { 
+            $existing_plan_cols[] = $row['Field']; 
+        }
+    }
+    
+    if (!in_array('type', $existing_plan_cols)) {
+        $conn->query("ALTER TABLE subscription_plans ADD COLUMN type ENUM('package', 'subscription', 'addon') DEFAULT 'subscription'");
+    }
+    if (!in_array('credits_included', $existing_plan_cols)) {
+        $conn->query("ALTER TABLE subscription_plans ADD COLUMN credits_included INT DEFAULT 0");
+    }
+    if (!in_array('billing_cycle_days', $existing_plan_cols)) {
+        $conn->query("ALTER TABLE subscription_plans ADD COLUMN billing_cycle_days INT NULL");
+    }
 }
