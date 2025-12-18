@@ -1627,9 +1627,12 @@ if (!$applications) {
                             </td>
                             <td data-label="Categories">
                                 <?php if ($u['role'] === 'teacher'): ?>
-                                    <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" 
-                                            class="btn-primary btn-sm" 
-                                            style="cursor: pointer; padding: 8px 16px; font-weight: 600; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s;"
+                                    <button type="button" 
+                                            onclick="console.log('Category button clicked for teacher <?php echo $u['id']; ?>'); showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>'); return false;" 
+                                            class="btn-primary btn-sm category-btn" 
+                                            data-teacher-id="<?php echo $u['id']; ?>"
+                                            data-categories="<?php echo h($u['categories'] ?? ''); ?>"
+                                            style="cursor: pointer; padding: 8px 16px; font-weight: 600; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s; pointer-events: auto; position: relative; z-index: 1;"
                                             onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)'"
                                             onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'"
                                             title="Click to manage teaching categories">
@@ -1669,9 +1672,12 @@ if (!$applications) {
                                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                     <a href="profile.php?id=<?php echo $u['id']; ?>" class="btn-outline btn-sm">View</a>
                                     <?php if ($u['role'] === 'teacher'): ?>
-                                        <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" 
-                                                class="btn-primary btn-sm" 
-                                                style="background: #667eea; color: white; border: none; font-weight: 600; padding: 8px 16px;"
+                                        <button type="button"
+                                                onclick="console.log('Manage Categories button clicked for teacher <?php echo $u['id']; ?>'); showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>'); return false;" 
+                                                class="btn-primary btn-sm category-btn" 
+                                                data-teacher-id="<?php echo $u['id']; ?>"
+                                                data-categories="<?php echo h($u['categories'] ?? ''); ?>"
+                                                style="background: #667eea; color: white; border: none; font-weight: 600; padding: 8px 16px; cursor: pointer; pointer-events: auto; position: relative; z-index: 1;"
                                                 title="Manage which categories this teacher can teach (Kids, Adults, Coding)">
                                             <i class="fas fa-tags"></i> Manage Categories
                                         </button>
@@ -1736,15 +1742,18 @@ if (!$applications) {
                             </div>
                         </td>
                         <td data-label="Email"><?php echo h($t['email']); ?></td>
-                            <td data-label="Categories">
-                            <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" 
-                                    class="btn-primary" 
-                                    style="width: 100%; cursor: pointer; padding: 10px 16px; font-weight: 600; font-size: 0.95rem; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s;"
+                        <td data-label="Categories">
+                            <button type="button"
+                                    onclick="console.log('Category button clicked for teacher <?php echo $t['id']; ?>'); showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>'); return false;" 
+                                    class="btn-primary category-btn" 
+                                    data-teacher-id="<?php echo $t['id']; ?>"
+                                    data-categories="<?php echo h($t['categories'] ?? ''); ?>"
+                                    style="width: 100%; cursor: pointer; padding: 10px 16px; font-weight: 600; font-size: 0.95rem; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s; pointer-events: auto; position: relative; z-index: 1;"
                                     onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)'"
                                     onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'"
                                     title="Click to manage teaching categories - Teachers with approved categories appear on category pages">
                                 <i class="fas fa-tags"></i>
-                                <?php if (!empty($categories)): ?>
+                            <?php if (!empty($categories)): ?>
                                     <span style="margin-left: 8px;">
                                         <?php 
                                         $category_labels = array_map(function($cat) {
@@ -1754,9 +1763,9 @@ if (!$applications) {
                                         echo implode(', ', $category_labels);
                                         ?>
                                     </span>
-                                <?php else: ?>
+                            <?php else: ?>
                                     <span style="margin-left: 8px;">Assign Categories</span>
-                                <?php endif; ?>
+                            <?php endif; ?>
                             </button>
                         </td>
                         <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
@@ -1772,9 +1781,12 @@ if (!$applications) {
                         <td data-label="Actions">
                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                 <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
-                                <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" 
-                                        class="btn-primary btn-sm" 
-                                        style="background: #667eea; color: white; border: none; font-weight: 600;"
+                                <button type="button"
+                                        onclick="console.log('Categories button clicked for teacher <?php echo $t['id']; ?>'); showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>'); return false;" 
+                                        class="btn-primary btn-sm category-btn" 
+                                        data-teacher-id="<?php echo $t['id']; ?>"
+                                        data-categories="<?php echo h($t['categories'] ?? ''); ?>"
+                                        style="background: #667eea; color: white; border: none; font-weight: 600; cursor: pointer; pointer-events: auto; position: relative; z-index: 1;"
                                         title="Manage which categories this teacher can teach">
                                     <i class="fas fa-tags"></i> Categories
                                 </button>
@@ -3390,7 +3402,7 @@ function showCategoryModal(teacherId, currentCategories) {
 
     // 4) Finally, show the modal
     if (modal) {
-        modal.style.display = 'block';
+    modal.style.display = 'block';
         console.log('Category modal displayed');
         // Prevent body scroll when modal is open
         document.body.style.overflow = 'hidden';
@@ -3414,6 +3426,40 @@ document.addEventListener('keydown', function(event) {
         closeCategoryModal();
     }
 });
+
+// Add event listeners for category buttons using event delegation (more reliable)
+// This ensures buttons work even if they're dynamically loaded or if onclick fails
+(function() {
+    function initCategoryButtons() {
+        // Use event delegation for category buttons - works even if buttons are added later
+        document.addEventListener('click', function(e) {
+            const categoryBtn = e.target.closest('.category-btn');
+            if (categoryBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const teacherId = categoryBtn.getAttribute('data-teacher-id');
+                const categories = categoryBtn.getAttribute('data-categories') || '';
+                console.log('Category button clicked via delegation - Teacher ID:', teacherId, 'Categories:', categories);
+                if (teacherId && typeof showCategoryModal === 'function') {
+                    showCategoryModal(parseInt(teacherId), categories);
+                } else {
+                    console.error('showCategoryModal function not found or teacherId missing', {
+                        teacherId: teacherId,
+                        showCategoryModal: typeof showCategoryModal
+                    });
+                }
+                return false;
+            }
+        }, true); // Use capture phase for better reliability
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCategoryButtons);
+    } else {
+        initCategoryButtons(); // DOM already ready
+    }
+})();
 
 // Wallet Management Modal
 function showWalletModal(studentId, studentName, currentBalance) {
