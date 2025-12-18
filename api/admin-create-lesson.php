@@ -4,19 +4,35 @@
  * Allows admin to create lessons directly
  */
 
+// Start output buffering to prevent header issues
+ob_start();
+
 session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../app/Views/components/dashboard-functions.php';
 
+// Set headers early, before any output
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+}
+
 // Check admin authentication
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
+    ob_end_clean();
     http_response_code(403);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode(['error' => 'Unauthorized']);
     exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    ob_end_clean();
     http_response_code(405);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode(['error' => 'Method not allowed']);
     exit();
 }
@@ -31,13 +47,21 @@ $notes = $_POST['notes'] ?? '';
 
 // Calculate end_time from start_time and duration
 if (empty($start_time)) {
+    ob_end_clean();
     http_response_code(400);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode(['error' => 'Missing start_time or lesson_time field']);
     exit();
 }
 
 if (!$teacher_id || !$student_id || !$lesson_date) {
+    ob_end_clean();
     http_response_code(400);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode(['error' => 'Missing required fields']);
     exit();
 }
@@ -72,7 +96,11 @@ try {
     if ($conflict_result->num_rows > 0) {
         $conflict_check->close();
         $conn->rollback();
+        ob_end_clean();
         http_response_code(409);
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+        }
         echo json_encode(['error' => 'Time conflict detected. Another lesson exists at this time.']);
         exit();
     }
@@ -127,14 +155,25 @@ try {
     
     $conn->commit();
     
-    header('Content-Type: application/json');
+    // Clear any output buffer before sending JSON
+    ob_end_clean();
+    
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode(['success' => true, 'lesson_id' => $lesson_id]);
     
 } catch (Exception $e) {
     $conn->rollback();
     error_log("Admin lesson creation error: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+    
+    // Clear any output buffer before sending error
+    ob_end_clean();
+    
     http_response_code(500);
-    header('Content-Type: application/json');
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
     echo json_encode([
         'error' => 'Failed to create lesson',
         'details' => $e->getMessage() // Include actual error for debugging
