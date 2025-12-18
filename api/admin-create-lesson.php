@@ -91,7 +91,8 @@ try {
         throw new Exception("Failed to prepare statement: " . $conn->error);
     }
     
-    $bind_result = $insert_stmt->bind_param("iisssiss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial, $wallet_transaction_id, $category, $notes);
+    // bind_param: i (teacher_id), i (student_id), s (lesson_date), s (start_time), s (end_time), i (is_trial), i (wallet_transaction_id), s (category), s (notes)
+    $bind_result = $insert_stmt->bind_param("iisssisss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial, $wallet_transaction_id, $category, $notes);
     
     if (!$bind_result) {
         throw new Exception("Failed to bind parameters: " . $insert_stmt->error);
