@@ -3212,6 +3212,8 @@ function updateCategoryBadge(checkbox, badgeId) {
 
 function showCategoryModal(teacherId, currentCategories) {
     let modal = document.getElementById('categoryModal');
+
+    // 1) Create the modal once if it doesn't exist yet
     if (!modal) {
         const modalHtml = `
             <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
@@ -3308,111 +3310,70 @@ function showCategoryModal(teacherId, currentCategories) {
                 </div>
             </div>
         `;
+
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         modal = document.getElementById('categoryModal');
-        
-        // Add form submit handler (only once when modal is created)
+
+        // Attach simple submit handler once
         const form = document.getElementById('categoryForm');
         if (form && !form.dataset.handlerAdded) {
             form.addEventListener('submit', function(e) {
-                const submitBtn = form.querySelector('button[type="submit"]');
-                const originalText = submitBtn.innerHTML;
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-                
-                // Verify teacher ID is set
                 const teacherIdInput = document.getElementById('categoryTeacherId');
                 if (!teacherIdInput || !teacherIdInput.value || teacherIdInput.value === '0') {
                     e.preventDefault();
                     alert('Error: Teacher ID is missing. Please try again.');
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
                     return false;
                 }
-                
-                // Log form data for debugging
-                const formData = new FormData(form);
-                console.log('Category form submitting:');
-                for (let [key, value] of formData.entries()) {
-                    console.log('  ' + key + ': ' + value);
-                }
-                
-                // Verify checkboxes are in form
-                const kidsCheck = document.getElementById('category_kids');
-                const adultsCheck = document.getElementById('category_adults');
-                const codingCheck = document.getElementById('category_coding');
-                
-                console.log('Checkbox states:', {
-                    kids: kidsCheck ? kidsCheck.checked : 'not found',
-                    adults: adultsCheck ? adultsCheck.checked : 'not found',
-                    coding: codingCheck ? codingCheck.checked : 'not found'
-                });
-                
-                // Ensure form action is correct
-                if (!form.action || form.action === '') {
-                    form.action = window.location.pathname;
-                }
-                
-                // Form will submit normally
                 return true;
             });
             form.dataset.handlerAdded = 'true';
         }
     }
-    
-    // Set teacher ID
+
+    // 2) Whenever the modal opens, set the teacher ID
     const teacherIdInput = document.getElementById('categoryTeacherId');
     if (teacherIdInput) {
         teacherIdInput.value = teacherId;
     }
-    
-    // Parse current categories
-    const cats = currentCategories ? currentCategories.split(',').map(c => c.trim()).filter(c => c) : [];
+
+    // 3) Set checkbox states from currentCategories
+    const cats = currentCategories ? currentCategories.split(',').map(c => c.trim()).filter(Boolean) : [];
     const kidsApproved = cats.includes('young_learners');
     const adultsApproved = cats.includes('adults');
     const codingApproved = cats.includes('coding');
-    
-    // Get checkbox elements and update them
-    // Use setTimeout to ensure DOM is ready
-    setTimeout(function() {
-        const kidsCheckbox = document.getElementById('category_kids');
-        const adultsCheckbox = document.getElementById('category_adults');
-        const codingCheckbox = document.getElementById('category_coding');
-        
-        // Setup checkboxes with proper event handlers
-        if (kidsCheckbox) {
-            kidsCheckbox.checked = kidsApproved;
-            // Remove existing listeners by replacing
-            const newKids = kidsCheckbox.cloneNode(true);
-            kidsCheckbox.parentNode.replaceChild(newKids, kidsCheckbox);
-            newKids.addEventListener('change', function() {
-                updateCategoryBadge(this, 'kids_status_badge');
-            });
-            updateCategoryBadge(newKids, 'kids_status_badge');
-        }
-        
-        if (adultsCheckbox) {
-            adultsCheckbox.checked = adultsApproved;
-            const newAdults = adultsCheckbox.cloneNode(true);
-            adultsCheckbox.parentNode.replaceChild(newAdults, adultsCheckbox);
-            newAdults.addEventListener('change', function() {
-                updateCategoryBadge(this, 'adults_status_badge');
-            });
-            updateCategoryBadge(newAdults, 'adults_status_badge');
-        }
-        
-        if (codingCheckbox) {
-            codingCheckbox.checked = codingApproved;
-            const newCoding = codingCheckbox.cloneNode(true);
-            codingCheckbox.parentNode.replaceChild(newCoding, codingCheckbox);
-            newCoding.addEventListener('change', function() {
-                updateCategoryBadge(this, 'coding_status_badge');
-            });
-            updateCategoryBadge(newCoding, 'coding_status_badge');
-        }
-    }, 100);
-    
-    modal.style.display = 'block';
+
+    const kidsCheckbox = document.getElementById('category_kids');
+    const adultsCheckbox = document.getElementById('category_adults');
+    const codingCheckbox = document.getElementById('category_coding');
+
+    if (kidsCheckbox) {
+        kidsCheckbox.checked = kidsApproved;
+        kidsCheckbox.onchange = function() {
+            updateCategoryBadge(this, 'kids_status_badge');
+        };
+        updateCategoryBadge(kidsCheckbox, 'kids_status_badge');
+    }
+
+    if (adultsCheckbox) {
+        adultsCheckbox.checked = adultsApproved;
+        adultsCheckbox.onchange = function() {
+            updateCategoryBadge(this, 'adults_status_badge');
+        };
+        updateCategoryBadge(adultsCheckbox, 'adults_status_badge');
+    }
+
+    if (codingCheckbox) {
+        codingCheckbox.checked = codingApproved;
+        codingCheckbox.onchange = function() {
+            updateCategoryBadge(this, 'coding_status_badge');
+        };
+        updateCategoryBadge(codingCheckbox, 'coding_status_badge');
+    }
+
+    // 4) Finally, show the modal
+    if (modal) {
+        modal.style.display = 'block';
+    }
 }
 
 function closeCategoryModal() {

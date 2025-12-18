@@ -8,6 +8,8 @@ require_once __DIR__ . '/google-calendar-config.php';
 require_once __DIR__ . '/app/Services/WalletService.php';
 require_once __DIR__ . '/app/Services/TeacherService.php';
 require_once __DIR__ . '/app/Services/TrialService.php';
+require_once __DIR__ . '/app/Services/CreditService.php';
+require_once __DIR__ . '/app/Services/SubscriptionService.php';
 
 // #region agent log helper
 if (!function_exists('agent_debug_log')) {
@@ -640,6 +642,13 @@ if ($stmt) {
     }
     $stmt->close();
 }
+
+// Get credits balance and subscription info
+$creditService = new CreditService($conn);
+$subscriptionService = new SubscriptionService($conn);
+$credits_balance = $creditService->getCreditsBalance($student_id);
+$credit_history = $creditService->getCreditHistory($student_id, 20);
+$subscription_details = $subscriptionService->getSubscriptionDetails($student_id);
 
 $active_tab = 'overview';
 ?>

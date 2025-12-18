@@ -10,6 +10,7 @@ require_once 'google-calendar-config.php';
 require_once __DIR__ . '/app/Services/TeacherService.php';
 require_once __DIR__ . '/app/Services/WalletService.php';
 require_once __DIR__ . '/app/Services/TrialService.php';
+require_once __DIR__ . '/app/Services/CreditService.php';
 
 // Only allow POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -79,6 +80,7 @@ if (strtotime($lesson_date . ' ' . $start_time) <= time()) {
 $teacherService = new TeacherService($conn);
 $walletService = new WalletService($conn);
 $trialService = new TrialService($conn);
+$creditService = new CreditService($conn);
 $api = new GoogleCalendarAPI($conn);
 
 // Check if teacher exists and is in student's category (if student has a category)
@@ -197,14 +199,27 @@ if ($is_trial) {
         $lesson_cost = 50.00; // Default 1-hour lesson cost
     }
     
-    // Check wallet balance
-    $wallet = $walletService->getWalletBalance($student_id);
-    if ($wallet['balance'] < $lesson_cost) {
+    // Check credits balance (1 class = 1 credit)
+    $credits_balance = $creditService->getCreditsBalance($student_id);
+    if ($credits_balance < 1) {
+        // Also check if subscription payment failed
+        $subscription_check = $conn->prepare("SELECT subscription_payment_failed FROM users WHERE id = ?");
+        $subscription_check->bind_param("i", $student_id);
+        $subscription_check->execute();
+        $subscription_result = $subscription_check->get_result();
+        $subscription_data = $subscription_result->fetch_assoc();
+        $subscription_check->close();
+        
+        $error_message = 'Insufficient credits. You need at least 1 credit to book a lesson.';
+        if ($subscription_data && $subscription_data['subscription_payment_failed']) {
+            $error_message .= ' Your subscription payment failed. Please update your payment method.';
+        }
+        
         http_response_code(402);
         echo json_encode([
-            'error' => 'Insufficient wallet balance',
-            'required' => $lesson_cost,
-            'available' => $wallet['balance']
+            'error' => $error_message,
+            'required' => 1,
+            'available' => $credits_balance
         ]);
         exit();
     }
@@ -224,29 +239,14 @@ $student_category = ($student && isset($student['preferred_category'])) ? $stude
 $conn->begin_transaction();
 
 try {
-    // Deduct funds if not trial
+    // Deduct credit if not trial (1 credit per lesson)
     $wallet_transaction_id = null;
-    if (!$is_trial && $lesson_cost > 0) {
-        $reference_id = 'lesson_' . time() . '_' . $student_id;
-        if (!$walletService->deductFunds($student_id, $lesson_cost, $reference_id, "Lesson booking with " . $teacher['name'])) {
-            throw new Exception("Failed to deduct funds from wallet");
-        }
-        
-        // Get the transaction ID - this must exist after a successful deduction
-        $txn_stmt = $conn->prepare("SELECT id FROM wallet_transactions WHERE reference_id = ? ORDER BY id DESC LIMIT 1");
-        $txn_stmt->bind_param("s", $reference_id);
-        $txn_stmt->execute();
-        $txn_result = $txn_stmt->get_result();
-        if ($txn_result->num_rows > 0) {
-            $txn_data = $txn_result->fetch_assoc();
-            $wallet_transaction_id = $txn_data['id'];
-        } else {
-            // Critical error: funds were deducted but transaction record not found
-            throw new Exception("Funds deducted but transaction record not found. Reference ID: " . $reference_id);
-        }
-        $txn_stmt->close();
+    $credit_transaction_id = null;
+    if (!$is_trial) {
+        // Note: We'll deduct credit after lesson is created to have the lesson_id
+        // For now, just check that we have enough credits (already checked above)
     } elseif ($is_trial) {
-        // Deduct trial credit
+        // Deduct trial credit (existing logic)
         $update_trial = $conn->prepare("UPDATE student_wallet SET trial_credits = trial_credits - 1 WHERE student_id = ? AND trial_credits > 0");
         $update_trial->bind_param("i", $student_id);
         if (!$update_trial->execute() || $update_trial->affected_rows === 0) {
@@ -257,22 +257,12 @@ try {
     
     // Create lesson record in database
     $google_event_id = null;
-    // Handle NULL wallet_transaction_id for trial lessons
-    if ($wallet_transaction_id === null) {
-        $stmt = $conn->prepare("
-            INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, is_trial, wallet_transaction_id, category)
-            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?)
-        ");
-        $is_trial_int = $is_trial ? 1 : 0;
-        $stmt->bind_param("iisssis", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial_int, $student_category);
-    } else {
-        $stmt = $conn->prepare("
-            INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, is_trial, wallet_transaction_id, category)
-            VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)
-        ");
-        $is_trial_int = $is_trial ? 1 : 0;
-        $stmt->bind_param("iisssiis", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial_int, $wallet_transaction_id, $student_category);
-    }
+    $stmt = $conn->prepare("
+        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, is_trial, wallet_transaction_id, category)
+        VALUES (?, ?, ?, ?, ?, 'scheduled', ?, NULL, ?)
+    ");
+    $is_trial_int = $is_trial ? 1 : 0;
+    $stmt->bind_param("iisssis", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial_int, $student_category);
 
     if (!$stmt->execute()) {
         throw new Exception("Failed to create lesson: " . $stmt->error);
@@ -280,6 +270,13 @@ try {
     
     $lesson_id = $stmt->insert_id;
     $stmt->close();
+    
+    // Deduct credit after lesson is created (so we have lesson_id)
+    if (!$is_trial) {
+        if (!$creditService->useCredit($student_id, $lesson_id)) {
+            throw new Exception("Failed to deduct credit for lesson");
+        }
+    }
     
     // If trial, update trial_lessons table
     if ($is_trial) {

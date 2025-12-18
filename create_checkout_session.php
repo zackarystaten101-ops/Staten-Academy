@@ -148,6 +148,20 @@ if ($is_trial) {
     $mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
     $plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : null;
     $track = isset($_POST['track']) ? $_POST['track'] : null;
+    $payment_type = isset($_POST['payment_type']) ? $_POST['payment_type'] : 'plan'; // plan, gift_credit
+    $gift_recipient_email = isset($_POST['gift_recipient_email']) ? $_POST['gift_recipient_email'] : null;
+    
+    // Determine mode based on plan type if not explicitly set
+    if ($plan_id && $mode === 'payment') {
+        require_once __DIR__ . '/app/Models/SubscriptionPlan.php';
+        $planModel = new SubscriptionPlan($conn);
+        $plan = $planModel->getPlan($plan_id);
+        if ($plan && isset($plan['type'])) {
+            if ($plan['type'] === 'subscription') {
+                $mode = 'subscription';
+            }
+        }
+    }
 }
 
 // Store plan_id and track in session for success page
@@ -201,14 +215,98 @@ $data = [
     'cancel_url' => $domain . '/cancel.php',
 ];
 
-// Add metadata for trial lessons
+// Add metadata for checkout
+$metadata = [];
 if ($is_trial) {
-    $data['metadata'] = [
+    $metadata = [
         'type' => 'trial',
         'teacher_id' => (string)$teacher_id,
         'student_id' => (string)$_SESSION['user_id']
     ];
+} else {
+    // Get user's Stripe customer ID or create one
+    $user_id = $_SESSION['user_id'];
+    $user_stmt = $conn->prepare("SELECT email, stripe_customer_id FROM users WHERE id = ?");
+    $user_stmt->bind_param("i", $user_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user_data = $user_result->fetch_assoc();
+    $user_stmt->close();
+    
+    $customer_id = $user_data['stripe_customer_id'] ?? null;
+    
+    // If no customer ID, create one via Stripe API
+    if (empty($customer_id) && !empty($user_data['email'])) {
+        $ch = curl_init('https://api.stripe.com/v1/customers');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_USERPWD, STRIPE_SECRET_KEY . ':');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'email' => $user_data['email'],
+            'metadata' => [
+                'user_id' => (string)$user_id
+            ]
+        ]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
+        
+        $customer_response = curl_exec($ch);
+        $customer_http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($customer_http_code === 200) {
+            $customer_data = json_decode($customer_response, true);
+            if (isset($customer_data['id'])) {
+                $customer_id = $customer_data['id'];
+                // Store in database
+                $update_customer = $conn->prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?");
+                $update_customer->bind_param("si", $customer_id, $user_id);
+                $update_customer->execute();
+                $update_customer->close();
+            }
+        }
+    }
+    
+    // Build metadata
+    $metadata = [
+        'type' => $payment_type,
+        'student_id' => (string)$user_id
+    ];
+    
+    if ($plan_id) {
+        $metadata['plan_id'] = (string)$plan_id;
+    }
+    
+    if ($customer_id) {
+        $metadata['customer_id'] = $customer_id;
+    }
+    
+    if ($payment_type === 'gift_credit' && !empty($gift_recipient_email)) {
+        $metadata['recipient_email'] = $gift_recipient_email;
+        // Get credits amount from gift product
+        if ($plan_id) {
+            $gift_stmt = $conn->prepare("SELECT credits_amount FROM gift_credit_products WHERE id = ?");
+            $gift_stmt->bind_param("i", $plan_id);
+            $gift_stmt->execute();
+            $gift_result = $gift_stmt->get_result();
+            if ($gift_result->num_rows > 0) {
+                $gift_product = $gift_result->fetch_assoc();
+                $metadata['credits_amount'] = (string)$gift_product['credits_amount'];
+            }
+            $gift_stmt->close();
+        }
+    }
+    
+    // For subscriptions, add customer to checkout session
+    if ($mode === 'subscription' && $customer_id) {
+        $data['customer'] = $customer_id;
+        // Get subscription ID will be added by Stripe when subscription is created
+    } else if ($customer_id) {
+        // For one-time payments, set customer email
+        $data['customer_email'] = $user_data['email'];
+    }
 }
+
+$data['metadata'] = $metadata;
 
 // If it's a subscription plan (you can check price ID or pass a mode param)
 // For now, defaulting to 'payment' as requested for the $30 one-time.
