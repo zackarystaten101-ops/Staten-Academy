@@ -24,31 +24,48 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $teacher_id = intval($_POST['teacher_id'] ?? 0);
 $student_id = intval($_POST['student_id'] ?? 0);
 $lesson_date = $_POST['lesson_date'] ?? '';
-$lesson_time = $_POST['lesson_time'] ?? '';
-$duration = intval($_POST['duration'] ?? 60);
+$start_time = $_POST['start_time'] ?? $_POST['lesson_time'] ?? ''; // Support both field names
+$duration = intval($_POST['duration'] ?? 60); // Duration in minutes
 $category = $_POST['category'] ?? 'adults';
 $notes = $_POST['notes'] ?? '';
 
-if (!$teacher_id || !$student_id || !$lesson_date || !$lesson_time) {
+// Calculate end_time from start_time and duration
+if (empty($start_time)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Missing start_time or lesson_time field']);
+    exit();
+}
+
+if (!$teacher_id || !$student_id || !$lesson_date) {
     http_response_code(400);
     echo json_encode(['error' => 'Missing required fields']);
     exit();
 }
 
+// Validate category
+if (!in_array($category, ['young_learners', 'adults', 'coding'])) {
+    $category = null; // Allow NULL if invalid
+}
+
+// Calculate end_time
+$start_timestamp = strtotime($lesson_date . ' ' . $start_time);
+$end_timestamp = $start_timestamp + ($duration * 60);
+$end_time = date('H:i:s', $end_timestamp);
+
 $conn->begin_transaction();
 try {
-    // Check for conflicts
+    // Check for conflicts using start_time and end_time
     $conflict_check = $conn->prepare("
         SELECT id FROM lessons 
         WHERE teacher_id = ? 
         AND lesson_date = ? 
         AND status != 'cancelled'
         AND (
-            (lesson_time <= ? AND ADDTIME(lesson_time, SEC_TO_TIME(? * 60)) > ?)
-            OR (? <= lesson_time AND ADDTIME(?, SEC_TO_TIME(? * 60)) > lesson_time)
+            (start_time < ? AND end_time > ?)
+            OR (start_time < ? AND end_time > ?)
         )
     ");
-    $conflict_check->bind_param("isssssss", $teacher_id, $lesson_date, $lesson_time, $duration, $lesson_time, $lesson_time, $lesson_time, $duration);
+    $conflict_check->bind_param("isssss", $teacher_id, $lesson_date, $end_time, $start_time, $start_time, $end_time);
     $conflict_check->execute();
     $conflict_result = $conflict_check->get_result();
     
@@ -61,13 +78,30 @@ try {
     }
     $conflict_check->close();
     
-    // Create lesson
+    // Create lesson - use start_time and end_time instead of lesson_time and duration
+    $is_trial = 0; // Admin-created lessons are not trials
+    $wallet_transaction_id = null; // Admin-created lessons don't use wallet/credits
+    
     $insert_stmt = $conn->prepare("
-        INSERT INTO lessons (teacher_id, student_id, lesson_date, lesson_time, duration, category, notes, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', NOW())
+        INSERT INTO lessons (teacher_id, student_id, lesson_date, start_time, end_time, status, is_trial, wallet_transaction_id, category, student_notes)
+        VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
     ");
-    $insert_stmt->bind_param("iississ", $teacher_id, $student_id, $lesson_date, $lesson_time, $duration, $category, $notes);
-    $insert_stmt->execute();
+    
+    if (!$insert_stmt) {
+        throw new Exception("Failed to prepare statement: " . $conn->error);
+    }
+    
+    $bind_result = $insert_stmt->bind_param("iisssiss", $teacher_id, $student_id, $lesson_date, $start_time, $end_time, $is_trial, $wallet_transaction_id, $category, $notes);
+    
+    if (!$bind_result) {
+        throw new Exception("Failed to bind parameters: " . $insert_stmt->error);
+    }
+    
+    if (!$insert_stmt->execute()) {
+        error_log("Admin lesson creation failed - SQL Error: " . $insert_stmt->error . " | Teacher ID: $teacher_id | Student ID: $student_id | Date: $lesson_date | Start: $start_time");
+        throw new Exception("Failed to create lesson: " . $insert_stmt->error);
+    }
+    
     $lesson_id = $conn->insert_id;
     $insert_stmt->close();
     
@@ -79,7 +113,8 @@ try {
         'teacher_id' => $teacher_id,
         'student_id' => $student_id,
         'lesson_date' => $lesson_date,
-        'lesson_time' => $lesson_time,
+        'start_time' => $start_time,
+        'end_time' => $end_time,
         'duration' => $duration,
         'category' => $category
     ]);
@@ -96,9 +131,13 @@ try {
     
 } catch (Exception $e) {
     $conn->rollback();
-    error_log("Error creating lesson: " . $e->getMessage());
+    error_log("Admin lesson creation error: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
     http_response_code(500);
-    echo json_encode(['error' => 'Failed to create lesson']);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'error' => 'Failed to create lesson',
+        'details' => $e->getMessage() // Include actual error for debugging
+    ]);
 }
 
 
