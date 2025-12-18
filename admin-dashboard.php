@@ -2074,10 +2074,11 @@ if (!$applications) {
                                     <td>
                                         <?php 
                                         // Calculate duration from start_time and end_time
-                                        if (isset($lesson['start_time']) && isset($lesson['end_time']) && !empty($lesson['start_time']) && !empty($lesson['end_time'])) {
+                                        if (isset($lesson['start_time']) && isset($lesson['end_time']) && !empty($lesson['start_time']) && !empty($lesson['end_time']) && isset($lesson['lesson_date'])) {
                                             try {
-                                                $start_timestamp = strtotime($lesson['start_time']);
-                                                $end_timestamp = strtotime($lesson['end_time']);
+                                                // Combine lesson_date with time values for accurate calculation
+                                                $start_timestamp = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);
+                                                $end_timestamp = strtotime($lesson['lesson_date'] . ' ' . $lesson['end_time']);
                                                 // Handle case where end_time is next day (e.g., 23:00 to 01:00)
                                                 if ($end_timestamp < $start_timestamp) {
                                                     $end_timestamp += 86400; // Add 24 hours
