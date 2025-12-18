@@ -1627,15 +1627,25 @@ if (!$applications) {
                             </td>
                             <td data-label="Categories">
                                 <?php if ($u['role'] === 'teacher'): ?>
-                                    <?php if (!empty($categories)): ?>
-                                        <?php foreach ($categories as $cat): ?>
-                                            <span class="badge badge-info" style="margin-right: 5px;">
-                                                <?php echo ucfirst(str_replace('_', ' ', $cat)); ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <span style="color: #999;">Not assigned</span>
-                                    <?php endif; ?>
+                                    <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" 
+                                            class="btn-primary btn-sm" 
+                                            style="cursor: pointer; padding: 8px 16px; font-weight: 600; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s;"
+                                            onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)'"
+                                            onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'"
+                                            title="Click to manage teaching categories">
+                                        <i class="fas fa-tags"></i>
+                                        <?php if (!empty($categories)): ?>
+                                            <?php 
+                                            $category_labels = array_map(function($cat) {
+                                                $labels = ['young_learners' => 'Kids', 'adults' => 'Adults', 'coding' => 'Coding'];
+                                                return $labels[$cat] ?? ucfirst(str_replace('_', ' ', $cat));
+                                            }, $categories);
+                                            echo ' ' . implode(', ', $category_labels);
+                                            ?>
+                                        <?php else: ?>
+                                            <span>Assign Categories</span>
+                                        <?php endif; ?>
+                                    </button>
                                 <?php else: ?>
                                     <span style="color: #999;">N/A</span>
                                 <?php endif; ?>
@@ -1659,8 +1669,11 @@ if (!$applications) {
                                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                     <a href="profile.php?id=<?php echo $u['id']; ?>" class="btn-outline btn-sm">View</a>
                                     <?php if ($u['role'] === 'teacher'): ?>
-                                        <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" class="btn-outline btn-sm">
-                                            <i class="fas fa-tags"></i> Categories
+                                        <button onclick="showCategoryModal(<?php echo $u['id']; ?>, '<?php echo h($u['categories'] ?? ''); ?>')" 
+                                                class="btn-primary btn-sm" 
+                                                style="background: #667eea; color: white; border: none; font-weight: 600; padding: 8px 16px;"
+                                                title="Manage which categories this teacher can teach (Kids, Adults, Coding)">
+                                            <i class="fas fa-tags"></i> Manage Categories
                                         </button>
                                     <?php endif; ?>
                                     <?php if ($u['role'] === 'student' || $u['role'] === 'new_student'): ?>
@@ -1723,28 +1736,26 @@ if (!$applications) {
                             </div>
                         </td>
                         <td data-label="Email"><?php echo h($t['email']); ?></td>
-                        <td data-label="Categories">
+                            <td data-label="Categories">
                             <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" 
-                                    class="btn-outline btn-sm" 
-                                    style="width: 100%; justify-content: center; cursor: pointer; background: <?php echo !empty($categories) ? '#e7f3ff' : '#fff'; ?>; border-color: <?php echo !empty($categories) ? '#0b6cf5' : '#ddd'; ?>;"
+                                    class="btn-primary" 
+                                    style="width: 100%; cursor: pointer; padding: 10px 16px; font-weight: 600; font-size: 0.95rem; border: none; background: <?php echo !empty($categories) ? '#28a745' : '#ffc107'; ?>; color: white; border-radius: 6px; transition: all 0.2s;"
+                                    onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)'"
+                                    onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'"
                                     title="Click to manage teaching categories - Teachers with approved categories appear on category pages">
-                                <i class="fas fa-tags" style="color: <?php echo !empty($categories) ? '#0b6cf5' : '#999'; ?>;"></i>
+                                <i class="fas fa-tags"></i>
                                 <?php if (!empty($categories)): ?>
-                                    <span style="margin-left: 5px; font-weight: 500;">
+                                    <span style="margin-left: 8px;">
                                         <?php 
                                         $category_labels = array_map(function($cat) {
-                                            $labels = [
-                                                'young_learners' => 'Kids',
-                                                'adults' => 'Adults',
-                                                'coding' => 'Coding'
-                                            ];
+                                            $labels = ['young_learners' => 'Kids', 'adults' => 'Adults', 'coding' => 'Coding'];
                                             return $labels[$cat] ?? ucfirst(str_replace('_', ' ', $cat));
                                         }, $categories);
                                         echo implode(', ', $category_labels);
                                         ?>
                                     </span>
                                 <?php else: ?>
-                                    <span style="margin-left: 5px; color: #999; font-style: italic;">Click to Add</span>
+                                    <span style="margin-left: 8px;">Assign Categories</span>
                                 <?php endif; ?>
                             </button>
                         </td>
@@ -1761,6 +1772,12 @@ if (!$applications) {
                         <td data-label="Actions">
                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                                 <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
+                                <button onclick="showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>')" 
+                                        class="btn-primary btn-sm" 
+                                        style="background: #667eea; color: white; border: none; font-weight: 600;"
+                                        title="Manage which categories this teacher can teach">
+                                    <i class="fas fa-tags"></i> Categories
+                                </button>
                                 <button onclick="showRoleModal(<?php echo $t['id']; ?>, '<?php echo h($t['role']); ?>')" class="btn-outline btn-sm">
                                     <i class="fas fa-user-tag"></i> Role
                                 </button>
@@ -3211,13 +3228,14 @@ function updateCategoryBadge(checkbox, badgeId) {
 }
 
 function showCategoryModal(teacherId, currentCategories) {
+    console.log('showCategoryModal called with teacherId:', teacherId, 'currentCategories:', currentCategories);
     let modal = document.getElementById('categoryModal');
 
     // 1) Create the modal once if it doesn't exist yet
     if (!modal) {
         const modalHtml = `
-            <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
-                <div class="modal-content" style="background-color: #ffffff; margin: 3% auto; padding: 0; border: none; width: 90%; max-width: 700px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden;">
+            <div id="categoryModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);" onclick="if(event.target.id === 'categoryModal') closeCategoryModal();">
+                <div class="modal-content" style="background-color: #ffffff; margin: 3% auto; padding: 0; border: none; width: 90%; max-width: 700px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden;" onclick="event.stopPropagation();">
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px 30px; color: white;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
@@ -3373,13 +3391,29 @@ function showCategoryModal(teacherId, currentCategories) {
     // 4) Finally, show the modal
     if (modal) {
         modal.style.display = 'block';
+        console.log('Category modal displayed');
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+    } else {
+        console.error('Category modal element not found!');
+        alert('Error: Could not open category management modal. Please refresh the page and try again.');
     }
 }
 
 function closeCategoryModal() {
     const modal = document.getElementById('categoryModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto'; // Restore body scroll
+    }
 }
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeCategoryModal();
+    }
+});
 
 // Wallet Management Modal
 function showWalletModal(studentId, studentName, currentBalance) {
