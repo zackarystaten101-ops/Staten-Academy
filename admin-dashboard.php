@@ -2074,7 +2074,7 @@ if (!$applications) {
                                     <td>
                                         <?php 
                                         // Calculate duration from start_time and end_time
-                                        if (isset($lesson['start_time']) && isset($lesson['end_time']) && !empty($lesson['start_time']) && !empty($lesson['end_time']) && isset($lesson['lesson_date'])) {
+                                        if (isset($lesson['start_time']) && isset($lesson['end_time']) && !empty($lesson['start_time']) && !empty($lesson['end_time']) && isset($lesson['lesson_date']) && !empty($lesson['lesson_date'])) {
                                             try {
                                                 // Combine lesson_date with time values for accurate calculation
                                                 $start_timestamp = strtotime($lesson['lesson_date'] . ' ' . $lesson['start_time']);

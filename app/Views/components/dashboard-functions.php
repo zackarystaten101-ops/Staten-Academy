@@ -380,6 +380,11 @@ function getAssetPath($asset) {
         $assetPath = 'assets/' . $asset;
     }
     
+    // Check if public directory exists and use it (for production deployments)
+    if (is_dir(__DIR__ . '/../../public/assets')) {
+        return '/public/' . $assetPath;
+    }
+    
     // Get base path from REQUEST_URI - more reliable for subdirectories
     $requestUri = $_SERVER['REQUEST_URI'] ?? '';
     $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';

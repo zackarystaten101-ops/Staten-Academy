@@ -24,6 +24,10 @@ if (!function_exists('getAssetPath')) {
         } else {
             $assetPath = 'assets/' . $asset;
         }
+        // Check if public directory exists and use it
+        if (is_dir(__DIR__ . '/public/assets')) {
+            return '/public/' . $assetPath;
+        }
         return '/' . $assetPath;
     }
 }
