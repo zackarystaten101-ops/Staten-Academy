@@ -675,14 +675,35 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 }
 
 // Add columns to users table for Google Calendar integration if they don't exist
-if (!in_array('google_calendar_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
-if (!in_array('google_calendar_token_expiry', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
-if (!in_array('google_calendar_refresh_token', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+// Refresh existing_cols array to account for any columns added earlier
+$cols_refresh = $conn->query("SHOW COLUMNS FROM users");
+$existing_cols_refresh = [];
+if ($cols_refresh) {
+    while($row = $cols_refresh->fetch_assoc()) { 
+        $existing_cols_refresh[] = $row['Field']; 
+    }
+}
+
+if (!in_array('google_calendar_token', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
+}
+if (!in_array('google_calendar_token_expiry', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
+}
+if (!in_array('google_calendar_refresh_token', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+}
 
 // Add timezone support columns to users table
-if (!in_array('timezone', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN timezone VARCHAR(255) DEFAULT 'UTC' AFTER google_calendar_refresh_token");
-if (!in_array('timezone_auto_detected', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN timezone_auto_detected BOOLEAN DEFAULT FALSE AFTER timezone");
-if (!in_array('booking_notice_hours', $existing_cols)) $conn->query("ALTER TABLE users ADD COLUMN booking_notice_hours INT DEFAULT 24 AFTER timezone_auto_detected");
+if (!in_array('timezone', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN timezone VARCHAR(255) DEFAULT 'UTC' AFTER google_calendar_refresh_token");
+}
+if (!in_array('timezone_auto_detected', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN timezone_auto_detected BOOLEAN DEFAULT FALSE AFTER timezone");
+}
+if (!in_array('booking_notice_hours', $existing_cols_refresh)) {
+    $conn->query("ALTER TABLE users ADD COLUMN booking_notice_hours INT DEFAULT 24 AFTER timezone_auto_detected");
+}
 
 // Create reviews table (for teacher reviews by students)
 // Drop existing table if it has bad foreign keys
