@@ -1,335 +1,345 @@
+/**
+ * Polling Manager for WebRTC Signaling
+ * Polls the backend API for new signaling messages and handles WebRTC communication
+ */
+
 export interface PollingMessage {
   type: string;
-  [key: string]: any;
+  userId?: string;
+  targetUserId?: string;
+  data?: any;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+  timestamp?: number;
 }
 
 export class PollingManager {
-  private pollingInterval: number = 2000; // 2 seconds for better real-time performance
-  private pollingTimer: NodeJS.Timeout | null = null;
-  private url: string;
   private userId: string = '';
   private sessionId: string = '';
-  private userRole: string = '';
-  private userName: string = '';
+  private pollingInterval: number = 1000; // Poll every 1 second
+  private pollTimer: NodeJS.Timeout | null = null;
   private lastCheck: number = 0;
-  private listeners: Map<string, Set<(data: any) => void>> = new Map();
-  private messageQueue: PollingMessage[] = [];
+  private eventHandlers: Map<string, Array<(data: any) => void>> = new Map();
   private isConnected: boolean = false;
+  private messageQueue: PollingMessage[] = [];
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
-  private sendQueue: Array<{ type: string; data: any }> = [];
-  private isPolling: boolean = false; // Prevent concurrent polls
+  private reconnectDelay: number = 2000; // Start with 2 seconds
 
-  constructor(url: string = '/api/polling.php') {
-    this.url = url;
+  constructor() {
+    // Initialize event handlers map
+    this.eventHandlers.set('webrtc-offer', []);
+    this.eventHandlers.set('webrtc-answer', []);
+    this.eventHandlers.set('webrtc-ice-candidate', []);
+    this.eventHandlers.set('whiteboard-operation', []);
+    this.eventHandlers.set('cursor-move', []);
+    this.eventHandlers.set('user-joined', []);
+    this.eventHandlers.set('user-left', []);
   }
 
-  connect(userId: string, sessionId: string, userRole: string, userName: string, token?: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.userId = userId;
-      this.sessionId = sessionId;
-      this.userRole = userRole;
-      this.userName = userName;
-      this.lastCheck = Date.now();
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
+  /**
+   * Connect to polling service
+   */
+  async connect(
+    userId: string,
+    sessionId: string,
+    userRole: string,
+    userName: string,
+    onConnect?: () => void
+  ): Promise<void> {
+    this.userId = userId;
+    this.sessionId = sessionId;
+    this.isConnected = true;
+    this.lastCheck = Date.now();
 
-      // Start polling
-      this.startPolling();
-      
-      // Process any queued messages
-      this.processSendQueue();
-
-      resolve();
-    });
-  }
-
-  private startPolling() {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
+    // Re-initialize event handlers if they were cleared (e.g., after disconnect)
+    if (this.eventHandlers.size === 0) {
+      this.eventHandlers.set('webrtc-offer', []);
+      this.eventHandlers.set('webrtc-answer', []);
+      this.eventHandlers.set('webrtc-ice-candidate', []);
+      this.eventHandlers.set('whiteboard-operation', []);
+      this.eventHandlers.set('cursor-move', []);
+      this.eventHandlers.set('user-joined', []);
+      this.eventHandlers.set('user-left', []);
     }
 
-    this.pollingTimer = setInterval(() => {
+    // Start polling
+    this.startPolling();
+
+    // Process any queued messages
+    this.processMessageQueue();
+
+    if (onConnect) {
+      onConnect();
+    }
+
+    return Promise.resolve();
+  }
+
+  /**
+   * Start polling for messages
+   */
+  private startPolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+    }
+
+    this.pollTimer = setInterval(() => {
       this.poll();
     }, this.pollingInterval);
   }
 
-  private async poll() {
-    if (!this.isConnected || !this.sessionId || !this.userId || this.isPolling) {
+  /**
+   * Poll for new messages
+   */
+  private async poll(): Promise<void> {
+    if (!this.isConnected || !this.sessionId) {
       return;
     }
 
-    this.isPolling = true;
-
     try {
-      const url = `${this.url}?sessionId=${encodeURIComponent(this.sessionId)}&userId=${encodeURIComponent(this.userId)}&lastCheck=${this.lastCheck}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await fetch(
+        `/api/polling.php?sessionId=${encodeURIComponent(this.sessionId)}&lastCheck=${this.lastCheck}`
+      );
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          this.isConnected = false;
-          this.handleDisconnect();
-          this.isPolling = false;
+        if (response.status === 403 || response.status === 404) {
+          // Session invalid, stop polling
+          this.disconnect();
           return;
         }
-        throw new Error(`Polling failed: ${response.status}`);
+        throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      
+
       if (data.success && data.messages) {
         this.lastCheck = data.timestamp || Date.now();
-        
-        // Process messages immediately
-        if (data.messages.length > 0) {
-          data.messages.forEach((message: any) => {
-            this.handleMessage(message);
-          });
-        }
+        this.processMessages(data.messages);
+        this.reconnectAttempts = 0; // Reset on successful poll
       }
-
-      this.reconnectAttempts = 0; // Reset on successful poll
     } catch (error) {
       console.error('Polling error:', error);
-      this.reconnectAttempts++;
-      
-      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        this.isConnected = false;
-        this.handleDisconnect();
-      }
-    } finally {
-      this.isPolling = false;
+      this.handlePollingError();
     }
   }
 
-  private handleMessage(message: PollingMessage) {
-    // Handle different message types
-    if (message.type === 'webrtc-offer') {
-      // Extract offer from data - message_data is stored as {"offer": {...}}
-      // So message.data will be {offer: {...}}
-      const offerData = message.data?.offer || message.data;
-      if (offerData && (offerData.type === 'offer' || offerData.sdp)) {
-        console.log('Received WebRTC offer from user:', message.userId);
-        this.notifyListeners('webrtc-offer', {
-          userId: String(message.userId || message.from_user_id || ''),
-          offer: offerData
-        });
-      } else {
-        console.warn('Invalid offer data received:', message);
-      }
-    } else if (message.type === 'webrtc-answer') {
-      const answerData = message.data?.answer || message.data;
-      if (answerData && (answerData.type === 'answer' || answerData.sdp)) {
-        console.log('Received WebRTC answer from user:', message.userId);
-        this.notifyListeners('webrtc-answer', {
-          userId: String(message.userId || message.from_user_id || ''),
-          answer: answerData
-        });
-      } else {
-        console.warn('Invalid answer data received:', message);
-      }
-    } else if (message.type === 'webrtc-ice-candidate') {
-      const candidateData = message.data?.candidate || message.data;
-      if (candidateData && (candidateData.candidate || candidateData.sdpMLineIndex !== undefined)) {
-        this.notifyListeners('webrtc-ice-candidate', {
-          userId: String(message.userId || message.from_user_id || ''),
-          candidate: candidateData
-        });
-      } else {
-        console.warn('Invalid ICE candidate data received:', message);
-      }
-    } else if (message.type === 'whiteboard-operation') {
-      this.notifyListeners('whiteboard-operation', {
-        userId: message.userId,
-        operation: message.operation,
-        ...message
-      });
-    } else if (message.type === 'cursor-move') {
-      this.notifyListeners('cursor-move', {
-        userId: message.userId,
-        userName: message.userName,
-        x: message.x,
-        y: message.y
-      });
-    } else if (message.type === 'user-joined') {
-      this.notifyListeners('user-joined', message);
-    } else if (message.type === 'user-left') {
-      this.notifyListeners('user-left', message);
-    }
+  /**
+   * Process incoming messages
+   */
+  private processMessages(messages: any[]): void {
+    for (const message of messages) {
+      const messageType = message.type || message.messageType;
 
-    // Also notify 'message' listeners for all messages
-    this.notifyListeners('message', message);
-  }
-
-  private notifyListeners(event: string, data: any) {
-    const listeners = this.listeners.get(event);
-    if (listeners) {
-      listeners.forEach(listener => {
-        try {
-          listener(data);
-        } catch (error) {
-          console.error('Error in polling listener:', error);
-        }
-      });
+      // Handle WebRTC messages
+      if (messageType === 'webrtc-offer') {
+        this.emit('webrtc-offer', {
+          userId: message.userId || message.fromUserId,
+          offer: message.data?.offer || message.offer
+        });
+      } else if (messageType === 'webrtc-answer') {
+        this.emit('webrtc-answer', {
+          userId: message.userId || message.fromUserId,
+          answer: message.data?.answer || message.answer
+        });
+      } else if (messageType === 'webrtc-ice-candidate') {
+        this.emit('webrtc-ice-candidate', {
+          userId: message.userId || message.fromUserId,
+          candidate: message.data?.candidate || message.candidate
+        });
+      } else if (messageType === 'whiteboard-operation') {
+        this.emit('whiteboard-operation', {
+          userId: message.userId,
+          operation: message.operation || message.data
+        });
+      } else if (messageType === 'cursor-move') {
+        this.emit('cursor-move', {
+          userId: message.userId,
+          x: message.x,
+          y: message.y
+        });
+      } else if (messageType === 'user-joined') {
+        this.emit('user-joined', {
+          userId: message.userId,
+          userName: message.userName,
+          userRole: message.userRole
+        });
+      } else if (messageType === 'user-left') {
+        this.emit('user-left', {
+          userId: message.userId
+        });
+      }
     }
   }
 
-  send(message: PollingMessage) {
-    if (!this.isConnected) {
-      // Queue message for when connection is established
-      this.sendQueue.push({ type: message.type, data: message });
+  /**
+   * Send a message via polling API
+   */
+  async send(message: PollingMessage): Promise<void> {
+    if (!this.isConnected || !this.sessionId) {
+      // Queue message for later
+      this.messageQueue.push(message);
       return;
     }
 
-    // Send immediately via appropriate API endpoint
-    this.sendMessage(message);
-  }
-
-  private async sendMessage(message: PollingMessage) {
     try {
-      if (message.type === 'webrtc-offer') {
-        const response = await fetch('/api/webrtc.php?action=offer', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: this.sessionId,
-            targetUserId: message.targetUserId,
-            offer: message.offer
-          })
-        });
-        // Trigger immediate poll after sending critical signaling message
-        if (response.ok) {
-          setTimeout(() => this.poll(), 100);
+      // Determine message type and format
+      let action = '';
+      let payload: any = {
+        sessionId: this.sessionId,
+        action: ''
+      };
+
+      if (message.type === 'webrtc-offer' || message.type === 'webrtc-answer' || message.type === 'webrtc-ice-candidate') {
+        // Validate targetUserId is provided
+        if (!message.targetUserId) {
+          console.error(`Cannot send ${message.type}: targetUserId is required`);
+          throw new Error(`targetUserId is required for ${message.type}`);
         }
-      } else if (message.type === 'webrtc-answer') {
-        const response = await fetch('/api/webrtc.php?action=answer', {
+
+        // Send WebRTC signaling via polling.php POST endpoint
+        // The backend will handle storing in signaling_queue table
+        const response = await fetch('/api/polling.php', {
           method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             sessionId: this.sessionId,
-            targetUserId: message.targetUserId,
-            answer: message.answer
+            action: 'signaling',
+            toUserId: message.targetUserId,
+            messageType: message.type,
+            messageData: message.offer || message.answer || message.candidate
           })
         });
-        // Trigger immediate poll after sending critical signaling message
-        if (response.ok) {
-          setTimeout(() => this.poll(), 100);
+
+        if (!response.ok) {
+          throw new Error(`Failed to send ${message.type}`);
         }
-      } else if (message.type === 'webrtc-ice-candidate') {
-        const response = await fetch('/api/webrtc.php?action=ice-candidate', {
+      } else if (message.type === 'whiteboard-operation' || message.type === 'cursor-move') {
+        // Send whiteboard operations
+        const response = await fetch('/api/polling.php', {
           method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             sessionId: this.sessionId,
-            targetUserId: message.targetUserId,
-            candidate: message.candidate
+            action: message.type,
+            operation: message.data || message
           })
         });
-        // Trigger immediate poll after sending critical signaling message
-        if (response.ok) {
-          setTimeout(() => this.poll(), 100);
+
+        if (!response.ok) {
+          throw new Error(`Failed to send ${message.type}`);
         }
-      } else if (message.type === 'whiteboard-operation') {
-        // Store whiteboard operation in queue
-        await fetch('/api/polling.php', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'whiteboard-operation',
-            sessionId: this.sessionId,
-            operation: message.operation
-          })
-        });
-      } else if (message.type === 'cursor-move') {
-        // Store cursor move in queue (throttled - don't poll immediately)
-        await fetch('/api/polling.php', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'cursor-move',
-            sessionId: this.sessionId,
-            x: message.x,
-            y: message.y
-          })
-        });
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Queue message for retry
+      this.messageQueue.push(message);
     }
   }
 
-  private async processSendQueue() {
-    while (this.sendQueue.length > 0 && this.isConnected) {
-      const message = this.sendQueue.shift();
-      if (message) {
-        await this.sendMessage(message as PollingMessage);
+  /**
+   * Process queued messages
+   */
+  private processMessageQueue(): void {
+    if (this.messageQueue.length === 0) {
+      return;
+    }
+
+    const messages = [...this.messageQueue];
+    this.messageQueue = [];
+
+    for (const message of messages) {
+      this.send(message).catch(error => {
+        console.error('Error processing queued message:', error);
+        // Re-queue if still not connected
+        if (!this.isConnected) {
+          this.messageQueue.push(message);
+        }
+      });
+    }
+  }
+
+  /**
+   * Register event handler
+   */
+  on(event: string, handler: (data: any) => void): void {
+    if (!this.eventHandlers.has(event)) {
+      this.eventHandlers.set(event, []);
+    }
+    this.eventHandlers.get(event)!.push(handler);
+  }
+
+  /**
+   * Remove event handler
+   */
+  off(event: string, handler: (data: any) => void): void {
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
       }
     }
   }
 
-  on(event: string, callback: (data: any) => void) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+  /**
+   * Emit event to handlers
+   */
+  private emit(event: string, data: any): void {
+    const handlers = this.eventHandlers.get(event);
+    if (handlers) {
+      handlers.forEach(handler => {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`Error in event handler for ${event}:`, error);
+        }
+      });
     }
-    this.listeners.get(event)!.add(callback);
   }
 
-  off(event: string, callback?: (data: any) => void) {
-    if (!this.listeners.has(event)) {
+  /**
+   * Handle polling errors with exponential backoff
+   */
+  private handlePollingError(): void {
+    this.reconnectAttempts++;
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('Max reconnect attempts reached. Stopping polling.');
+      this.disconnect();
       return;
     }
 
-    if (callback) {
-      this.listeners.get(event)!.delete(callback);
-    } else {
-      this.listeners.delete(event);
-    }
+    // Exponential backoff
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    
+    setTimeout(() => {
+      if (this.isConnected) {
+        this.startPolling();
+      }
+    }, delay);
   }
 
-  disconnect() {
+  /**
+   * Disconnect from polling service
+   */
+  disconnect(): void {
     this.isConnected = false;
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
+
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     }
-    this.listeners.clear();
+
+    // Clear event handlers
+    this.eventHandlers.clear();
+
+    // Clear message queue
     this.messageQueue = [];
-    this.sendQueue = [];
-  }
-
-  isConnected(): boolean {
-    return this.isConnected;
-  }
-
-  private handleDisconnect() {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-
-    // Attempt reconnection with exponential backoff
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-      console.log(`Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`);
-      
-      setTimeout(() => {
-        if (this.userId && this.sessionId) {
-          this.connect(this.userId, this.sessionId, this.userRole, this.userName)
-            .catch(console.error);
-        }
-      }, delay);
-    }
   }
 }
-

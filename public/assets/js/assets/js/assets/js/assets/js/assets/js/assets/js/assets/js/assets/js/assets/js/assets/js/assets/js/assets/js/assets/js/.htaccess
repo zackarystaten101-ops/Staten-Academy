@@ -1,0 +1,30 @@
+# Public Directory - Apache Configuration
+# This is the web root for clean architecture
+
+# Enable Rewrite Engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # Redirect all requests to index.php except for existing files
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Security: Prevent directory listing
+Options -Indexes
+
+# Security: Prevent access to sensitive files
+<FilesMatch "\.(env|log|ini|conf|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Allow access to assets
+<IfModule mod_headers.c>
+    # Cache static assets
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=31536000"
+    </FilesMatch>
+</IfModule>

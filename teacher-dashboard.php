@@ -67,14 +67,23 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Get teacher's categories
+// Get teacher's categories with approval status
 $teacher_categories = [];
-$stmt = $conn->prepare("SELECT category FROM teacher_categories WHERE teacher_id = ? AND is_active = 1");
+$teacher_categories_all = []; // All categories including inactive
+$stmt = $conn->prepare("SELECT category, is_active, approved_by, approved_at FROM teacher_categories WHERE teacher_id = ? ORDER BY category");
 $stmt->bind_param("i", $teacher_id);
 $stmt->execute();
 $cat_result = $stmt->get_result();
 while ($row = $cat_result->fetch_assoc()) {
-    $teacher_categories[] = $row['category'];
+    if ($row['is_active']) {
+        $teacher_categories[] = $row['category'];
+    }
+    $teacher_categories_all[] = [
+        'category' => $row['category'],
+        'is_active' => (bool)$row['is_active'],
+        'approved_by' => $row['approved_by'],
+        'approved_at' => $row['approved_at']
+    ];
 }
 $stmt->close();
 

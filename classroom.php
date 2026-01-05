@@ -312,11 +312,11 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
         ></div>
         
         <!-- Load React Bundle -->
-        <script type="module" src="<?php echo getAssetPath('js/classroom.bundle.js'); ?>"></script>
+        <script type="module" src="<?php echo getAssetPath('js/build/classroom.bundle.js'); ?>"></script>
         <script>
             // Fallback if bundle fails to load
             window.addEventListener('error', function(e) {
-                if (e.target && e.target.tagName === 'SCRIPT' && e.target.src && e.target.src.includes('classroom.bundle.js')) {
+                if (e.target && e.target.tagName === 'SCRIPT' && e.target.src && (e.target.src.includes('classroom.bundle.js') || e.target.src.includes('build/classroom.bundle.js'))) {
                     const rootElement = document.getElementById('classroom-root');
                     if (rootElement) {
                         rootElement.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; padding: 20px; text-align: center;"><h2 style="color: #004080; margin-bottom: 15px;">Classroom Loading Error</h2><p style="color: #666; margin-bottom: 20px;">The classroom application failed to load. Please refresh the page or contact support if the problem persists.</p><button onclick="location.reload()" style="background: #0b6cf5; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Refresh Page</button></div>';

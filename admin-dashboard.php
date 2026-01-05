@@ -314,9 +314,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['manage_section_approv
         $stmt->execute();
         $stmt->close();
         
-        // Add approved categories
+        // Add approved categories with approval tracking
         foreach ($categories_to_add as $category) {
-            $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category, is_active) VALUES (?, ?, TRUE)");
+            // Check if category already exists
+            $check_stmt = $conn->prepare("SELECT id FROM teacher_categories WHERE teacher_id = ? AND category = ?");
+            $check_stmt->bind_param("is", $teacher_id, $category);
+            $check_stmt->execute();
+            $exists = $check_stmt->get_result()->num_rows > 0;
+            $check_stmt->close();
+            
+            if ($exists) {
+                // Update existing category to active and record approval
+                $stmt = $conn->prepare("UPDATE teacher_categories SET is_active = TRUE, approved_by = ?, approved_at = NOW() WHERE teacher_id = ? AND category = ?");
+                $stmt->bind_param("iis", $admin_id, $teacher_id, $category);
+            } else {
+                // Insert new category with approval tracking
+                $stmt = $conn->prepare("INSERT INTO teacher_categories (teacher_id, category, is_active, approved_by, approved_at) VALUES (?, ?, TRUE, ?, NOW())");
+                $stmt->bind_param("isi", $teacher_id, $category, $admin_id);
+            }
+            $stmt->execute();
+            $stmt->close();
+        }
+        
+        // Deactivate categories that were unchecked
+        $all_categories = ['young_learners', 'adults', 'coding'];
+        $categories_to_deactivate = array_diff($all_categories, $categories_to_add);
+        foreach ($categories_to_deactivate as $category) {
+            $stmt = $conn->prepare("UPDATE teacher_categories SET is_active = FALSE WHERE teacher_id = ? AND category = ?");
             $stmt->bind_param("is", $teacher_id, $category);
             $stmt->execute();
             $stmt->close();

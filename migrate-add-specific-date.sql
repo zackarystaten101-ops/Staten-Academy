@@ -15,3 +15,7 @@ ADD UNIQUE KEY unique_teacher_slot (teacher_id, day_of_week, specific_date, star
 
 
 
+
+
+
+

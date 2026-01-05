@@ -5,15 +5,26 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'public/assets/js',
+    // Use a build subdirectory to avoid conflicts with existing assets structure
+    outDir: 'public/assets/js/build',
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         classroom: path.resolve(__dirname, 'src/classroom.tsx')
       },
       output: {
+        // Output bundle directly in build directory, not in nested assets/
         entryFileNames: '[name].bundle.js',
-        chunkFileNames: 'chunks/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]',
+        chunkFileNames: '[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          // Put all assets directly in build directory, no nested assets/ folder
+          const ext = assetInfo.name?.split('.').pop() || 'bin';
+          if (ext === 'css') {
+            return 'classroom.[hash].css';
+          }
+          // Images and other assets go directly in build dir
+          return '[name]-[hash].[ext]';
+        },
         format: 'iife',
         name: 'ClassroomApp'
       }
@@ -39,6 +50,10 @@ export default defineConfig({
     }
   }
 });
+
+
+
+
 
 
 

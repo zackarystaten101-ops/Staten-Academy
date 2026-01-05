@@ -227,7 +227,54 @@ function handlePost($conn, $userId) {
     }
     $stmt->close();
 
-    if ($action === 'whiteboard-operation') {
+    if ($action === 'signaling') {
+        // Handle WebRTC signaling messages (offer, answer, ICE candidate)
+        $toUserId = $data['toUserId'] ?? 0;
+        $messageType = $data['messageType'] ?? '';
+        $messageData = $data['messageData'] ?? null;
+        
+        if (!$toUserId || !$messageType || !$messageData) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing required signaling fields']);
+            return;
+        }
+        
+        // Get session participants to determine from_user_id
+        $session_stmt = $conn->prepare("
+            SELECT teacher_id, student_id FROM video_sessions 
+            WHERE session_id = ? AND status = 'active'
+        ");
+        $session_stmt->bind_param("s", $sessionId);
+        $session_stmt->execute();
+        $session_result = $session_stmt->get_result();
+        $session = $session_result->fetch_assoc();
+        $session_stmt->close();
+        
+        if (!$session) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Session not found']);
+            return;
+        }
+        
+        $fromUserId = $userId;
+        $messageDataJson = json_encode($messageData);
+        
+        // Insert into signaling_queue
+        $stmt = $conn->prepare("
+            INSERT INTO signaling_queue (session_id, from_user_id, to_user_id, message_type, message_data)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->bind_param("siiss", $sessionId, $fromUserId, $toUserId, $messageType, $messageDataJson);
+        
+        if ($stmt->execute()) {
+            $stmt->close();
+            echo json_encode(['success' => true]);
+        } else {
+            $stmt->close();
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to store signaling message']);
+        }
+    } else if ($action === 'whiteboard-operation') {
         $operation = $data['operation'] ?? null;
         if (!$operation) {
             http_response_code(400);

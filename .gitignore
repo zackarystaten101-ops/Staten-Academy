@@ -11,6 +11,16 @@ dist/
 build/
 backend/dist/
 
+# Prevent recursive nested assets directories from Vite builds
+# These are created by Vite when outDir conflicts with existing structure
+public/assets/js/assets/
+public/assets/js/**/assets/
+**/assets/js/assets/
+
+# Exclude all nested .htaccess files in assets/js/assets paths
+public/assets/js/assets/**/.htaccess
+**/assets/js/assets/**/.htaccess
+
 # IDE
 .vscode/
 .idea/

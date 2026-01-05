@@ -61,7 +61,8 @@ try {
         'teacher_id' => $lesson['teacher_id'],
         'student_id' => $lesson['student_id'],
         'lesson_date' => $lesson['lesson_date'],
-        'lesson_time' => $lesson['lesson_time']
+        'start_time' => $lesson['start_time'] ?? $lesson['lesson_time'] ?? null,
+        'end_time' => $lesson['end_time'] ?? null
     ]);
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     $admin_id = $_SESSION['user_id'];
@@ -80,6 +81,10 @@ try {
     http_response_code(500);
     echo json_encode(['error' => 'Failed to cancel lesson']);
 }
+
+
+
+
 
 
 

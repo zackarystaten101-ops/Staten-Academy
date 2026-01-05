@@ -430,15 +430,41 @@ $sql = "CREATE TABLE IF NOT EXISTS teacher_categories (
     teacher_id INT(6) UNSIGNED NOT NULL,
     category ENUM('young_learners', 'adults', 'coding') NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
+    approved_by INT(6) UNSIGNED NULL,
+    approved_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_teacher_category (teacher_id, category),
     INDEX idx_teacher (teacher_id),
     INDEX idx_category (category),
     INDEX idx_active (is_active),
-    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_approved_by (approved_by),
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 $conn->query($sql);
+
+// Add approved_by and approved_at columns if they don't exist (migration)
+$cols = $conn->query("SHOW COLUMNS FROM teacher_categories");
+$existing_cols = [];
+if ($cols) {
+    while($row = $cols->fetch_assoc()) { 
+        $existing_cols[] = $row['Field']; 
+    }
+}
+
+if (!in_array('approved_by', $existing_cols)) {
+    $conn->query("ALTER TABLE teacher_categories ADD COLUMN approved_by INT(6) UNSIGNED NULL AFTER is_active");
+    $conn->query("ALTER TABLE teacher_categories ADD INDEX idx_approved_by (approved_by)");
+    $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='teacher_categories' AND COLUMN_NAME='approved_by' AND REFERENCED_TABLE_NAME='users'");
+    if (!$fk_check || $fk_check->num_rows == 0) {
+        $conn->query("ALTER TABLE teacher_categories ADD CONSTRAINT fk_teacher_categories_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL");
+    }
+}
+
+if (!in_array('approved_at', $existing_cols)) {
+    $conn->query("ALTER TABLE teacher_categories ADD COLUMN approved_at TIMESTAMP NULL AFTER approved_by");
+}
 
 // =====================================================
 // STUDENT_WALLET TABLE
