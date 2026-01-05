@@ -675,35 +675,43 @@ if (!$fk_check || $fk_check->num_rows == 0) {
 }
 
 // Add columns to users table for Google Calendar integration if they don't exist
-// Refresh existing_cols array to account for any columns added earlier
-$cols_refresh = $conn->query("SHOW COLUMNS FROM users");
-$existing_cols_refresh = [];
-if ($cols_refresh) {
-    while($row = $cols_refresh->fetch_assoc()) { 
-        $existing_cols_refresh[] = $row['Field']; 
+// Use INFORMATION_SCHEMA for reliable column existence checking
+if (!function_exists('columnExists')) {
+    function columnExists($conn, $table, $column) {
+        $stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS 
+                                WHERE TABLE_SCHEMA = DATABASE() 
+                                AND TABLE_NAME = ? 
+                                AND COLUMN_NAME = ?");
+        if (!$stmt) return false;
+        $stmt->bind_param("ss", $table, $column);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        return ($row && $row['cnt'] > 0);
     }
 }
 
-if (!in_array('google_calendar_token', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
-}
-if (!in_array('google_calendar_token_expiry', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
-}
-if (!in_array('google_calendar_refresh_token', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+// Helper function to safely add column with error handling
+function safeAddColumn($conn, $table, $column, $definition) {
+    if (!columnExists($conn, $table, $column)) {
+        $result = @$conn->query($definition);
+        if (!$result && $conn->errno != 1060) { // 1060 = Duplicate column name
+            error_log("Failed to add column $column to $table: " . $conn->error);
+        }
+        return $result;
+    }
+    return true;
 }
 
+safeAddColumn($conn, 'users', 'google_calendar_token', "ALTER TABLE users ADD COLUMN google_calendar_token LONGTEXT AFTER video_url");
+safeAddColumn($conn, 'users', 'google_calendar_token_expiry', "ALTER TABLE users ADD COLUMN google_calendar_token_expiry DATETIME AFTER google_calendar_token");
+safeAddColumn($conn, 'users', 'google_calendar_refresh_token', "ALTER TABLE users ADD COLUMN google_calendar_refresh_token LONGTEXT AFTER google_calendar_token_expiry");
+
 // Add timezone support columns to users table
-if (!in_array('timezone', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN timezone VARCHAR(255) DEFAULT 'UTC' AFTER google_calendar_refresh_token");
-}
-if (!in_array('timezone_auto_detected', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN timezone_auto_detected BOOLEAN DEFAULT FALSE AFTER timezone");
-}
-if (!in_array('booking_notice_hours', $existing_cols_refresh)) {
-    $conn->query("ALTER TABLE users ADD COLUMN booking_notice_hours INT DEFAULT 24 AFTER timezone_auto_detected");
-}
+safeAddColumn($conn, 'users', 'timezone', "ALTER TABLE users ADD COLUMN timezone VARCHAR(255) DEFAULT 'UTC' AFTER google_calendar_refresh_token");
+safeAddColumn($conn, 'users', 'timezone_auto_detected', "ALTER TABLE users ADD COLUMN timezone_auto_detected BOOLEAN DEFAULT FALSE AFTER timezone");
+safeAddColumn($conn, 'users', 'booking_notice_hours', "ALTER TABLE users ADD COLUMN booking_notice_hours INT DEFAULT 24 AFTER timezone_auto_detected");
 
 // Create reviews table (for teacher reviews by students)
 // Drop existing table if it has bad foreign keys
