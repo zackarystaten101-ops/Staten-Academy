@@ -41,6 +41,23 @@ if (defined('APP_DEBUG') && APP_DEBUG === true) {
 // Load database connection
 require_once __DIR__ . '/db.php';
 
+// Ensure getAssetPath function is available early
+if (!function_exists('getAssetPath')) {
+    if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
+        require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+    } else {
+        function getAssetPath($asset) {
+            $asset = ltrim($asset, '/');
+            if (strpos($asset, 'assets/') === 0) {
+                $assetPath = $asset;
+            } else {
+                $assetPath = 'assets/' . $asset;
+            }
+            return '/' . $assetPath;
+        }
+    }
+}
+
 // Check if database connection is successful
 if (!isset($conn) || $conn->connect_error) {
     die("Database connection failed. Please check your database configuration.");
@@ -175,22 +192,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Sign Up - Staten Academy</title>
     <?php
-    // Ensure getAssetPath is available
-    if (!function_exists('getAssetPath')) {
-        if (file_exists(__DIR__ . '/app/Views/components/dashboard-functions.php')) {
-            require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
-        } else {
-            function getAssetPath($asset) {
-                $asset = ltrim($asset, '/');
-                if (strpos($asset, 'assets/') === 0) {
-                    $assetPath = $asset;
-                } else {
-                    $assetPath = 'assets/' . $asset;
-                }
-                return '/' . $assetPath;
-            }
-        }
-    }
     ?>
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
