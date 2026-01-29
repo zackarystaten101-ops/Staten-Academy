@@ -1599,7 +1599,7 @@ $active_tab = 'overview';
                         $lesson_check->execute();
                         $has_lessons = $lesson_check->get_result()->num_rows > 0;
                         $lesson_check->close();
-                        
+                        ?>
                         <a href="message_threads.php?user_id=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Message</a>
                     </div>
                 </div>
