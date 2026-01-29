@@ -84,16 +84,18 @@ class ProgressService {
         $assign_stmt->close();
         
         // Calculate learning streak (consecutive days with activity)
-        $streak_sql = "SELECT COUNT(DISTINCT DATE(created_at)) as streak_days
+        // Use appropriate date columns for each table
+        // Note: Using lesson_date for lessons, and checking for available date columns in other tables
+        $streak_sql = "SELECT COUNT(DISTINCT DATE(activity_date)) as streak_days
                       FROM (
-                          SELECT created_at FROM lessons WHERE student_id = ? AND status = 'completed'
-                          UNION
-                          SELECT created_at FROM user_course_progress WHERE user_id = ? AND progress_percentage > 0
-                          UNION
-                          SELECT created_at FROM assignments WHERE student_id = ? AND status IN ('completed', 'graded')
+                          SELECT lesson_date as activity_date FROM lessons WHERE student_id = ? AND status = 'completed' AND lesson_date IS NOT NULL
+                          UNION ALL
+                          SELECT updated_at as activity_date FROM user_course_progress WHERE user_id = ? AND progress_percentage > 0 AND updated_at IS NOT NULL
+                          UNION ALL
+                          SELECT created_at as activity_date FROM assignments WHERE student_id = ? AND status IN ('completed', 'graded') AND created_at IS NOT NULL
                       ) as activities
-                      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                      ORDER BY created_at DESC";
+                      WHERE activity_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                      ORDER BY activity_date DESC";
         $streak_stmt = $this->conn->prepare($streak_sql);
         $streak_stmt->bind_param("iii", $student_id, $student_id, $student_id);
         $streak_stmt->execute();
@@ -160,11 +162,11 @@ class ProgressService {
     public function getProgressOverTime($student_id, $days = 30) {
         $data = [];
         
-        $sql = "SELECT DATE(created_at) as date,
+        $sql = "SELECT DATE(lesson_date) as date,
                 COUNT(DISTINCT CASE WHEN status = 'completed' THEN id END) as lessons_completed
                 FROM lessons
-                WHERE student_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-                GROUP BY DATE(created_at)
+                WHERE student_id = ? AND lesson_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                GROUP BY DATE(lesson_date)
                 ORDER BY date ASC";
         
         $stmt = $this->conn->prepare($sql);
