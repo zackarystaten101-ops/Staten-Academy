@@ -85,12 +85,12 @@ class ProgressService {
         
         // Calculate learning streak (consecutive days with activity)
         // Use appropriate date columns for each table
-        // Note: Using lesson_date for lessons, and checking for available date columns in other tables
+        // Note: Using lesson_date for lessons, last_accessed_at for course progress, created_at for assignments
         $streak_sql = "SELECT COUNT(DISTINCT DATE(activity_date)) as streak_days
                       FROM (
                           SELECT lesson_date as activity_date FROM lessons WHERE student_id = ? AND status = 'completed' AND lesson_date IS NOT NULL
                           UNION ALL
-                          SELECT updated_at as activity_date FROM user_course_progress WHERE user_id = ? AND progress_percentage > 0 AND updated_at IS NOT NULL
+                          SELECT last_accessed_at as activity_date FROM user_course_progress WHERE user_id = ? AND progress_percentage > 0 AND last_accessed_at IS NOT NULL
                           UNION ALL
                           SELECT created_at as activity_date FROM assignments WHERE student_id = ? AND status IN ('completed', 'graded') AND created_at IS NOT NULL
                       ) as activities
