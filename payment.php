@@ -41,7 +41,7 @@ if ($track) {
     // If no plans exist, create placeholder plans
     if (empty($plans)) {
         $placeholderPlans = [
-            ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'price' => 99.00, 'display_order' => 1],
+            ['name' => 'Economy', 'one_on_one_classes_per_week' => 1, 'price' => 129.99, 'display_order' => 1],
             ['name' => 'Basic', 'one_on_one_classes_per_week' => 2, 'price' => 179.00, 'display_order' => 2],
             ['name' => 'Pro', 'one_on_one_classes_per_week' => 3, 'price' => 249.00, 'display_order' => 3],
             ['name' => 'Mega', 'one_on_one_classes_per_week' => 4, 'price' => 319.00, 'display_order' => 4],
@@ -76,7 +76,7 @@ $trackThemes = [
     'coding' => ['primary' => '#00d4aa', 'secondary' => '#00a67e', 'bg' => 'linear-gradient(135deg, #f0fff4 0%, #e8f8f0 100%)']
 ];
 
-$currentTheme = $track ? $trackThemes[$track] : $trackThemes['adults'];
+$currentTheme = $trackThemes['kids']; // Always use kids theme for Group Classes
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -345,61 +345,28 @@ $currentTheme = $track ? $trackThemes[$track] : $trackThemes['adults'];
     <div class="page-header">
         <h1><i class="fas fa-<?php echo $track === 'kids' ? 'child' : ($track === 'coding' ? 'code' : 'user-graduate'); ?>"></i> 
             <?php 
-            if ($track === 'kids') {
-                echo 'Kids Classes';
-            } elseif ($track === 'adults') {
-                echo 'Adult Classes';
-            } elseif ($track === 'coding') {
-                echo 'English for Coding';
+            if ($track === 'kids' || !$track) {
+                echo 'Group Classes';
             } else {
-                echo 'Choose Your Plan';
+                echo 'Group Classes';
             }
             ?>
         </h1>
         <p>
             <?php 
-            if ($track === 'kids') {
-                echo 'Fun, interactive English lessons designed for children ages 3-11';
-            } elseif ($track === 'adults') {
-                echo 'Professional English training for adults 12+. Focus on fluency, career, and real-world communication.';
-            } elseif ($track === 'coding') {
-                echo 'Specialized English courses for developers and tech professionals';
-            } else {
-                echo 'Invest in your future with flexible English learning options.';
-            }
+            echo 'Join interactive group sessions with peers. Perfect for kids ages 3-11 who learn best in a fun, social environment.';
             ?>
         </p>
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px;">
-            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Tracks</a>
-            <?php if (!$track): ?>
-                <a href="kids-plans.php" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
-                    <i class="fas fa-child"></i> Kids Plans
-                </a>
-                <a href="adults-plans.php" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
-                    <i class="fas fa-user-graduate"></i> Adults Plans
-                </a>
-                <a href="coding-plans.php" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
-                    <i class="fas fa-code"></i> Coding Plans
-                </a>
-            <?php endif; ?>
+            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
+            <a href="kids-plans.php" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
+                <i class="fas fa-users"></i> Group Classes
+            </a>
         </div>
     </div>
 
     <div class="plans-container">
-        <!-- Single Class / Trial Lesson -->
-        <div class="single-class-box">
-            <h2><i class="fas fa-calendar-check"></i> Single Class / Trial Lesson</h2>
-            <p>Perfect for trying out a teacher or flexible scheduling.</p>
-            <div class="single-class-price">$30 <span>/ hour</span></div>
-            <div style="margin: 20px 0;">
-                <form action="create_checkout_session.php" method="POST" style="display: inline-block;">
-                    <input type="hidden" name="price_id" value="price_1SXv22Fg7Fwmuz0xYimW2nGp">
-                    <input type="hidden" name="mode" value="payment">
-                    <?php if ($track): ?><input type="hidden" name="track" value="<?php echo htmlspecialchars($track); ?>"><?php endif; ?>
-                    <button type="submit" class="plan-cta" style="max-width: 300px;">Book Now</button>
-                </form>
-            </div>
-        </div>
+        <!-- Note: Single class/trial options removed - focusing on Group Classes only -->
 
         <?php if ($track && !empty($plans)): ?>
             <!-- Show plans for specific track -->
@@ -479,14 +446,8 @@ $currentTheme = $track ? $trackThemes[$track] : $trackThemes['adults'];
                     Choose a track to see available subscription plans, or browse all plans below.
                 </p>
                 <div class="track-selector">
-                    <a href="kids-plans.php" class="track-btn">
-                        <i class="fas fa-child"></i> Kids Classes
-                    </a>
-                    <a href="adults-plans.php" class="track-btn">
-                        <i class="fas fa-user-graduate"></i> Adult Classes
-                    </a>
-                    <a href="coding-plans.php" class="track-btn">
-                        <i class="fas fa-code"></i> English for Coding
+                    <a href="kids-plans.php" class="track-btn active">
+                        <i class="fas fa-users"></i> Group Classes
                     </a>
                 </div>
             </div>

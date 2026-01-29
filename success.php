@@ -269,10 +269,10 @@ if (isset($_SESSION['user_id'])) {
             <h1>Payment Successful! 🎉</h1>
             <?php if (isset($_GET['test_student'])): ?>
                 <div class="test-badge">
-                    <i class="fas fa-info-circle"></i> <strong>Test Account:</strong> Your plan has been activated without payment.
+                    <i class="fas fa-info-circle"></i> <strong>Test Account:</strong> Your Group Classes plan has been activated without payment.
                 </div>
             <?php else: ?>
-                <p>Thank you for your purchase! Your subscription is now active.</p>
+                <p>Thank you for subscribing to Group Classes! Your plan is now active. You'll have access to 3 classes per week (12 per month).</p>
             <?php endif; ?>
         <?php endif; ?>
         
@@ -338,15 +338,9 @@ if (isset($_SESSION['user_id'])) {
                 </div>
                 
                 <div style="margin-top: 30px;">
-                    <?php if ($teacher_id): ?>
-                        <a href="teacher-profile.php?id=<?php echo intval($teacher_id); ?>" class="btn">
-                            <i class="fas fa-calendar-plus"></i> Book Trial Lesson Now
-                        </a>
-                    <?php else: ?>
-                        <a href="index.php" class="btn">
-                            <i class="fas fa-search"></i> Browse Teachers
-                        </a>
-                    <?php endif; ?>
+                    <a href="student-dashboard.php#group-classes" class="btn" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">
+                        <i class="fas fa-users"></i> View My Classes
+                    </a>
                     <a href="student-dashboard.php" class="btn btn-secondary">
                         <i class="fas fa-home"></i> Go to Dashboard
                     </a>
@@ -365,7 +359,7 @@ if (isset($_SESSION['user_id'])) {
                         </div>
                         <div class="step-content">
                             <div class="step-title">Complete Payment</div>
-                            <div class="step-desc">Your payment has been processed successfully</div>
+                            <div class="step-desc">Your Group Classes subscription payment has been processed successfully</div>
                         </div>
                     </div>
                     
@@ -383,49 +377,25 @@ if (isset($_SESSION['user_id'])) {
                         </div>
                     </div>
                     
-                    <div class="step <?php echo $has_teacher ? 'completed' : ($has_needs ? 'current' : ''); ?>">
-                        <div class="step-number">
-                            <?php if ($has_teacher): ?>
-                                <i class="fas fa-check"></i>
-                            <?php else: ?>
-                                3
-                            <?php endif; ?>
-                        </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
                         <div class="step-content">
-                            <div class="step-title">Get Assigned a Teacher</div>
-                            <div class="step-desc">We'll match you with a teacher based on your learning needs (usually within 24-48 hours)</div>
-                        </div>
-                    </div>
-                    
-                    <div class="step <?php echo $has_teacher ? 'current' : ''; ?>">
-                        <div class="step-number">4</div>
-                        <div class="step-content">
-                            <div class="step-title">Book Your First Lesson</div>
-                            <div class="step-desc">Schedule your first class with your assigned teacher</div>
+                            <div class="step-title">Join Your Group Classes</div>
+                            <div class="step-desc">Access your 3 weekly classes from your dashboard and start learning!</div>
                         </div>
                     </div>
                 </div>
                 
                 <div style="margin-top: 30px;">
-                    <?php if (!$has_needs): ?>
-                        <a href="student-dashboard.php#learning-needs" class="btn">
-                            <i class="fas fa-arrow-right"></i> Add Learning Needs Now
-                        </a>
-                    <?php elseif (!$has_teacher): ?>
-                        <a href="student-dashboard.php" class="btn">
-                            <i class="fas fa-home"></i> Go to Dashboard
-                        </a>
-                        <p style="margin-top: 15px; color: #666; font-size: 0.9rem;">
-                            <i class="fas fa-info-circle"></i> We're matching you with a teacher. You'll be notified when assigned!
-                        </p>
-                    <?php else: ?>
-                        <a href="schedule.php" class="btn">
-                            <i class="fas fa-calendar-plus"></i> Book Your First Lesson
-                        </a>
-                        <a href="student-dashboard.php" class="btn btn-secondary">
-                            <i class="fas fa-home"></i> Go to Dashboard
-                        </a>
-                    <?php endif; ?>
+                    <a href="student-dashboard.php#group-classes" class="btn" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">
+                        <i class="fas fa-users"></i> View My Group Classes
+                    </a>
+                    <a href="student-dashboard.php" class="btn btn-secondary">
+                        <i class="fas fa-home"></i> Go to Dashboard
+                    </a>
+                    <p style="margin-top: 15px; color: #666; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> You'll be notified when new group classes are available to join!
+                    </p>
                 </div>
             <?php endif; ?>
         <?php else: ?>

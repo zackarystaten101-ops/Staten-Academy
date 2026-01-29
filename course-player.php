@@ -273,8 +273,8 @@ if ($user_id && $is_enrolled) {
                     <p style="margin: 0; font-size: 0.9rem; color: #856404;">
                         <i class="fas fa-info-circle"></i> Upgrade to access all lessons in this course.
                     </p>
-                    <a href="payment.php" class="btn-primary" style="display: block; text-align: center; margin-top: 10px;">
-                        Upgrade Now
+                    <a href="kids-plans.php" class="btn-primary" style="display: block; text-align: center; margin-top: 10px;">
+                        Subscribe Now
                     </a>
                 </div>
             <?php endif; ?>
@@ -289,8 +289,8 @@ if ($user_id && $is_enrolled) {
                             <i class="fas fa-lock" style="font-size: 4rem; margin-bottom: 20px;"></i>
                             <h2>This lesson is locked</h2>
                             <p>Upgrade your account to access this lesson</p>
-                            <a href="payment.php" class="btn-primary" style="margin-top: 20px;">
-                                Upgrade Now
+                            <a href="kids-plans.php" class="btn-primary" style="margin-top: 20px;">
+                                Subscribe Now
                             </a>
                         </div>
                     <?php else: ?>
@@ -391,6 +391,7 @@ if ($user_id && $is_enrolled) {
     </script>
 </body>
 </html>
+
 
 
 

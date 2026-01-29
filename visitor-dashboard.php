@@ -149,7 +149,7 @@ $active_tab = 'overview';
                 <h2>Start Your English Learning Journey</h2>
                 <p>Upgrade to a student account to access full courses, book classes with teachers, and track your progress!</p>
                 <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px;">
-                    <a href="payment.php" class="btn-upgrade">View Plans & Upgrade</a>
+                    <a href="kids-plans.php" class="btn-upgrade" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">Subscribe to Group Classes</a>
                     <a href="#" onclick="startAdminChat(event)" style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 12px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; font-size: 1.1rem; transition: transform 0.2s; border: 2px solid rgba(255,255,255,0.3);">
                         <i class="fas fa-headset"></i> Contact Admin
                     </a>
@@ -269,7 +269,7 @@ $active_tab = 'overview';
         <div id="plans" class="tab-content">
             <h1>Choose Your Plan</h1>
             <p style="color: #666; margin-bottom: 30px;">Select a plan that fits your learning goals and unlock full access to courses and teachers.</p>
-            <a href="payment.php" class="btn-primary" style="display: inline-block; margin-bottom: 20px;">
+            <a href="kids-plans.php" class="btn-primary" style="display: inline-block; margin-bottom: 20px; background: linear-gradient(135deg, #ff6b9d, #ffa500);">
                 <i class="fas fa-credit-card"></i> View All Plans
             </a>
             <!-- Plan comparison will be shown here -->
@@ -309,7 +309,7 @@ $active_tab = 'overview';
                     </div>
                     <div style="text-align: center; padding: 20px; background: #f9f9f9; border-radius: 8px; margin-top: 20px;">
                         <p style="margin: 0; color: #666;">Upgrade to a student account to edit your full profile and access all features.</p>
-                        <a href="payment.php" class="btn-primary" style="margin-top: 15px; display: inline-block;">
+                        <a href="kids-plans.php" class="btn-primary" style="margin-top: 15px; display: inline-block; background: linear-gradient(135deg, #ff6b9d, #ffa500);">
                             <i class="fas fa-arrow-up"></i> Upgrade Now
                         </a>
                     </div>

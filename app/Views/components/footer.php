@@ -13,15 +13,14 @@
                         <li><a href="index.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Home</a></li>
                         <li><a href="about.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">About Us</a></li>
                         <li><a href="how-we-work.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">How We Work</a></li>
-                        <li><a href="payment.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Plans & Pricing</a></li>
+                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Group Classes</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h3 style="margin-bottom: 15px; color: white;">Learning Tracks</h3>
+                    <h3 style="margin-bottom: 15px; color: white;">Our Classes</h3>
                     <ul style="list-style: none; padding: 0; line-height: 2;">
-                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Kids Classes</a></li>
-                        <li><a href="adults-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Adult Classes</a></li>
-                        <li><a href="coding-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">English for Coding</a></li>
+                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Group Classes</a></li>
+                        <li style="color: rgba(255,255,255,0.6);">One-on-One Classes (Coming Soon)</li>
                     </ul>
                 </div>
                 <div>

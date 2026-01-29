@@ -77,31 +77,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         exit();
                     } 
                     else if ($role === 'visitor' || $role === 'new_student') {
-                        // Visitors and new_students: Check if they were trying to book a specific teacher
-                        if (isset($_SESSION['redirect_teacher'])) {
-                            $teacher = $_SESSION['redirect_teacher'];
-                            unset($_SESSION['redirect_teacher']);
-                            header("Location: schedule.php?teacher=" . urlencode($teacher));
+                        // Visitors and new_students go to their dashboard
+                        unset($_SESSION['redirect_teacher']); // Clear any old redirect
+                        if ($role === 'new_student') {
+                            header("Location: student-dashboard.php");
                         } else {
-                            // Default landing page - use student dashboard for new_student
-                            if ($role === 'new_student') {
-                                header("Location: student-dashboard.php");
-                            } else {
-                                header("Location: visitor-dashboard.php");
-                            }
+                            header("Location: visitor-dashboard.php");
                         }
                         exit();
                     }
                     else if ($role === 'student') {
-                        // Students: Check if they were trying to book a specific teacher
-                        if (isset($_SESSION['redirect_teacher'])) {
-                            $teacher = $_SESSION['redirect_teacher'];
-                            unset($_SESSION['redirect_teacher']);
-                            header("Location: schedule.php?teacher=" . urlencode($teacher));
-                        } else {
-                            // Default landing page for students logging in from Home Page
-                            header("Location: student-dashboard.php"); 
-                        }
+                        // Students go to their dashboard
+                        unset($_SESSION['redirect_teacher']); // Clear any old redirect
+                        header("Location: student-dashboard.php"); 
                         exit();
                     }
                 } else {
@@ -270,8 +258,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 body: formData
             }).then(res => res.text()).then(data => {
                 if (data.includes('success')) {
-                    // Determine redirect based on role (will be handled by server-side redirects)
-                    window.location.href = 'schedule.php';
+                    // Redirect to student dashboard (will redirect if different role)
+                    window.location.href = 'student-dashboard.php';
                 } else {
                     alert('Login failed: ' + data);
                 }

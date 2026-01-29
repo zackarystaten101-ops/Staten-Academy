@@ -70,7 +70,7 @@ if (!function_exists('getAssetPath')) {
             <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             <span class="nav-label">How We Work</span>
         </a>
-        <a class="nav-btn" href="payment.php">
+        <a class="nav-btn" href="kids-plans.php">
             <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
             <span class="nav-label">Plans</span>
         </a>
@@ -106,14 +106,14 @@ if (!function_exists('getAssetPath')) {
                         1
                     </div>
                     <div style="flex: 1;">
-                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Sign Up & Choose Your Track</h3>
+                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Sign Up for Group Classes</h3>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 15px;">
-                            Create your account and select your learning track:
+                            Create your account and subscribe to our Group Classes:
                         </p>
                         <ul style="color: #666; line-height: 2; padding-left: 20px;">
-                            <li><strong style="color: #004080;">Kids Classes:</strong> For ages 3-11, fun and interactive learning</li>
-                            <li><strong style="color: #004080;">Adult General English:</strong> For adults of all levels</li>
-                            <li><strong style="color: #004080;">English for Coding:</strong> Specialized for developers and tech professionals</li>
+                            <li><strong style="color: #ff6b9d;">Group Classes:</strong> For kids ages 3-11, fun and interactive learning with peers</li>
+                            <li><strong style="color: #ff6b9d;">$129.99/month:</strong> 3 classes per week (12 classes per month)</li>
+                            <li><strong style="color: #ff6b9d;">Expert Teachers:</strong> Certified and experienced with kids</li>
                         </ul>
                     </div>
                 </div>
@@ -147,9 +147,9 @@ if (!function_exists('getAssetPath')) {
                         3
                     </div>
                     <div style="flex: 1;">
-                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Browse and Select Your Teacher</h3>
+                        <h3 style="font-size: 1.8rem; color: #004080; margin-bottom: 15px;">Join Group Classes</h3>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-bottom: 15px;">
-                            Visit your chosen track's page (Kids Classes, Adult Classes, or English for Coding) to browse approved teachers. You can:
+                            Once subscribed, you'll be assigned to group classes taught by our certified teachers. Benefits include:
                         </p>
                         <ul style="color: #666; line-height: 2; padding-left: 20px;">
                             <li>View teacher profiles, specialties, and ratings</li>
@@ -159,7 +159,7 @@ if (!function_exists('getAssetPath')) {
                             <li>Select the teacher that best fits your needs</li>
                         </ul>
                         <p style="color: #666; line-height: 1.8; font-size: 1.1rem; margin-top: 15px;">
-                            <strong style="color: #004080;">You're in control:</strong> Browse teachers approved for your track and choose the one that works best for you!
+                            <strong style="color: #ff6b9d;">Social Learning:</strong> Your child will learn alongside peers in engaging, interactive sessions!
                         </p>
                     </div>
                 </div>
@@ -314,8 +314,8 @@ if (!function_exists('getAssetPath')) {
                         <div style="font-size: 2.5rem; color: #28a745; margin-bottom: 10px;">
                             <i class="fas fa-graduation-cap"></i>
                         </div>
-                        <h4 style="color: #004080; margin-bottom: 8px;">Track Approval</h4>
-                        <p style="color: #666; font-size: 0.9rem;">All teachers shown are pre-approved by admins for your chosen learning track</p>
+                        <h4 style="color: #004080; margin-bottom: 8px;">Certified Teachers</h4>
+                        <p style="color: #666; font-size: 0.9rem;">All teachers are pre-approved and certified to teach kids in group settings</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; color: #ffc107; margin-bottom: 10px;">
@@ -334,7 +334,7 @@ if (!function_exists('getAssetPath')) {
                 </div>
                 <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; text-align: center;">
                     <p style="color: #666; line-height: 1.8; font-size: 1rem; margin: 0;">
-                        <strong style="color: #004080;">Your Choice:</strong> Browse approved teachers on your track's page, use filters to narrow down options, and select the teacher that best matches your learning style and schedule. You can book with multiple teachers if desired!
+                        <strong style="color: #ff6b9d;">Simple and Fun:</strong> Subscribe to Group Classes for just $129.99/month. Your child will be assigned to interactive sessions with certified teachers and learn alongside other students!
                     </p>
                 </div>
             </div>
@@ -358,7 +358,7 @@ if (!function_exists('getAssetPath')) {
                         <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                     </a>
                 <?php endif; ?>
-                <a href="payment.php" class="btn-outline" style="padding: 15px 40px; font-size: 1.1rem; text-decoration: none; display: inline-block; border: 2px solid white; color: white; border-radius: 8px;">
+                <a href="kids-plans.php" class="btn-outline" style="padding: 15px 40px; font-size: 1.1rem; text-decoration: none; display: inline-block; border: 2px solid white; color: white; border-radius: 8px;">
                     <i class="fas fa-dollar-sign"></i> View Plans
                 </a>
             </div>

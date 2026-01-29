@@ -70,7 +70,7 @@ if (!function_exists('getAssetPath')) {
             <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             <span class="nav-label">How We Work</span>
         </a>
-        <a class="nav-btn" href="payment.php">
+        <a class="nav-btn" href="kids-plans.php">
             <svg class="nav-icon" viewBox="0 0 24 24"><path fill="#06385a" d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
             <span class="nav-label">Plans</span>
         </a>
@@ -206,10 +206,10 @@ if (!function_exists('getAssetPath')) {
                     <div style="font-size: 2rem; color: #6f42c1; margin-bottom: 15px;">
                         <i class="fas fa-graduation-cap"></i>
                     </div>
-                    <h3 style="color: #004080; margin-bottom: 10px;">Diverse Learning Tracks</h3>
+                    <h3 style="color: #004080; margin-bottom: 10px;">Group Classes for Kids</h3>
                     <p style="color: #666; line-height: 1.7;">
-                        Choose from Kids Classes, Adult General English, or English for Coding. 
-                        Each track is tailored to specific needs and goals.
+                        Our Group Classes are designed for children ages 3-11, offering fun, interactive sessions 
+                        with peers for just $129.99/month (3 classes per week).
                     </p>
                 </div>
             </div>

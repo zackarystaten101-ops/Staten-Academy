@@ -36,7 +36,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kids Classes Plans - Staten Academy</title>
+    <title>Group Classes - Staten Academy</title>
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/tracks.css'); ?>">
@@ -251,10 +251,10 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <div id="mobile-backdrop" class="mobile-backdrop" aria-hidden="true"></div>
 
     <div class="page-header">
-        <h1><i class="fas fa-child"></i> Kids Classes</h1>
-        <p>Fun, interactive English lessons designed for children ages 3-11</p>
+        <h1><i class="fas fa-users"></i> Group Classes</h1>
+        <p>Join interactive group sessions with peers. Perfect for kids ages 3-11 who learn best in a fun, social environment.</p>
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px;">
-            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Tracks</a>
+            <a href="index.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Home</a>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <a href="#" onclick="startAdminChat(event)" class="back-link" style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px;">
                     <i class="fas fa-headset"></i> Contact Admin
@@ -266,16 +266,16 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <!-- Video Introduction Section -->
     <section class="video-intro-section" style="background: linear-gradient(135deg, #ff6b9d 0%, #ffa500 100%); color: white; padding: 60px 20px; text-align: center; margin-top: -40px; position: relative; z-index: 5;">
         <div style="max-width: 1200px; margin: 0 auto;">
-            <h2 style="font-size: 2rem; margin-bottom: 20px; font-weight: 700; color: #ffffff; text-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6);">Our Kids Teaching Approach</h2>
+            <h2 style="font-size: 2rem; margin-bottom: 20px; font-weight: 700; color: #ffffff; text-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6);">Our Group Classes Teaching Approach</h2>
             <p style="font-size: 1.1rem; margin-bottom: 40px; color: #ffffff; text-shadow: 0 1px 4px rgba(0,0,0,0.4); opacity: 1; max-width: 700px; margin-left: auto; margin-right: auto; font-weight: 500;">
-                Learn about our fun and engaging teaching style for kids, and hear from parents and students about their experience.
+                Learn about our fun and engaging group teaching style for kids, and hear from parents and students about their experience.
             </p>
             <div style="max-width: 900px; margin: 0 auto; position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
                 <iframe 
                     id="kids-intro-video" 
                     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" 
                     src="https://www.youtube.com/embed/YOUR_KIDS_VIDEO_ID_HERE" 
-                    title="Kids Classes Introduction Video"
+                    title="Group Classes Introduction Video"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                     allowfullscreen>
                 </iframe>
@@ -286,19 +286,19 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
         </div>
     </section>
 
-    <!-- Approved Teachers Section -->
+    <!-- Meet Our Teachers Section -->
     <?php if (!empty($teachers)): ?>
     <section class="teachers-section" style="background: white; padding: 60px 20px; margin-top: 40px;">
         <div style="max-width: 1200px; margin: 0 auto;">
             <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 15px; color: #ff6b9d; font-weight: 700;">
-                <i class="fas fa-chalkboard-teacher"></i> Our Approved Teachers
+                <i class="fas fa-chalkboard-teacher"></i> Meet Our Teachers
             </h2>
             <p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto;">
-                Meet our experienced teachers approved for Kids classes. Click on any teacher to view their profile and select a plan.
+                Our certified teachers are experienced in teaching kids and leading engaging group classes. When you subscribe, you'll be assigned to classes taught by our expert instructors.
             </p>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; margin-top: 40px;">
-                <?php foreach ($teachers as $teacher): ?>
-                    <div class="teacher-card" style="background: white; border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(255, 107, 157, 0.15); transition: all 0.3s ease; text-align: center; cursor: pointer;" onclick="window.location.href='teacher-profile.php?id=<?php echo intval($teacher['id']); ?>'">
+                <?php foreach (array_slice($teachers, 0, 4) as $teacher): ?>
+                    <div class="teacher-card" style="background: white; border-radius: 16px; padding: 30px; box-shadow: 0 4px 20px rgba(255, 107, 157, 0.15); text-align: center;">
                         <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
                              alt="<?php echo htmlspecialchars($teacher['name']); ?>" 
                              style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; margin: 0 auto 20px; border: 4px solid #ff6b9d;">
@@ -327,22 +327,15 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                                 }
                             ?>
                                 <span style="color: #666; font-size: 0.9rem; margin-left: 5px;">
-                                    <?php echo number_format($rating, 1); ?> (<?php echo intval($teacher['review_count'] ?? 0); ?>)
+                                    <?php echo number_format($rating, 1); ?>
                                 </span>
                             <?php else: ?>
-                                <span style="color: #999; font-size: 0.9rem;">No ratings yet</span>
+                                <span style="color: #999; font-size: 0.9rem;">New Teacher</span>
                             <?php endif; ?>
                         </div>
-                        <?php if ($teacher['bio']): ?>
-                            <p style="color: #555; font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
-                                <?php echo htmlspecialchars(substr($teacher['bio'], 0, 120)); ?>...
-                            </p>
-                        <?php endif; ?>
-                        <a href="teacher-profile.php?id=<?php echo intval($teacher['id']); ?>" 
-                           class="btn-primary" 
-                           style="display: inline-block; padding: 12px 24px; border-radius: 25px; text-decoration: none; font-weight: 600; background: linear-gradient(135deg, #ff6b9d, #ffa500); color: white; transition: transform 0.2s;">
-                            View Profile
-                        </a>
+                        <span style="display: inline-block; padding: 8px 16px; border-radius: 20px; background: linear-gradient(135deg, #ff6b9d, #ffa500); color: white; font-size: 0.85rem; font-weight: 600;">
+                            <i class="fas fa-check"></i> Certified for Kids
+                        </span>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -351,39 +344,43 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <?php endif; ?>
 
     <div class="plans-container">
-        <div class="plans-grid">
-            <?php if (empty($plans)): ?>
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-                    <p style="font-size: 1.2rem; color: #666;">No plans available at this time. Please check back later.</p>
-                </div>
-            <?php else: ?>
-                <?php foreach ($plans as $plan): ?>
-                <div class="plan-card <?php echo ($plan['is_best_value'] ?? false) ? 'best-value' : ''; ?>">
-                    <h3 class="plan-name"><?php echo htmlspecialchars($plan['name']); ?></h3>
+        <!-- Main Group Classes Plan -->
+        <div class="plans-grid" style="grid-template-columns: 1fr; max-width: 500px; margin: 0 auto;">
+            <?php
+            // Find the group classes plan ($129.99/month, 12 classes/month)
+            // If no plan exists, show a default plan card
+            $groupPlan = null;
+            foreach ($plans as $plan) {
+                // Look for plan with 12 group classes per month or closest match
+                if (($plan['group_classes_per_month'] ?? 0) >= 12) {
+                    $groupPlan = $plan;
+                    break;
+                }
+            }
+            // If no plan found, use first plan or create default
+            if (!$groupPlan && !empty($plans)) {
+                $groupPlan = $plans[0];
+            }
+            ?>
+            
+            <?php if ($groupPlan): ?>
+                <div class="plan-card best-value">
+                    <h3 class="plan-name">Group Classes</h3>
                     <div class="plan-price">
-                        $<?php echo number_format($plan['price'] ?? 0, 2); ?>
+                        $<?php echo number_format($groupPlan['price'] ?? 129.99, 2); ?>
                         <span>/month</span>
                     </div>
                     <ul class="plan-features">
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['one_on_one_classes_per_month'] ?? 0; ?></strong> × 1-on-1 classes per month</li>
-                        <li><i class="fas fa-check-circle"></i> <strong><?php echo $plan['group_classes_per_month'] ?? 0; ?></strong> × group classes per month</li>
+                        <li><i class="fas fa-check-circle"></i> <strong>3</strong> classes per week</li>
+                        <li><i class="fas fa-check-circle"></i> <strong>12</strong> group classes per month</li>
                         <li><i class="fas fa-check-circle"></i> 50-minute sessions</li>
-                        <?php 
-                        // Display track-specific features
-                        $trackFeatures = [];
-                        if (!empty($plan['track_specific_features'])) {
-                            if (is_string($plan['track_specific_features'])) {
-                                $trackFeatures = json_decode($plan['track_specific_features'], true) ?: [];
-                            } else {
-                                $trackFeatures = $plan['track_specific_features'];
-                            }
-                        }
-                        foreach ($trackFeatures as $feature): ?>
-                            <li><i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($feature); ?></li>
-                        <?php endforeach; ?>
+                        <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
+                        <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
+                        <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
+                        <li><i class="fas fa-check-circle"></i> Ages 3-11</li>
                     </ul>
                     <?php 
-                    $plan_id = $plan['id'] ?? null;
+                    $plan_id = $groupPlan['id'] ?? null;
                     ?>
                     <?php if (isset($_SESSION['user_id']) && ($_SESSION['user_role'] === 'student' || $_SESSION['user_role'] === 'new_student' || $_SESSION['user_role'] === 'visitor')): ?>
                         <!-- Logged in: Go directly to checkout -->
@@ -392,17 +389,51 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                                 <input type="hidden" name="plan_id" value="<?php echo (int)$plan_id; ?>">
                             <?php endif; ?>
                             <input type="hidden" name="track" value="kids">
-                            <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($plan['stripe_price_id'] ?? ''); ?>">
+                            <input type="hidden" name="price_id" value="<?php echo htmlspecialchars($groupPlan['stripe_price_id'] ?? ''); ?>">
                             <input type="hidden" name="mode" value="subscription">
-                            <button type="submit" class="plan-cta" <?php echo empty($plan['stripe_price_id']) ? 'disabled' : ''; ?>>Choose This Plan</button>
+                            <button type="submit" class="plan-cta" <?php echo empty($groupPlan['stripe_price_id']) ? 'disabled' : ''; ?>>Subscribe Now</button>
                         </form>
                     <?php else: ?>
-                        <!-- Not logged in: Register first, then they'll see todo list -->
+                        <!-- Not logged in: Register first -->
                         <a href="register.php?track=kids<?php echo $plan_id ? '&plan_id=' . (int)$plan_id : ''; ?>" class="plan-cta">Get Started</a>
                     <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+            <?php else: ?>
+                <!-- Fallback: Show default plan if none found in database -->
+                <div class="plan-card best-value">
+                    <h3 class="plan-name">Group Classes</h3>
+                    <div class="plan-price">
+                        $129.99
+                        <span>/month</span>
+                    </div>
+                    <ul class="plan-features">
+                        <li><i class="fas fa-check-circle"></i> <strong>3</strong> classes per week</li>
+                        <li><i class="fas fa-check-circle"></i> <strong>12</strong> group classes per month</li>
+                        <li><i class="fas fa-check-circle"></i> 50-minute sessions</li>
+                        <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
+                        <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
+                        <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
+                        <li><i class="fas fa-check-circle"></i> Ages 3-11</li>
+                    </ul>
+                    <a href="register.php?track=kids" class="plan-cta">Get Started</a>
+                </div>
             <?php endif; ?>
+        </div>
+        
+        <!-- Coming Soon: One-on-One Classes -->
+        <div style="max-width: 500px; margin: 60px auto 0; padding: 40px 30px; background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(255, 107, 157, 0.1); text-align: center; border: 2px dashed #ff6b9d; opacity: 0.7;">
+            <h3 style="color: #ff6b9d; margin-bottom: 15px; font-size: 1.8rem;">
+                <i class="fas fa-user"></i> One-on-One Classes
+            </h3>
+            <p style="color: #666; margin-bottom: 20px; font-size: 1.1rem;">
+                Coming Soon!
+            </p>
+            <p style="color: #999; font-size: 0.95rem; line-height: 1.6;">
+                We're working on adding one-on-one classes for personalized learning. Stay tuned!
+            </p>
+            <button disabled style="margin-top: 20px; padding: 12px 30px; border-radius: 50px; background: #ddd; color: #999; border: none; font-weight: 600; font-size: 1rem; cursor: not-allowed;">
+                Coming Soon
+            </button>
         </div>
     </div>
 

@@ -253,8 +253,8 @@ $_SESSION['profile_pic'] = $user['profile_pic'] ?? getAssetPath('images/placehol
                     <p style="color: #666; font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px;">
                         <?php echo htmlspecialchars($joinRestrictionMessage); ?>
                     </p>
-                    <a href="schedule.php" style="display: inline-block; background: #0b6cf5; color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; transition: background 0.2s;">
-                        <i class="fas fa-arrow-left"></i> Back to Schedule
+                    <a href="student-dashboard.php#group-classes" style="display: inline-block; background: linear-gradient(135deg, #ff6b9d, #ffa500); color: white; padding: 12px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; transition: background 0.2s;">
+                        <i class="fas fa-arrow-left"></i> Back to My Classes
                     </a>
                 </div>
             </div>

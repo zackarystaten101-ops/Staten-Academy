@@ -272,6 +272,29 @@ function handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $a
         // Update subscription info
         $subscriptionService->updateSubscription($student_id, $subscription_id, $billing_cycle_date);
         
+        // Update plan_id and learning_track for Group Classes (always 'kids')
+        if ($plan_id) {
+            $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+            if ($col_check && $col_check->num_rows > 0) {
+                $update_plan = $conn->prepare("UPDATE users SET plan_id = ?, learning_track = 'kids' WHERE id = ?");
+                $update_plan->bind_param("ii", $plan_id, $student_id);
+                $update_plan->execute();
+                $update_plan->close();
+            } else {
+                // If plan_id column doesn't exist, just update track
+                $update_track = $conn->prepare("UPDATE users SET learning_track = 'kids' WHERE id = ?");
+                $update_track->bind_param("i", $student_id);
+                $update_track->execute();
+                $update_track->close();
+            }
+        } else {
+            // Ensure track is set to 'kids' even if no plan_id
+            $update_track = $conn->prepare("UPDATE users SET learning_track = 'kids' WHERE id = ?");
+            $update_track->bind_param("i", $student_id);
+            $update_track->execute();
+            $update_track->close();
+        }
+        
         // Add initial credits for subscription
         if ($credits_to_add > 0) {
             $description = "Subscription activated - " . ($plan_id ? "Plan #$plan_id" : "Initial subscription");
@@ -305,12 +328,28 @@ function handlePlanPayment($conn, $session_id, $payment_intent_id, $metadata, $a
         $update_stmt->close();
     }
     
-    // Update plan_id if provided
+    // Update plan_id and learning_track (always 'kids' for Group Classes)
+    // This is handled above in the subscription section, but also handle here for packages/addons
     if ($plan_id) {
-        $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ? WHERE id = ?");
-        $plan_stmt->bind_param("ii", $plan_id, $student_id);
-        $plan_stmt->execute();
-        $plan_stmt->close();
+        $col_check = $conn->query("SHOW COLUMNS FROM users LIKE 'plan_id'");
+        if ($col_check && $col_check->num_rows > 0) {
+            $plan_stmt = $conn->prepare("UPDATE users SET plan_id = ?, learning_track = 'kids' WHERE id = ?");
+            $plan_stmt->bind_param("ii", $plan_id, $student_id);
+            $plan_stmt->execute();
+            $plan_stmt->close();
+        } else {
+            // If plan_id column doesn't exist, just update track
+            $update_track = $conn->prepare("UPDATE users SET learning_track = 'kids' WHERE id = ?");
+            $update_track->bind_param("i", $student_id);
+            $update_track->execute();
+            $update_track->close();
+        }
+    } else {
+        // Ensure track is set to 'kids' even if no plan_id
+        $update_track = $conn->prepare("UPDATE users SET learning_track = 'kids' WHERE id = ?");
+        $update_track->bind_param("i", $student_id);
+        $update_track->execute();
+        $update_track->close();
     }
     
     error_log("Stripe webhook: Plan payment processed for student $student_id, type: $plan_type, credits: $credits_to_add");

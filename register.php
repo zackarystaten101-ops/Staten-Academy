@@ -87,13 +87,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $hashed_password = password_hash($password, PASSWORD_DEFAULT);
         
         // Get track and plan_id from POST or URL parameters
-        $track = $_POST['track'] ?? $_GET['track'] ?? null;
+        // Always default to 'kids' for Group Classes
+        $track = $_POST['track'] ?? $_GET['track'] ?? 'kids';
         $plan_id = $_POST['plan_id'] ?? $_GET['plan_id'] ?? null;
         
-        // Validate track if provided
+        // Validate track - ensure it's 'kids' for Group Classes focus
         if ($track && !in_array($track, ['kids', 'adults', 'coding'])) {
-            $track = null;
+            $track = 'kids';
         }
+        // Force track to 'kids' for Group Classes only
+        $track = 'kids';
         
         // Convert plan_id to integer if provided
         if ($plan_id) {
@@ -142,8 +145,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Clear output buffer before redirect
             ob_end_clean();
             
-            // Redirect to student dashboard (will show todo list)
-            // Plan selection will be handled via todo list or they can complete it from the plan page
+            // If plan_id is provided, redirect directly to checkout
+            if ($plan_id) {
+                // Store plan_id and track in session for checkout
+                $_SESSION['selected_plan_id'] = $plan_id;
+                if ($track) {
+                    $_SESSION['selected_track'] = $track;
+                }
+                // Redirect to checkout
+                header("Location: create_checkout_session.php");
+                exit();
+            }
+            
+            // Otherwise, redirect to student dashboard (will show todo list)
             header("Location: student-dashboard.php");
             exit();
         } else {

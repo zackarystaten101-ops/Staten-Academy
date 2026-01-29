@@ -43,7 +43,7 @@ if (!function_exists('getAssetPath')) {
             
             <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
                 <h3>What is Staten Academy?</h3>
-                <p>Staten Academy is a curated online English learning platform connecting students with expert teachers for personalized language instruction. We offer three learning tracks: Kids English, Adult English, and English for Coding.</p>
+                <p>Staten Academy is an online English learning platform offering Group Classes for kids ages 3-11. Our fun, interactive classes help children learn English with peers in a social environment. For just $129.99/month, students get 3 classes per week (12 per month).</p>
             </div>
             
             <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">

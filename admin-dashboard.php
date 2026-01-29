@@ -14,6 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/app/Views/components/dashboard-functions.php';
+require_once __DIR__ . '/app/Services/AnalyticsService.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
     ob_end_clean(); // Clear output buffer before redirect
@@ -37,6 +38,13 @@ $user_role_filter = $_GET['user_role_filter'] ?? '';
 
 // Get admin stats
 $admin_stats = getAdminStats($conn);
+
+// Initialize Analytics Service
+$analyticsService = new AnalyticsService($conn);
+$platform_metrics = $analyticsService->getPlatformMetrics(30);
+$teacher_performance = $analyticsService->getTeacherPerformance(30);
+$student_engagement = $analyticsService->getStudentEngagement(30);
+$trends_data = $analyticsService->getTrends(30);
 
 // Handle Profile Update (Admin can update directly)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
@@ -818,6 +826,7 @@ if (!$applications) {
     <link rel="stylesheet" href="<?php echo getAssetPath('css/dashboard.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="<?php echo getAssetPath('js/toast.js'); ?>" defer></script>
 </head>
 <body class="dashboard-layout">
@@ -929,55 +938,110 @@ if (!$applications) {
             </div>
             
             <div id="reports-analytics" class="reports-subtab active">
-                <h2>Analytics</h2>
+                <h2><i class="fas fa-chart-line"></i> Platform Analytics (Last 30 Days)</h2>
             
-            <div class="earnings-summary">
+            <!-- Platform Metrics -->
+            <div class="earnings-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
                 <div class="earnings-card primary">
-                    <div class="earnings-amount"><?php echo formatCurrency($total_revenue); ?></div>
-                    <div class="earnings-label">Total Revenue</div>
+                    <div class="earnings-amount"><?php echo formatCurrency($platform_metrics['revenue']); ?></div>
+                    <div class="earnings-label">Revenue (30 days)</div>
                 </div>
                 <div class="earnings-card">
-                    <div class="earnings-amount"><?php echo $admin_stats['total_bookings']; ?></div>
-                    <div class="earnings-label">Total Bookings</div>
-                </div>
-                <div class="earnings-card">
-                    <div class="earnings-amount"><?php echo $admin_stats['students'] + $admin_stats['teachers']; ?></div>
+                    <div class="earnings-amount"><?php echo $platform_metrics['total_users']; ?></div>
                     <div class="earnings-label">Total Users</div>
                 </div>
+                <div class="earnings-card">
+                    <div class="earnings-amount"><?php echo $platform_metrics['active_users']; ?></div>
+                    <div class="earnings-label">Active Users</div>
+                </div>
+                <div class="earnings-card">
+                    <div class="earnings-amount"><?php echo $platform_metrics['new_registrations']; ?></div>
+                    <div class="earnings-label">New Registrations</div>
+                </div>
+                <div class="earnings-card">
+                    <div class="earnings-amount"><?php echo $platform_metrics['total_lessons']; ?></div>
+                    <div class="earnings-label">Total Lessons</div>
+                </div>
+                <div class="earnings-card">
+                    <div class="earnings-amount"><?php echo $platform_metrics['completed_lessons']; ?></div>
+                    <div class="earnings-label">Completed</div>
+                </div>
+            </div>
+            
+            <!-- Student Engagement Metrics -->
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-user-graduate"></i> Student Engagement</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: #0b6cf5;"><?php echo $student_engagement['total_students']; ?></div>
+                        <div style="color: #666; margin-top: 5px;">Total Students</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: #28a745;"><?php echo $student_engagement['active_students']; ?></div>
+                        <div style="color: #666; margin-top: 5px;">Active Students</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: #ffc107;"><?php echo $student_engagement['avg_lessons_per_student']; ?></div>
+                        <div style="color: #666; margin-top: 5px;">Avg Lessons/Student</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: #17a2b8;"><?php echo $student_engagement['course_enrollment_rate']; ?>%</div>
+                        <div style="color: #666; margin-top: 5px;">Course Enrollment Rate</div>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 2.5rem; font-weight: bold; color: #28a745;"><?php echo $student_engagement['completion_rate']; ?>%</div>
+                        <div style="color: #666; margin-top: 5px;">Lesson Completion Rate</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Trends Chart -->
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-chart-area"></i> Trends Over Time</h2>
+                <canvas id="trendsChart" style="max-height: 300px;"></canvas>
             </div>
 
-            <div class="card">
-                <h2><i class="fas fa-trophy"></i> Top Teachers</h2>
+            <!-- Teacher Performance -->
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-trophy"></i> Teacher Performance (Last 30 Days)</h2>
+                <?php if (count($teacher_performance) > 0): ?>
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>Teacher</th>
-                            <th>Rating</th>
-                            <th>Students</th>
-                            <th>Hours</th>
+                            <th>Total Lessons</th>
+                            <th>Completed</th>
+                            <th>Completion Rate</th>
+                            <th>Avg Rating</th>
+                            <th>Reviews</th>
+                            <th>Unique Students</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php 
-                        $teachers->data_seek(0);
-                        $count = 0;
-                        while ($t = $teachers->fetch_assoc()): 
-                            if ($count++ >= 10) break;
-                        ?>
+                        <?php foreach (array_slice($teacher_performance, 0, 20) as $teacher): ?>
                         <tr>
                             <td data-label="Teacher">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <img src="<?php echo h($t['profile_pic']); ?>" alt="<?php echo h($t['name']); ?>" style="width: 35px; height: 35px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?php echo getAssetPath('images/placeholder-teacher.svg'); ?>'">
-                                    <?php echo h($t['name']); ?>
+                                    <strong><?php echo h($teacher['name']); ?></strong>
                                 </div>
                             </td>
-                            <td data-label="Rating"><?php echo getStarRatingHtml($t['avg_rating'] ?? 0); ?></td>
-                            <td data-label="Students"><?php echo $t['student_count'] ?? 0; ?></td>
-                            <td data-label="Hours"><?php echo $t['hours_taught'] ?? 0; ?> hrs</td>
+                            <td data-label="Total Lessons"><?php echo $teacher['total_lessons']; ?></td>
+                            <td data-label="Completed"><?php echo $teacher['completed_lessons']; ?></td>
+                            <td data-label="Completion Rate">
+                                <span style="color: <?php echo $teacher['completion_rate'] >= 80 ? '#28a745' : ($teacher['completion_rate'] >= 60 ? '#ffc107' : '#dc3545'); ?>;">
+                                    <?php echo $teacher['completion_rate']; ?>%
+                                </span>
+                            </td>
+                            <td data-label="Avg Rating"><?php echo $teacher['avg_rating'] > 0 ? getStarRatingHtml($teacher['avg_rating']) : 'N/A'; ?></td>
+                            <td data-label="Reviews"><?php echo $teacher['review_count']; ?></td>
+                            <td data-label="Unique Students"><?php echo $teacher['unique_students']; ?></td>
                         </tr>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php else: ?>
+                <p style="color: var(--gray); text-align: center; padding: 20px;">No teacher performance data available.</p>
+                <?php endif; ?>
             </div>
 
             <div class="card">
@@ -1013,6 +1077,19 @@ if (!$applications) {
             
             <div id="reports-reports" class="reports-subtab" style="display: none;">
                 <h2>Financial Reports</h2>
+                
+                <!-- Beta Feedback Management -->
+                <div class="card" style="margin-top: 30px;">
+                    <h2><i class="fas fa-comment-dots"></i> Beta Feedback</h2>
+                    <p style="color: #666; margin-bottom: 20px;">Review and manage feedback from beta testers.</p>
+                    
+                    <div id="beta-feedback-list" style="margin-top: 20px;">
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #0b6cf5;"></i>
+                            <p style="margin-top: 15px; color: #666;">Loading feedback...</p>
+                        </div>
+                    </div>
+                </div>
                 
                 <?php
                 // Get financial report filters
@@ -1804,7 +1881,7 @@ if (!$applications) {
                         </td>
                         <td data-label="Actions">
                             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                                <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
+                            <a href="profile.php?id=<?php echo $t['id']; ?>" class="btn-outline btn-sm">View</a>
                                 <button type="button"
                                         onclick="console.log('Categories button clicked for teacher <?php echo $t['id']; ?>'); showCategoryModal(<?php echo $t['id']; ?>, '<?php echo h($t['categories'] ?? ''); ?>'); return false;" 
                                         class="btn-primary btn-sm category-btn" 
@@ -1819,12 +1896,12 @@ if (!$applications) {
                                 </button>
                                 <?php if ($is_suspended): ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this teacher account?');">
-                                        <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
+                                <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
                                         <input type="hidden" name="action_type" value="activate">
                                         <button type="submit" name="toggle_account_status" class="btn-success btn-sm">
                                             <i class="fas fa-check"></i> Activate
                                         </button>
-                                    </form>
+                            </form>
                                 <?php else: ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Suspend this teacher account?');">
                                         <input type="hidden" name="user_id" value="<?php echo $t['id']; ?>">
@@ -1900,12 +1977,12 @@ if (!$applications) {
                                 </button>
                                 <?php if ($is_suspended): ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Activate this student account?');">
-                                        <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
+                                <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
                                         <input type="hidden" name="action_type" value="activate">
                                         <button type="submit" name="toggle_account_status" class="btn-success btn-sm">
                                             <i class="fas fa-check"></i> Activate
                                         </button>
-                                    </form>
+                            </form>
                                 <?php else: ?>
                                     <form method="POST" style="display: inline;" onsubmit="return confirm('Suspend this student account?');">
                                         <input type="hidden" name="user_id" value="<?php echo $s['id']; ?>">
@@ -3728,6 +3805,102 @@ async function handleDemoteClick(event, button) {
         return false;
     }
 }
+
+// Load beta feedback
+function loadBetaFeedback() {
+    fetch('api/beta-feedback.php?action=list&status=all&limit=50')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.feedback) {
+                displayBetaFeedback(data.feedback);
+            } else {
+                const container = document.getElementById('beta-feedback-list');
+                if (container) {
+                    container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No feedback available.</p>';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading feedback:', error);
+            const container = document.getElementById('beta-feedback-list');
+            if (container) {
+                container.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 20px;">Error loading feedback.</p>';
+            }
+        });
+}
+
+function displayBetaFeedback(feedback) {
+    const container = document.getElementById('beta-feedback-list');
+    if (!container) return;
+    
+    if (feedback.length === 0) {
+        container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No feedback submitted yet.</p>';
+        return;
+    }
+    
+    const priorityColors = {
+        'low': '#17a2b8',
+        'medium': '#ffc107',
+        'high': '#fd7e14',
+        'critical': '#dc3545'
+    };
+    
+    container.innerHTML = feedback.map(item => {
+        const priorityColor = priorityColors[item.priority] || '#666';
+        return `
+            <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid ${priorityColor};">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 5px 0; color: #333;">${escapeHtml(item.title)}</h3>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px;">
+                            <span style="background: ${priorityColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem;">
+                                ${item.priority.toUpperCase()}
+                            </span>
+                            <span style="background: #e9ecef; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem;">
+                                ${item.feedback_type.replace('_', ' ')}
+                            </span>
+                            <span style="background: #e9ecef; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem;">
+                                ${item.category}
+                            </span>
+                            <span style="background: ${item.status === 'pending' ? '#ffc107' : (item.status === 'resolved' ? '#28a745' : '#6c757d')}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem;">
+                                ${item.status}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.9rem; color: #666;">
+                        ${item.user_name ? escapeHtml(item.user_name) : 'Anonymous'}<br>
+                        <small>${new Date(item.created_at).toLocaleDateString()}</small>
+                    </div>
+                </div>
+                <p style="color: #555; margin: 10px 0; line-height: 1.6;">${escapeHtml(item.description)}</p>
+                ${item.page_url ? `<p style="font-size: 0.85rem; color: #666; margin: 5px 0;"><i class="fas fa-link"></i> <a href="${escapeHtml(item.page_url)}" target="_blank">${escapeHtml(item.page_url)}</a></p>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Load feedback when reports tab is opened
+document.addEventListener('DOMContentLoaded', function() {
+    const reportsTab = document.getElementById('reports');
+    if (reportsTab) {
+        const observer = new MutationObserver(function(mutations) {
+            if (reportsTab.classList.contains('active')) {
+                const feedbackList = document.getElementById('beta-feedback-list');
+                if (feedbackList && feedbackList.innerHTML.includes('Loading feedback')) {
+                    loadBetaFeedback();
+                }
+            }
+        });
+        observer.observe(reportsTab, { attributes: true, attributeFilter: ['class'] });
+    }
+});
 </script>
 
 </body>

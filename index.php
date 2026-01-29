@@ -60,8 +60,8 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <meta name="theme-color" content="#004080">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="Staten Academy - Choose your English learning track: Kids, Adults, or English for Coding">
-    <title>Staten Academy - Choose Your Learning Track</title>
+    <meta name="description" content="Staten Academy - Kids Group Classes: Fun, interactive English lessons for children ages 3-11. $129.99/month for 12 classes.">
+    <title>Staten Academy - Kids Group Classes</title>
     <link rel="stylesheet" href="<?php echo getAssetPath('styles.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/mobile.css'); ?>">
     <link rel="stylesheet" href="<?php echo getAssetPath('css/tracks.css'); ?>">
@@ -480,50 +480,30 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
 
     <main id="main-content">
         <section class="hero-section">
-            <h1>Choose Your Learning Track</h1>
-            <p>Select the perfect English learning path for you. Each track is designed with your goals in mind.</p>
+            <h1>Kids Group Classes</h1>
+            <p>Fun, interactive English lessons designed for children ages 3-11. Join group sessions with peers and enhance your learning!</p>
+            <div style="margin-top: 40px;">
+                <a href="kids-plans.php" class="track-cta" style="display: inline-block; text-decoration: none;">
+                    Get Started - $129.99/month
+                </a>
+            </div>
         </section>
 
         <div class="tracks-container">
-            <div class="tracks-grid">
-                <a href="kids-plans.php" class="track-card kids">
+            <div class="tracks-grid" style="grid-template-columns: 1fr; max-width: 600px; margin: 0 auto;">
+                <div class="track-card kids" style="cursor: default;">
                     <i class="fas fa-child track-icon"></i>
-                    <h2 class="track-title">Kids Classes</h2>
-                    <p class="track-description">Fun, interactive English lessons designed for children ages 3-11. Engaging activities, games, and age-appropriate content.</p>
+                    <h2 class="track-title">Group Classes</h2>
+                    <p class="track-description">Join interactive group sessions with peers. Perfect for kids ages 3-11 who learn best in a fun, social environment.</p>
                     <ul class="track-features">
                         <li><i class="fas fa-check-circle"></i> Ages 3-11</li>
+                        <li><i class="fas fa-check-circle"></i> 3 classes per week (12 per month)</li>
                         <li><i class="fas fa-check-circle"></i> Interactive games & activities</li>
                         <li><i class="fas fa-check-circle"></i> Parent progress reports</li>
-                        <li><i class="fas fa-check-circle"></i> Kid-friendly teachers</li>
+                        <li><i class="fas fa-check-circle"></i> Kid-friendly certified teachers</li>
                     </ul>
-                    <span class="track-cta">View Kids Plans →</span>
-                </a>
-
-                <a href="adults-plans.php" class="track-card adults">
-                    <i class="fas fa-user-graduate track-icon"></i>
-                    <h2 class="track-title">Adult Classes</h2>
-                    <p class="track-description">Professional English training for adults 12+. Focus on fluency, career advancement, travel, and real-world communication.</p>
-                    <ul class="track-features">
-                        <li><i class="fas fa-check-circle"></i> Ages 12+</li>
-                        <li><i class="fas fa-check-circle"></i> Career & business English</li>
-                        <li><i class="fas fa-check-circle"></i> Travel & conversation</li>
-                        <li><i class="fas fa-check-circle"></i> Flexible scheduling</li>
-                    </ul>
-                    <span class="track-cta">View Adult Plans →</span>
-                </a>
-
-                <a href="coding-plans.php" class="track-card coding">
-                    <i class="fas fa-code track-icon"></i>
-                    <h2 class="track-title">English for Coding</h2>
-                    <p class="track-description">Specialized English training for developers. Technical vocabulary, interview prep, documentation, and developer communication.</p>
-                    <ul class="track-features">
-                        <li><i class="fas fa-check-circle"></i> Technical vocabulary</li>
-                        <li><i class="fas fa-check-circle"></i> Interview preparation</li>
-                        <li><i class="fas fa-check-circle"></i> Code documentation</li>
-                        <li><i class="fas fa-check-circle"></i> Developer scenarios</li>
-                    </ul>
-                    <span class="track-cta">View Coding Plans →</span>
-                </a>
+                    <a href="kids-plans.php" class="track-cta" style="text-decoration: none; display: inline-block;">View Plans →</a>
+                </div>
             </div>
         </div>
 
@@ -571,7 +551,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                 <div class="feature-item">
                     <i class="fas fa-users"></i>
                     <h3>Group Classes</h3>
-                    <p>Join group sessions to practice with peers and enhance your learning.</p>
+                    <p>Join interactive group sessions with peers. 3 classes per week, 12 classes per month for just $129.99.</p>
                 </div>
             </div>
         </section>
@@ -593,7 +573,7 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                             1
                         </div>
                         <h3 style="color: #004080; margin-bottom: 10px; font-size: 1.3rem;">Sign Up</h3>
-                        <p style="color: #666; line-height: 1.6;">Create your account and choose your learning track</p>
+                        <p style="color: #666; line-height: 1.6;">Create your account and start learning with Group Classes</p>
                     </div>
 
                     <div style="text-align: center; position: relative;">
@@ -703,15 +683,14 @@ $user_role = $_SESSION['user_role'] ?? 'guest';
                         <li><a href="index.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Home</a></li>
                         <li><a href="about.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">About Us</a></li>
                         <li><a href="how-we-work.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">How We Work</a></li>
-                        <li><a href="payment.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Plans & Pricing</a></li>
+                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Group Classes</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h3 style="margin-bottom: 15px; color: white;">Learning Tracks</h3>
+                    <h3 style="margin-bottom: 15px; color: white;">Our Classes</h3>
                     <ul style="list-style: none; padding: 0; line-height: 2;">
-                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Kids Classes</a></li>
-                        <li><a href="adults-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Adult Classes</a></li>
-                        <li><a href="coding-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">English for Coding</a></li>
+                        <li><a href="kids-plans.php" style="color: rgba(255,255,255,0.8); text-decoration: none;">Kids Group Classes</a></li>
+                        <li style="color: rgba(255,255,255,0.6);">One-on-One Classes (Coming Soon)</li>
                     </ul>
                 </div>
                 <div>

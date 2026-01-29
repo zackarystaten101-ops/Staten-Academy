@@ -258,15 +258,14 @@ if (in_array($current_page, $sidebar_pages)) {
             <a href="about.php">About Us</a>
             <a href="how-we-work.php">How We Work</a>
             <?php if ($user_role === 'teacher' || $user_role === 'admin'): ?>
-                <a href="schedule.php">Schedule</a>
-                <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>">View Profile</a>
+                <a href="teacher-dashboard.php#group-classes">My Classes</a>
                 <a href="classroom.php">Classroom</a>
             <?php endif; ?>
             <?php if ($user_role === 'visitor'): ?>
                 <a href="visitor-dashboard.php">My Dashboard</a>
-                <a href="payment.php">Upgrade to Student</a>
+                <a href="kids-plans.php">Subscribe</a>
             <?php elseif ($user_role === 'student'): ?>
-                <a href="schedule.php">Book Lesson</a>
+                <a href="student-dashboard.php#group-classes">My Classes</a>
                 <a href="student-dashboard.php">My Profile</a>
             <?php endif; ?>
             <?php if ($user_role === 'teacher'): ?>

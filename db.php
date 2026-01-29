@@ -1639,6 +1639,53 @@ if ($admin_check) {
     }
 }
 
+// Create beta_feedback table
+$beta_feedback_check = $conn->query("SHOW TABLES LIKE 'beta_feedback'");
+if (!$beta_feedback_check || $beta_feedback_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS beta_feedback (
+        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT(6) UNSIGNED NULL,
+        feedback_type ENUM('bug', 'feature_request', 'ui_issue', 'performance', 'general') DEFAULT 'general',
+        category VARCHAR(50) DEFAULT 'other',
+        title VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+        page_url VARCHAR(500),
+        user_agent TEXT,
+        ip_address VARCHAR(45),
+        status ENUM('pending', 'reviewed', 'in_progress', 'resolved', 'rejected') DEFAULT 'pending',
+        admin_notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_user (user_id),
+        INDEX idx_status (status),
+        INDEX idx_category (category),
+        INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+    
+    // Add foreign key
+    $fk_check = $conn->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='beta_feedback' AND COLUMN_NAME='user_id' AND REFERENCED_TABLE_NAME='users'");
+    if (!$fk_check || $fk_check->num_rows == 0) {
+        $conn->query("ALTER TABLE beta_feedback ADD CONSTRAINT fk_beta_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL");
+    }
+}
+
+// Create rate_limits table
+$rate_limits_check = $conn->query("SHOW TABLES LIKE 'rate_limits'");
+if (!$rate_limits_check || $rate_limits_check->num_rows == 0) {
+    $sql = "CREATE TABLE IF NOT EXISTS rate_limits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        identifier VARCHAR(255) NOT NULL,
+        endpoint VARCHAR(255) NOT NULL,
+        request_count INT DEFAULT 1,
+        window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_identifier_endpoint (identifier, endpoint),
+        INDEX idx_window_start (window_start)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $conn->query($sql);
+}
+
 // Create admin_settings table if it doesn't exist
 $admin_settings_check = $conn->query("SHOW TABLES LIKE 'admin_settings'");
 if (!$admin_settings_check || $admin_settings_check->num_rows == 0) {

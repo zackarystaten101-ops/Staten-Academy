@@ -61,7 +61,7 @@ session_start();
         <h1>Payment Cancelled</h1>
         <p>You have cancelled the payment process. No charges were made.</p>
         <?php if (isset($_SESSION['user_id'])): ?>
-            <a href="payment.php" class="btn">Try Again</a>
+            <a href="kids-plans.php" class="btn">Try Again</a>
             <a href="index.php" class="btn" style="background: #6c757d; margin-left: 10px;">Return to Home</a>
         <?php else: ?>
             <a href="index.php" class="btn">Return to Home</a>

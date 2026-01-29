@@ -140,16 +140,35 @@ if ($is_trial) {
     $_SESSION['trial_student_id'] = $student_id;
 } else {
     // Regular plan checkout
-    if (!isset($_POST['price_id'])) {
-        die("Error: No Price ID provided.");
+    // Check if coming from registration redirect (session-based)
+    $plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : (isset($_SESSION['selected_plan_id']) ? (int)$_SESSION['selected_plan_id'] : null);
+    $track = isset($_POST['track']) ? $_POST['track'] : (isset($_SESSION['selected_track']) ? $_SESSION['selected_track'] : 'kids');
+    
+    // If plan_id is in session but no POST data, fetch plan details
+    if ($plan_id && !isset($_POST['price_id'])) {
+        require_once __DIR__ . '/app/Models/SubscriptionPlan.php';
+        $planModel = new SubscriptionPlan($conn);
+        $plan = $planModel->getPlan($plan_id);
+        if ($plan && !empty($plan['stripe_price_id'])) {
+            $priceId = $plan['stripe_price_id'];
+            $mode = ($plan['type'] ?? 'subscription') === 'subscription' ? 'subscription' : 'payment';
+        } else {
+            die("Error: Plan not found or Stripe Price ID not configured. Please contact support.");
+        }
+    } elseif (isset($_POST['price_id'])) {
+        $priceId = $_POST['price_id'];
+        $mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
+    } else {
+        die("Error: No Price ID or Plan ID provided.");
     }
     
-    $priceId = $_POST['price_id'];
-    $mode = isset($_POST['mode']) ? $_POST['mode'] : 'payment';
-    $plan_id = isset($_POST['plan_id']) ? (int)$_POST['plan_id'] : null;
-    $track = isset($_POST['track']) ? $_POST['track'] : null;
     $payment_type = isset($_POST['payment_type']) ? $_POST['payment_type'] : 'plan'; // plan, gift_credit
     $gift_recipient_email = isset($_POST['gift_recipient_email']) ? $_POST['gift_recipient_email'] : null;
+    
+    // Ensure track is set to 'kids' for group classes
+    if (!$track || !in_array($track, ['kids', 'adults', 'coding'])) {
+        $track = 'kids';
+    }
     
     // Determine mode based on plan type if not explicitly set
     if ($plan_id && $mode === 'payment') {

@@ -84,6 +84,11 @@ $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id
             <?php endif; ?>
         </a>
         
+        <!-- WhatsApp Support -->
+        <a href="https://wa.me/50558477620?text=Hello%20Staten%20Academy" target="_blank" class="header-whatsapp" title="Contact Support via WhatsApp" style="color: #25D366; font-size: 1.5rem; margin: 0 10px; text-decoration: none; display: flex; align-items: center;">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+        
         <!-- User Profile -->
         <div class="header-bar-profile" onclick="toggleProfileMenu()">
             <div class="header-bar-info">
@@ -96,11 +101,10 @@ $message_count = isset($conn) ? getUnreadMessagesCount($conn, $_SESSION['user_id
             <div class="profile-dropdown" id="profileDropdown">
                 <?php if ($user_role === 'student'): ?>
                     <a href="student-dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                    <a href="schedule.php"><i class="fas fa-calendar-plus"></i> Book Lesson</a>
+                    <a href="student-dashboard.php#group-classes"><i class="fas fa-users"></i> My Classes</a>
                 <?php elseif ($user_role === 'teacher'): ?>
                     <a href="teacher-dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                    <a href="profile.php?id=<?php echo $_SESSION['user_id']; ?>"><i class="fas fa-user"></i> View Profile</a>
-                    <a href="schedule.php"><i class="fas fa-calendar"></i> Schedule</a>
+                    <a href="teacher-dashboard.php#group-classes"><i class="fas fa-users"></i> My Classes</a>
                 <?php elseif ($user_role === 'admin'): ?>
                     <a href="admin-dashboard.php"><i class="fas fa-cogs"></i> Admin Panel</a>
                     <a href="teacher-dashboard.php"><i class="fas fa-chalkboard-teacher"></i> Teaching</a>

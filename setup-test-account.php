@@ -238,7 +238,7 @@ try {
         <li>All features pre-activated</li>
     </ul>
     <a href="student-dashboard.php" class="btn">Go to Student Dashboard</a>
-    <a href="schedule.php" class="btn" style="background: #6c757d;">Go to Schedule</a>
+    <a href="student-dashboard.php#group-classes" class="btn" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">Go to My Classes</a>
 </div>
 </body>
 </html>

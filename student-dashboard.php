@@ -10,6 +10,7 @@ require_once __DIR__ . '/app/Services/TeacherService.php';
 require_once __DIR__ . '/app/Services/TrialService.php';
 require_once __DIR__ . '/app/Services/CreditService.php';
 require_once __DIR__ . '/app/Services/SubscriptionService.php';
+require_once __DIR__ . '/app/Services/ProgressService.php';
 
 // #region agent log helper
 if (!function_exists('agent_debug_log')) {
@@ -59,9 +60,9 @@ $walletService = new WalletService($conn);
 $teacherService = new TeacherService($conn);
 $trialService = new TrialService($conn);
 
-// Get student's preferred category
-$student_category = ($user && isset($user['preferred_category'])) ? $user['preferred_category'] : 'adults';
-$student_track = ($user && isset($user['learning_track'])) ? $user['learning_track'] : null; // Keep for backward compatibility
+// Get student's preferred category - always default to kids for Group Classes
+$student_category = 'young_learners';
+$student_track = 'kids'; // Fixed to kids for Group Classes only
 
 // Get wallet balance
 $wallet = $walletService->getWalletBalance($student_id);
@@ -110,25 +111,50 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Get favorite teachers
-$favorite_teachers = [];
+// Get student's enrolled group classes
+$enrolled_group_classes = [];
 $stmt = $conn->prepare("
-    SELECT u.id, u.name, u.profile_pic, u.specialty, 
-           (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE teacher_id = u.id) as avg_rating, 
-           (SELECT COUNT(*) FROM reviews WHERE teacher_id = u.id) as review_count
-    FROM favorite_teachers ft
-    JOIN users u ON ft.teacher_id = u.id
-    WHERE ft.student_id = ?
-    ORDER BY ft.created_at DESC
-    LIMIT 5
+    SELECT gc.*, u.name as teacher_name, u.profile_pic as teacher_pic,
+           gce.enrolled_at
+    FROM group_class_enrollments gce
+    JOIN group_classes gc ON gce.group_class_id = gc.id
+    LEFT JOIN users u ON gc.teacher_id = u.id
+    WHERE gce.student_id = ? AND gc.status IN ('scheduled', 'approved')
+    AND gc.scheduled_date >= CURDATE()
+    ORDER BY gc.scheduled_date ASC, gc.scheduled_time ASC
 ");
-$stmt->bind_param("i", $student_id);
-$stmt->execute();
-$result = $stmt->get_result();
-while ($row = $result->fetch_assoc()) {
-    $favorite_teachers[] = $row;
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $enrolled_group_classes[] = $row;
+    }
+    $stmt->close();
 }
-$stmt->close();
+
+// Get available group classes for kids track
+$available_group_classes = [];
+$stmt = $conn->prepare("
+    SELECT gc.*, u.name as teacher_name, u.profile_pic as teacher_pic,
+           (SELECT COUNT(*) FROM group_class_enrollments WHERE group_class_id = gc.id) as current_enrollment
+    FROM group_classes gc
+    LEFT JOIN users u ON gc.teacher_id = u.id
+    WHERE gc.track = 'kids' AND gc.status IN ('scheduled', 'approved')
+    AND gc.scheduled_date >= CURDATE()
+    AND gc.id NOT IN (SELECT group_class_id FROM group_class_enrollments WHERE student_id = ?)
+    ORDER BY gc.scheduled_date ASC, gc.scheduled_time ASC
+    LIMIT 10
+");
+if ($stmt) {
+    $stmt->bind_param("i", $student_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $available_group_classes[] = $row;
+    }
+    $stmt->close();
+}
 
 // Get unread message count
 $unread_messages = 0;
@@ -646,9 +672,16 @@ if ($stmt) {
 // Get credits balance and subscription info
 $creditService = new CreditService($conn);
 $subscriptionService = new SubscriptionService($conn);
+$progressService = new ProgressService($conn);
 $credits_balance = $creditService->getCreditsBalance($student_id);
 $credit_history = $creditService->getCreditHistory($student_id, 20);
 $subscription_details = $subscriptionService->getSubscriptionDetails($student_id);
+
+// Get progress data
+$overall_progress = $progressService->getOverallProgress($student_id);
+$course_progress = $progressService->getCourseProgress($student_id);
+$progress_over_time = $progressService->getProgressOverTime($student_id, 30);
+$upcoming_milestones = $progressService->getUpcomingMilestones($student_id);
 
 $active_tab = 'overview';
 ?>
@@ -714,12 +747,9 @@ $active_tab = 'overview';
         <div id="overview" class="tab-content active">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <h1>Welcome back, <?php echo h($user['name']); ?>! 👋</h1>
-                <?php if ($student_track): ?>
-                    <span class="badge" style="font-size: 1rem; padding: 8px 20px;">
-                        <i class="fas fa-<?php echo $student_track === 'kids' ? 'child' : ($student_track === 'coding' ? 'code' : 'user-graduate'); ?>"></i>
-                        <?php echo ucfirst($student_track); ?> Track
-                    </span>
-                <?php endif; ?>
+                <span class="badge" style="font-size: 1rem; padding: 8px 20px; background: linear-gradient(135deg, #ff6b9d, #ffa500); color: white;">
+                    <i class="fas fa-users"></i> Group Classes
+                </span>
             </div>
             
             <?php
@@ -732,36 +762,23 @@ $active_tab = 'overview';
             $has_learning_needs = $learning_needs_stmt->get_result()->num_rows > 0;
             $learning_needs_stmt->close();
             
-            // Show optional plan selection prompt if no plan (not mandatory)
+            // Show subscription prompt if no plan
             if (!$has_plan):
             ?>
-            <div class="card" style="background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%); border: 2px solid #ffc107; margin-bottom: 30px;">
-                <h2 style="color: #856404; margin-bottom: 20px;">
-                    <i class="fas fa-lightbulb"></i> Get Started
+            <div class="card" style="background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%); border: 2px solid #ff6b9d; margin-bottom: 30px;">
+                <h2 style="color: #ff6b9d; margin-bottom: 20px;">
+                    <i class="fas fa-users"></i> Get Started with Group Classes
                 </h2>
-                <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ffc107;">
+                <div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #ff6b9d;">
                     <div style="flex: 1;">
-                        <h3 style="margin: 0 0 5px 0; color: #856404;">
-                            <i class="fas fa-credit-card"></i> Select a Plan (Optional)
+                        <h3 style="margin: 0 0 5px 0; color: #ff6b9d;">
+                            <i class="fas fa-credit-card"></i> Subscribe to Group Classes
                         </h3>
-                        <p style="margin: 0; color: #666; font-size: 0.9rem;">Choose a subscription plan to unlock all features, or browse teachers directly.</p>
+                        <p style="margin: 0; color: #666; font-size: 0.9rem;">$129.99/month for 3 classes per week (12 classes per month). Join interactive sessions with other students!</p>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <a href="<?php echo $user['learning_track'] ? ($user['learning_track'] . '-plans.php') : 'index.php'; ?>" 
-                           class="btn-primary" style="white-space: nowrap;">
-                            Browse Plans
-                        </a>
-                        <?php 
-                        // Get student's preferred category to link to teachers
-                        $student_category = ($user && isset($user['preferred_category'])) ? $user['preferred_category'] : 'adults';
-                        $category_map = ['young_learners' => 'kids', 'adults' => 'adults', 'coding' => 'coding'];
-                        $track_for_link = $category_map[$student_category] ?? 'adults';
-                        ?>
-                        <a href="category-teachers.php?category=<?php echo htmlspecialchars($student_category); ?>" 
-                           class="btn-outline" style="white-space: nowrap;">
-                            Browse Teachers
-                        </a>
-                    </div>
+                    <a href="kids-plans.php" class="btn-primary" style="white-space: nowrap; background: linear-gradient(135deg, #ff6b9d, #ffa500);">
+                        Subscribe Now
+                    </a>
                 </div>
             </div>
             <?php endif; ?>
@@ -786,30 +803,36 @@ $active_tab = 'overview';
             </div>
             <?php endif; ?>
             
-            <!-- Upcoming Classes -->
-            <?php if (count($upcoming_lessons) > 0): ?>
+            <!-- Upcoming Group Classes -->
+            <?php if (count($enrolled_group_classes) > 0): ?>
             <div class="dashboard-card" style="margin-bottom: 30px;">
                 <h2 style="margin-bottom: 20px;">
-                    <i class="fas fa-calendar-check"></i> Upcoming Classes
+                    <i class="fas fa-calendar-check"></i> Your Upcoming Group Classes
                 </h2>
                 <div style="display: flex; flex-direction: column; gap: 15px;">
-                    <?php foreach ($upcoming_lessons as $lesson): ?>
-                        <div style="display: flex; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; align-items: center;">
-                            <img src="<?php echo htmlspecialchars($lesson['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
-                                 alt="<?php echo htmlspecialchars($lesson['teacher_name']); ?>" 
-                                 style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;">
+                    <?php foreach ($enrolled_group_classes as $class): ?>
+                        <div style="display: flex; gap: 15px; padding: 15px; background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%); border-radius: 8px; align-items: center; border-left: 4px solid #ff6b9d;">
+                            <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #ff6b9d, #ffa500); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                                <i class="fas fa-users"></i>
+                            </div>
                             <div style="flex: 1;">
-                                <h4 style="margin: 0 0 5px 0;"><?php echo htmlspecialchars($lesson['teacher_name']); ?></h4>
+                                <h4 style="margin: 0 0 5px 0; color: #ff6b9d;"><?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?></h4>
                                 <p style="margin: 0; color: #666; font-size: 0.9rem;">
-                                    <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?> 
-                                    at <?php echo date('g:i A', strtotime($lesson['start_time'])); ?>
-                                    <?php if ($lesson['is_trial']): ?>
-                                        <span style="color: #28a745; margin-left: 10px;"><i class="fas fa-gift"></i> Trial</span>
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?> 
+                                    <i class="fas fa-clock" style="margin-left: 10px;"></i> <?php echo date('g:i A', strtotime($class['scheduled_time'])); ?>
+                                    <?php if ($class['teacher_name']): ?>
+                                        <span style="margin-left: 10px;"><i class="fas fa-chalkboard-teacher"></i> <?php echo htmlspecialchars($class['teacher_name']); ?></span>
                                     <?php endif; ?>
                                 </p>
                             </div>
-                            <a href="teacher-profile.php?id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem;">
-                                View Teacher
+                            <?php
+                            $classDateTime = strtotime($class['scheduled_date'] . ' ' . $class['scheduled_time']);
+                            $canJoin = $classDateTime <= (time() + 900); // Can join 15 min before
+                            ?>
+                            <a href="classroom.php?groupClassId=<?php echo intval($class['id']); ?>" 
+                               class="btn <?php echo $canJoin ? 'btn-primary' : 'btn-outline'; ?>" 
+                               style="padding: 8px 15px; font-size: 0.9rem; <?php echo $canJoin ? 'background: linear-gradient(135deg, #ff6b9d, #ffa500);' : ''; ?>">
+                                <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
                             </a>
                         </div>
                     <?php endforeach; ?>
@@ -817,78 +840,47 @@ $active_tab = 'overview';
             </div>
             <?php endif; ?>
             
-            <!-- Past Classes -->
-            <?php if (count($past_lessons) > 0): ?>
+            <!-- Available Group Classes -->
+            <?php if (count($available_group_classes) > 0): ?>
             <div class="dashboard-card" style="margin-bottom: 30px;">
                 <h2 style="margin-bottom: 20px;">
-                    <i class="fas fa-history"></i> Past Classes
+                    <i class="fas fa-plus-circle"></i> Available Group Classes
                 </h2>
+                <p style="color: #666; margin-bottom: 15px;">Enroll in upcoming group classes to learn with other students!</p>
                 <div style="display: flex; flex-direction: column; gap: 15px;">
-                    <?php foreach ($past_lessons as $lesson): ?>
-                        <div style="display: flex; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; align-items: center;">
-                            <img src="<?php echo htmlspecialchars($lesson['teacher_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
-                                 alt="<?php echo htmlspecialchars($lesson['teacher_name']); ?>" 
-                                 style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;">
+                    <?php foreach (array_slice($available_group_classes, 0, 5) as $class): ?>
+                        <div style="display: flex; gap: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; align-items: center; border-left: 4px solid #28a745;">
+                            <div style="width: 60px; height: 60px; border-radius: 50%; background: #28a745; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
                             <div style="flex: 1;">
-                                <h4 style="margin: 0 0 5px 0;"><?php echo htmlspecialchars($lesson['teacher_name']); ?></h4>
+                                <h4 style="margin: 0 0 5px 0;"><?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?></h4>
                                 <p style="margin: 0; color: #666; font-size: 0.9rem;">
-                                    <?php echo date('M d, Y', strtotime($lesson['lesson_date'])); ?> 
-                                    at <?php echo date('g:i A', strtotime($lesson['start_time'])); ?>
+                                    <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?> 
+                                    <i class="fas fa-clock" style="margin-left: 10px;"></i> <?php echo date('g:i A', strtotime($class['scheduled_time'])); ?>
+                                    <span style="margin-left: 10px;"><i class="fas fa-user"></i> <?php echo ($class['current_enrollment'] ?? 0); ?>/<?php echo ($class['max_students'] ?? 10); ?> enrolled</span>
                                 </p>
                             </div>
-                            <div style="display: flex; gap: 10px;">
-                                <a href="teacher-profile.php?id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem;">
-                                    Book Again
-                                </a>
-                                <a href="schedule.php?teacher_id=<?php echo intval($lesson['teacher_id']); ?>" class="btn" style="padding: 8px 15px; font-size: 0.9rem; background: #28a745;">
-                                    Schedule
-                                </a>
-                            </div>
+                            <button onclick="enrollInGroupClass(<?php echo intval($class['id']); ?>)" 
+                                    class="btn-primary" style="padding: 8px 15px; font-size: 0.9rem;"
+                                    <?php echo (($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10)) ? 'disabled' : ''; ?>>
+                                <i class="fas fa-plus"></i> <?php echo (($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10)) ? 'Full' : 'Enroll'; ?>
+                            </button>
                         </div>
                     <?php endforeach; ?>
                 </div>
-            </div>
-            <?php endif; ?>
-            
-            <!-- Favorite Teachers -->
-            <?php if (count($favorite_teachers) > 0): ?>
-            <div class="dashboard-card" style="margin-bottom: 30px;">
-                <h2 style="margin-bottom: 20px;">
-                    <i class="fas fa-heart"></i> Favorite Teachers
-                </h2>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
-                    <?php foreach ($favorite_teachers as $teacher): ?>
-                        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                            <img src="<?php echo htmlspecialchars($teacher['profile_pic'] ?? getAssetPath('images/placeholder-teacher.svg')); ?>" 
-                                 alt="<?php echo htmlspecialchars($teacher['name']); ?>" 
-                                 style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;">
-                            <h4 style="margin: 0 0 5px 0; font-size: 1rem;"><?php echo htmlspecialchars($teacher['name']); ?></h4>
-                            <?php if ($teacher['avg_rating']): ?>
-                                <p style="margin: 0; color: #ffa500; font-size: 0.9rem;">
-                                    <?php 
-                                    $rating = floatval($teacher['avg_rating']);
-                                    for ($i = 0; $i < floor($rating); $i++) {
-                                        echo '<i class="fas fa-star"></i>';
-                                    }
-                                    ?>
-                                    <?php echo number_format($rating, 1); ?>
-                                </p>
-                            <?php endif; ?>
-                            <a href="teacher-profile.php?id=<?php echo intval($teacher['id']); ?>" class="btn" style="margin-top: 10px; padding: 6px 12px; font-size: 0.85rem; display: inline-block;">
-                                View Profile
-                            </a>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                <a href="#" onclick="switchTab('group-classes')" style="color: #ff6b9d; text-decoration: none; display: block; margin-top: 15px; text-align: center;">
+                    View all available classes →
+                </a>
             </div>
             <?php endif; ?>
             
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-icon"><i class="fas fa-book-reader"></i></div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);"><i class="fas fa-users"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $stats['total_lessons']; ?></h3>
-                        <p>Total Lessons</p>
+                        <h3><?php echo count($enrolled_group_classes); ?></h3>
+                        <p>Enrolled Classes</p>
                     </div>
                 </div>
                 <div class="stat-card">
@@ -1018,9 +1010,9 @@ $active_tab = 'overview';
             <div class="card">
                 <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
                 <div class="quick-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-                    <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%);">
-                        <i class="fas fa-calendar-plus"></i>
-                        <span>Book Lesson</span>
+                    <a href="#" onclick="switchTab('group-classes')" class="quick-action-btn" style="background: linear-gradient(135deg, #ff6b9d 0%, #ffa500 100%);">
+                        <i class="fas fa-users"></i>
+                        <span>My Classes</span>
                     </a>
                     <a href="message_threads.php" class="quick-action-btn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); position: relative;">
                         <i class="fas fa-comments"></i>
@@ -1098,8 +1090,8 @@ $active_tab = 'overview';
                     </div>
                 <?php endforeach; ?>
                 <?php if (count($past_lessons_pending) > 3): ?>
-                    <a href="#" onclick="switchTab('bookings')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px; text-align: center;">
-                        View all pending confirmations →
+                    <a href="#" onclick="switchTab('group-classes')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px; text-align: center;">
+                        View all classes →
                     </a>
                 <?php endif; ?>
             </div>
@@ -1135,7 +1127,7 @@ $active_tab = 'overview';
                         </a>
                     </div>
                 <?php endforeach; ?>
-                <a href="schedule.php" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all lessons →</a>
+                <a href="#" onclick="switchTab('group-classes')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all classes →</a>
             </div>
             <?php endif; ?>
 
@@ -1164,47 +1156,107 @@ $active_tab = 'overview';
             </div>
             <?php endif; ?>
 
-            <?php if (!empty($group_classes) && $student_track): ?>
-            <div class="card">
-                <h2><i class="fas fa-users"></i> Available Group Classes</h2>
-                <p style="color: #666; margin-bottom: 20px;">Join group classes with other students in your track</p>
-                <?php foreach (array_slice($group_classes, 0, 3) as $class): ?>
-                    <div class="dashboard-card" style="padding: 20px; margin-bottom: 15px; border-left: 4px solid var(--track-primary, #0b6cf5);">
-                        <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 15px;">
-                            <div style="flex: 1; min-width: 200px;">
-                                <h3 style="margin: 0 0 10px 0; color: var(--track-primary, #004080);">
-                                    <?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?>
-                                </h3>
-                                <?php if (!empty($class['description'])): ?>
-                                    <p style="color: #666; margin: 0 0 10px 0; font-size: 0.9rem;">
-                                        <?php echo htmlspecialchars(substr($class['description'], 0, 100)); ?>
-                                        <?php echo strlen($class['description']) > 100 ? '...' : ''; ?>
-                                    </p>
-                                <?php endif; ?>
-                                <div style="font-size: 0.85rem; color: #666;">
-                                    <?php if (!empty($class['scheduled_date'])): ?>
-                                        <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($class['scheduled_date'])); ?>
-                                    <?php endif; ?>
-                                    <?php if (!empty($class['scheduled_time'])): ?>
-                                        <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('H:i', strtotime($class['scheduled_time'])); ?>
-                                    <?php endif; ?>
-                                    <i class="fas fa-user" style="margin-left: 15px;"></i> <?php echo $class['current_enrollment'] ?? 0; ?>/<?php echo $class['max_students'] ?? 10; ?> students
-                                </div>
-                            </div>
-                            <?php if (isset($class['id'])): ?>
-                                <button onclick="enrollInGroupClass(<?php echo $class['id']; ?>)" 
-                                        class="btn-primary" 
-                                        style="white-space: nowrap;"
-                                        <?php echo ($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10) ? 'disabled' : ''; ?>>
-                                    <i class="fas fa-user-plus"></i> 
-                                    <?php echo ($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10) ? 'Full' : 'Enroll'; ?>
-                                </button>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <a href="#" onclick="switchTab('group-classes')" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all group classes →</a>
+        </div>
+
+        <!-- Group Classes Tab -->
+        <div id="group-classes" class="tab-content">
+            <h1><i class="fas fa-users" style="color: #ff6b9d;"></i> My Group Classes</h1>
+            
+            <?php if (!$has_plan): ?>
+            <div class="card" style="text-align: center; padding: 40px; background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%); border: 2px solid #ff6b9d;">
+                <div style="font-size: 4rem; color: #ff6b9d; margin-bottom: 20px;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h2 style="color: #ff6b9d; margin-bottom: 15px;">Subscribe to Group Classes</h2>
+                <p style="color: #666; margin-bottom: 25px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                    Get access to interactive group classes with certified teachers. 
+                    Join 3 classes per week (12 per month) for just $129.99/month!
+                </p>
+                <a href="kids-plans.php" class="btn-primary" style="background: linear-gradient(135deg, #ff6b9d, #ffa500); padding: 15px 40px; font-size: 1.1rem;">
+                    <i class="fas fa-credit-card"></i> Subscribe Now - $129.99/month
+                </a>
             </div>
+            <?php else: ?>
+            
+            <!-- Enrolled Classes Section -->
+            <div class="card">
+                <h2 style="color: #ff6b9d;"><i class="fas fa-calendar-check"></i> Your Upcoming Classes</h2>
+                <?php if (count($enrolled_group_classes) > 0): ?>
+                    <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                        <?php foreach ($enrolled_group_classes as $class): ?>
+                            <div style="display: flex; gap: 15px; padding: 20px; background: linear-gradient(135deg, #fff5f8 0%, #ffffff 100%); border-radius: 12px; align-items: center; border-left: 4px solid #ff6b9d;">
+                                <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #ff6b9d, #ffa500); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem;">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h3 style="margin: 0 0 8px 0; color: #ff6b9d;"><?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?></h3>
+                                    <p style="margin: 0; color: #666; font-size: 0.95rem;">
+                                        <i class="fas fa-calendar"></i> <?php echo date('l, M d, Y', strtotime($class['scheduled_date'])); ?>
+                                        <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('g:i A', strtotime($class['scheduled_time'])); ?>
+                                    </p>
+                                    <?php if ($class['teacher_name']): ?>
+                                        <p style="margin: 5px 0 0 0; color: #888; font-size: 0.9rem;">
+                                            <i class="fas fa-chalkboard-teacher"></i> Teacher: <?php echo htmlspecialchars($class['teacher_name']); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                                <?php
+                                $classDateTime = strtotime($class['scheduled_date'] . ' ' . $class['scheduled_time']);
+                                $canJoin = $classDateTime <= (time() + 900);
+                                ?>
+                                <a href="classroom.php?groupClassId=<?php echo intval($class['id']); ?>" 
+                                   class="btn <?php echo $canJoin ? 'btn-primary' : 'btn-outline'; ?>" 
+                                   style="padding: 12px 20px; <?php echo $canJoin ? 'background: linear-gradient(135deg, #ff6b9d, #ffa500);' : ''; ?>">
+                                    <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join Class'; ?>
+                                </a>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div style="text-align: center; padding: 30px; color: #666;">
+                        <i class="fas fa-calendar-times" style="font-size: 3rem; color: #ddd; margin-bottom: 15px;"></i>
+                        <p>No upcoming classes scheduled yet. Check back soon!</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Available Classes Section -->
+            <div class="card" style="margin-top: 30px;">
+                <h2 style="color: #28a745;"><i class="fas fa-plus-circle"></i> Available Classes to Join</h2>
+                <?php if (count($available_group_classes) > 0): ?>
+                    <p style="color: #666; margin-bottom: 20px;">Enroll in additional classes below:</p>
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                        <?php foreach ($available_group_classes as $class): ?>
+                            <div style="display: flex; gap: 15px; padding: 20px; background: #f8f9fa; border-radius: 12px; align-items: center; border-left: 4px solid #28a745;">
+                                <div style="width: 70px; height: 70px; border-radius: 50%; background: #28a745; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem;">
+                                    <i class="fas fa-user-plus"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h3 style="margin: 0 0 8px 0;"><?php echo htmlspecialchars($class['title'] ?? 'Group Class'); ?></h3>
+                                    <p style="margin: 0; color: #666; font-size: 0.95rem;">
+                                        <i class="fas fa-calendar"></i> <?php echo date('l, M d, Y', strtotime($class['scheduled_date'])); ?>
+                                        <i class="fas fa-clock" style="margin-left: 15px;"></i> <?php echo date('g:i A', strtotime($class['scheduled_time'])); ?>
+                                        <span style="margin-left: 15px; color: #28a745;">
+                                            <i class="fas fa-users"></i> <?php echo ($class['current_enrollment'] ?? 0); ?>/<?php echo ($class['max_students'] ?? 10); ?> enrolled
+                                        </span>
+                                    </p>
+                                </div>
+                                <button onclick="enrollInGroupClass(<?php echo intval($class['id']); ?>)" 
+                                        class="btn-primary" style="padding: 12px 20px;"
+                                        <?php echo (($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10)) ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-plus"></i> <?php echo (($class['current_enrollment'] ?? 0) >= ($class['max_students'] ?? 10)) ? 'Class Full' : 'Enroll'; ?>
+                                </button>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div style="text-align: center; padding: 30px; color: #666;">
+                        <i class="fas fa-check-circle" style="font-size: 3rem; color: #28a745; margin-bottom: 15px;"></i>
+                        <p>You're all caught up! No additional classes available right now.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
             <?php endif; ?>
         </div>
 
@@ -1548,20 +1600,16 @@ $active_tab = 'overview';
                         $has_lessons = $lesson_check->get_result()->num_rows > 0;
                         $lesson_check->close();
                         
-                        if ($has_lessons): ?>
-                            <a href="teacher-profile.php?id=<?php echo $teacher['id']; ?>" class="btn-outline btn-sm">View Profile</a>
-                            <a href="schedule.php?teacher_id=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Book Again</a>
-                        <?php endif; ?>
                         <a href="message_threads.php?user_id=<?php echo $teacher['id']; ?>" class="btn-primary btn-sm">Message</a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             <?php else: ?>
                 <div class="empty-state">
-                    <i class="fas fa-chalkboard-teacher"></i>
-                    <h3>No Teachers Yet</h3>
-                    <p>Book your first lesson to start learning!</p>
-                    <a href="schedule.php" class="btn-primary">Browse Teachers</a>
+                    <i class="fas fa-users"></i>
+                    <h3>No Classes Yet</h3>
+                    <p>Subscribe to Group Classes to start learning!</p>
+                    <a href="kids-plans.php" class="btn-primary" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">Subscribe Now</a>
                 </div>
             <?php endif; ?>
 
@@ -1576,7 +1624,7 @@ $active_tab = 'overview';
                         <?php echo getStarRatingHtml($fav['avg_rating'] ?? 0); ?>
                     </div>
                 </div>
-                <a href="schedule.php?teacher=<?php echo $fav['teacher_id']; ?>" class="btn-primary btn-sm">Book Lesson</a>
+                <a href="message_threads.php?user_id=<?php echo $fav['teacher_id']; ?>" class="btn-primary btn-sm">Message</a>
             </div>
             <?php endforeach; ?>
             <?php endif; ?>
@@ -1700,11 +1748,7 @@ $active_tab = 'overview';
                                    title="Join Classroom">
                                     <i class="fas fa-video"></i> <?php echo $canJoin ? 'Join Now' : 'Join'; ?>
                                 </a>
-                                <?php 
-                                // Show profile link for any teacher the student has lessons with
-                                // (assigned_teacher_id is deprecated, so we show for all lessons)
-                                ?>
-                                    <a href="teacher-profile.php?id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">View Teacher</a>
+                                <a href="message_threads.php?user_id=<?php echo $lesson['teacher_id']; ?>" class="btn-outline btn-sm">Message Teacher</a>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -1726,10 +1770,10 @@ $active_tab = 'overview';
                     <?php endwhile; ?>
                 <?php else: ?>
                     <div class="empty-state">
-                        <i class="fas fa-calendar-alt"></i>
-                        <h3>No Lessons Yet</h3>
-                        <p>Book your first lesson to start your learning journey!</p>
-                        <a href="schedule.php" class="btn-primary">Book a Lesson</a>
+                        <i class="fas fa-users"></i>
+                        <h3>No Classes Yet</h3>
+                        <p>Subscribe to Group Classes to start your learning journey!</p>
+                        <a href="kids-plans.php" class="btn-primary" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">Subscribe Now</a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -1919,6 +1963,139 @@ $active_tab = 'overview';
                     <h3>No Reviews Yet</h3>
                     <p>Share your experience by reviewing your teachers!</p>
                 </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Progress Tracking Tab -->
+        <div id="progress" class="tab-content">
+            <h1><i class="fas fa-chart-line"></i> Progress Tracking</h1>
+            <p style="color: var(--gray); margin-bottom: 30px;">Track your learning journey and see your achievements.</p>
+            
+            <!-- Overall Statistics -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <div class="card" style="text-align: center; padding: 25px;">
+                    <div style="font-size: 3rem; color: #0b6cf5; margin-bottom: 10px;">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <h2 style="margin: 10px 0; color: #333;"><?php echo $overall_progress['enrolled_courses']; ?></h2>
+                    <p style="color: #666; margin: 0;">Enrolled Courses</p>
+                </div>
+                <div class="card" style="text-align: center; padding: 25px;">
+                    <div style="font-size: 3rem; color: #28a745; margin-bottom: 10px;">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2 style="margin: 10px 0; color: #333;"><?php echo $overall_progress['completed_courses']; ?></h2>
+                    <p style="color: #666; margin: 0;">Completed Courses</p>
+                </div>
+                <div class="card" style="text-align: center; padding: 25px;">
+                    <div style="font-size: 3rem; color: #ffc107; margin-bottom: 10px;">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                    <h2 style="margin: 10px 0; color: #333;"><?php echo $overall_progress['learning_streak']; ?></h2>
+                    <p style="color: #666; margin: 0;">Day Learning Streak</p>
+                </div>
+                <div class="card" style="text-align: center; padding: 25px;">
+                    <div style="font-size: 3rem; color: #17a2b8; margin-bottom: 10px;">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <h2 style="margin: 10px 0; color: #333;">
+                        <?php 
+                        $completion_rate = $overall_progress['total_lessons'] > 0 
+                            ? round(($overall_progress['completed_lessons'] / $overall_progress['total_lessons']) * 100) 
+                            : 0; 
+                        echo $completion_rate; 
+                        ?>%
+                    </h2>
+                    <p style="color: #666; margin: 0;">Lesson Completion</p>
+                </div>
+            </div>
+            
+            <!-- Progress Chart -->
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-chart-area"></i> Progress Over Time</h2>
+                <canvas id="progressChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <!-- Course Progress -->
+            <div class="card" style="margin-bottom: 30px;">
+                <h2><i class="fas fa-graduation-cap"></i> Course Progress</h2>
+                <?php if (count($course_progress) > 0): ?>
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        <?php foreach ($course_progress as $course): ?>
+                            <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <?php if ($course['thumbnail_url']): ?>
+                                            <img src="<?php echo h($course['thumbnail_url']); ?>" alt="" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover;">
+                                        <?php else: ?>
+                                            <div style="width: 60px; height: 60px; border-radius: 8px; background: <?php echo h($course['category_color'] ?? '#0b6cf5'); ?>; display: flex; align-items: center; justify-content: center; color: white;">
+                                                <i class="fas fa-book" style="font-size: 1.5rem;"></i>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div>
+                                            <h3 style="margin: 0; font-size: 1.1rem;"><?php echo h($course['title']); ?></h3>
+                                            <p style="margin: 5px 0 0; color: #666; font-size: 0.9rem;">
+                                                <?php echo $course['completed_lessons']; ?> / <?php echo $course['total_lessons']; ?> lessons completed
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 1.5rem; font-weight: bold; color: #0b6cf5;">
+                                            <?php echo number_format($course['progress_percentage'], 1); ?>%
+                                        </div>
+                                        <span class="tag <?php echo $course['status'] === 'completed' ? 'success' : ($course['status'] === 'in_progress' ? 'primary' : 'warning'); ?>">
+                                            <?php echo ucfirst(str_replace('_', ' ', $course['status'])); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style="background: #e9ecef; border-radius: 4px; height: 8px; overflow: hidden;">
+                                    <div style="background: linear-gradient(90deg, #0b6cf5 0%, #004080 100%); height: 100%; width: <?php echo $course['progress_percentage']; ?>%; transition: width 0.3s;"></div>
+                                </div>
+                                <div style="margin-top: 15px;">
+                                    <a href="course-player.php?course=<?php echo $course['id']; ?>" class="btn-primary btn-sm">
+                                        <i class="fas fa-play"></i> Continue Learning
+                                    </a>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-book-open"></i>
+                        <h3>No Course Progress Yet</h3>
+                        <p>Enroll in courses to start tracking your progress!</p>
+                        <a href="course-library.php" class="btn-primary" style="margin-top: 15px;">
+                            <i class="fas fa-book"></i> Browse Courses
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Upcoming Milestones -->
+            <?php if (count($upcoming_milestones) > 0): ?>
+            <div class="card">
+                <h2><i class="fas fa-trophy"></i> Upcoming Milestones</h2>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <?php foreach ($upcoming_milestones as $milestone): ?>
+                        <div style="padding: 15px; background: #f0f7ff; border-radius: 8px; border-left: 4px solid #0b6cf5;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="margin: 0 0 5px 0; color: #004080;"><?php echo h($milestone['description']); ?></h4>
+                                    <p style="margin: 0; color: #666; font-size: 0.9rem;">Current: <?php echo number_format($milestone['current'], 1); ?>% → Target: <?php echo $milestone['target']; ?>%</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.2rem; font-weight: bold; color: #0b6cf5;">
+                                        <?php echo number_format((($milestone['target'] - $milestone['current']) / $milestone['target']) * 100, 0); ?>% to go
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="background: #e9ecef; border-radius: 4px; height: 6px; overflow: hidden; margin-top: 10px;">
+                                <div style="background: linear-gradient(90deg, #0b6cf5 0%, #004080 100%); height: 100%; width: <?php echo ($milestone['current'] / $milestone['target']) * 100; ?>%;"></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
             <?php endif; ?>
         </div>
 

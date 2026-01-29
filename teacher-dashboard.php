@@ -937,9 +937,9 @@ $active_tab = 'overview';
                         Calendar & Scheduling
                     </h3>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <a href="schedule.php" class="quick-action-btn" style="background: linear-gradient(135deg, #0b6cf5 0%, #004080 100%); text-decoration: none; color: white;">
-                            <i class="fas fa-calendar"></i>
-                            <span>View Schedule</span>
+                        <a href="#" onclick="switchTab('group-classes'); return false;" class="quick-action-btn" style="background: linear-gradient(135deg, #ff6b9d 0%, #ffa500 100%); text-decoration: none; color: white;">
+                            <i class="fas fa-users"></i>
+                            <span>My Classes</span>
                         </a>
                         <a href="teacher-calendar-setup.php" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-decoration: none; color: white;">
                             <i class="fas fa-cog"></i>
@@ -1110,7 +1110,7 @@ $active_tab = 'overview';
                         </a>
                     </div>
                 <?php endforeach; ?>
-                <a href="schedule.php" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all lessons →</a>
+                <a href="#" onclick="switchTab('group-classes'); return false;" style="color: var(--primary); text-decoration: none; display: block; margin-top: 10px;">View all classes →</a>
             </div>
             <?php endif; ?>
 
@@ -1624,8 +1624,21 @@ $active_tab = 'overview';
             }
             $calendar_stmt->close();
             
+            // Helper function to convert day name to FullCalendar day number
+            function getDayOfWeekNumber($dayName) {
+                $days = ['Sunday' => 0, 'Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6];
+                return $days[$dayName] ?? 1;
+            }
+            
+            // Fetch time off periods for calendar
+            require_once __DIR__ . '/app/Models/TimeOff.php';
+            $timeOffModel = new TimeOff($conn);
+            $time_off_periods = $timeOffModel->getByTeacher($teacher_id);
+            
             // Prepare calendar events JSON
             $calendar_events = [];
+            
+            // Add lessons
             foreach ($all_lessons_for_calendar as $lesson) {
                 // Skip if required fields are missing
                 if (empty($lesson['lesson_date']) || empty($lesson['start_time']) || empty($lesson['end_time'])) {
@@ -1651,12 +1664,15 @@ $active_tab = 'overview';
                 elseif (!empty($lesson['category']) && $lesson['category'] === 'coding') $color = '#6f42c1';
                 
                 $calendar_events[] = [
-                    'id' => $lesson['id'],
+                    'id' => 'lesson_' . $lesson['id'],
                     'title' => (!empty($lesson['student_name']) ? $lesson['student_name'] : 'Student') . (!empty($lesson['is_trial']) && $lesson['is_trial'] ? ' (Trial)' : ''),
                     'start' => $start_datetime,
                     'end' => $end_datetime,
                     'color' => $color,
+                    'display' => 'block',
                     'extendedProps' => [
+                        'type' => 'lesson',
+                        'lesson_id' => $lesson['id'],
                         'student_name' => $lesson['student_name'] ?? '',
                         'category' => $lesson['category'] ?? '',
                         'status' => $lesson['status'] ?? 'scheduled',
@@ -1665,11 +1681,156 @@ $active_tab = 'overview';
                     ]
                 ];
             }
+            
+            // Add time off periods
+            foreach ($time_off_periods as $timeoff) {
+                $start_date = $timeoff['start_date'];
+                $end_date = $timeoff['end_date'] ?? $timeoff['start_date'];
+                // Add one day to end_date for FullCalendar to display correctly
+                $end_date_plus_one = date('Y-m-d', strtotime($end_date . ' +1 day'));
+                
+                $calendar_events[] = [
+                    'id' => 'timeoff_' . $timeoff['id'],
+                    'title' => 'Time Off' . (!empty($timeoff['reason']) ? ': ' . $timeoff['reason'] : ''),
+                    'start' => $start_date,
+                    'end' => $end_date_plus_one,
+                    'color' => '#dc3545',
+                    'display' => 'background',
+                    'extendedProps' => [
+                        'type' => 'timeoff',
+                        'timeoff_id' => $timeoff['id'],
+                        'reason' => $timeoff['reason'] ?? ''
+                    ]
+                ];
+            }
+            
+            // Add availability slots as background events (for week/day views)
+            foreach ($availability_slots as $slot) {
+                if ($slot['is_available'] && $slot['is_recurring'] && $slot['day_of_week']) {
+                    // For recurring slots, show them on the specific day of week
+                    $calendar_events[] = [
+                        'id' => 'availability_' . $slot['id'],
+                        'title' => 'Available: ' . date('g:i A', strtotime($slot['start_time'])) . ' - ' . date('g:i A', strtotime($slot['end_time'])),
+                        'daysOfWeek' => [getDayOfWeekNumber($slot['day_of_week'])],
+                        'startTime' => $slot['start_time'],
+                        'endTime' => $slot['end_time'],
+                        'color' => '#e8f5e9',
+                        'display' => 'background',
+                        'extendedProps' => [
+                            'type' => 'availability',
+                            'slot_id' => $slot['id']
+                        ]
+                    ];
+                } elseif ($slot['is_available'] && $slot['specific_date']) {
+                    // For one-time slots
+                    $start_datetime = $slot['specific_date'] . 'T' . $slot['start_time'];
+                    $end_datetime = $slot['specific_date'] . 'T' . $slot['end_time'];
+                    $calendar_events[] = [
+                        'id' => 'availability_' . $slot['id'],
+                        'title' => 'Available: ' . date('g:i A', strtotime($slot['start_time'])) . ' - ' . date('g:i A', strtotime($slot['end_time'])),
+                        'start' => $start_datetime,
+                        'end' => $end_datetime,
+                        'color' => '#e8f5e9',
+                        'display' => 'background',
+                        'extendedProps' => [
+                            'type' => 'availability',
+                            'slot_id' => $slot['id']
+                        ]
+                    ];
+                }
+            }
             ?>
             
             <div class="card" style="margin-bottom: 30px;">
-                <h2><i class="fas fa-calendar-check"></i> Calendar View</h2>
-                <div id="teacher-calendar" style="margin-bottom: 20px;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <h2 style="margin: 0;"><i class="fas fa-calendar-check"></i> Calendar View</h2>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="add-timeoff-btn" class="btn-outline" style="padding: 8px 16px;">
+                            <i class="fas fa-ban"></i> Add Time Off
+                        </button>
+                        <button id="quick-add-slot-btn" class="btn-primary" style="padding: 8px 16px;">
+                            <i class="fas fa-plus-circle"></i> Quick Add Slot
+                        </button>
+                    </div>
+                </div>
+                <div id="teacher-calendar" style="margin-bottom: 20px; min-height: 600px; position: relative;"></div>
+                <style>
+                    /* Enhanced calendar styling */
+                    #teacher-calendar {
+                        font-family: inherit;
+                    }
+                    #teacher-calendar .fc-scroller {
+                        overflow-y: auto !important;
+                        overflow-x: hidden !important;
+                        max-height: 700px;
+                    }
+                    #teacher-calendar .fc-timeGrid-view .fc-scroller {
+                        max-height: 600px;
+                    }
+                    #teacher-calendar .fc-dayGrid-view .fc-scroller {
+                        max-height: 500px;
+                    }
+                    /* Improve scrollbar appearance */
+                    #teacher-calendar .fc-scroller::-webkit-scrollbar {
+                        width: 8px;
+                    }
+                    #teacher-calendar .fc-scroller::-webkit-scrollbar-track {
+                        background: #f1f1f1;
+                        border-radius: 4px;
+                    }
+                    #teacher-calendar .fc-scroller::-webkit-scrollbar-thumb {
+                        background: #888;
+                        border-radius: 4px;
+                    }
+                    #teacher-calendar .fc-scroller::-webkit-scrollbar-thumb:hover {
+                        background: #555;
+                    }
+                    /* Selectable time slots styling */
+                    #teacher-calendar .fc-highlight {
+                        background: rgba(11, 108, 245, 0.2) !important;
+                        border: 2px dashed #0b6cf5 !important;
+                    }
+                    /* Better event styling */
+                    #teacher-calendar .fc-event {
+                        cursor: pointer;
+                        border-radius: 4px;
+                        padding: 2px 4px;
+                        font-size: 0.85rem;
+                    }
+                    #teacher-calendar .fc-event:hover {
+                        opacity: 0.9;
+                        transform: scale(1.02);
+                        transition: all 0.2s;
+                    }
+                    /* Time off background styling */
+                    #teacher-calendar .fc-event[data-type="timeoff"] {
+                        background: repeating-linear-gradient(
+                            45deg,
+                            #dc3545,
+                            #dc3545 10px,
+                            #ff6b6b 10px,
+                            #ff6b6b 20px
+                        ) !important;
+                        border: none !important;
+                    }
+                    /* Availability slot background */
+                    #teacher-calendar .fc-event[data-type="availability"] {
+                        background: #e8f5e9 !important;
+                        border: 1px dashed #28a745 !important;
+                    }
+                    /* Mobile responsiveness */
+                    @media (max-width: 768px) {
+                        #teacher-calendar .fc-header-toolbar {
+                            flex-direction: column;
+                            gap: 10px;
+                        }
+                        #teacher-calendar .fc-toolbar-chunk {
+                            width: 100%;
+                            display: flex;
+                            justify-content: center;
+                        }
+                    }
+                </style>
                 <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="width: 20px; height: 20px; background: #0b6cf5; border-radius: 4px;"></div>
@@ -2479,36 +2640,357 @@ function toggleMobileSidebar() {
     document.querySelector('.sidebar-overlay').classList.toggle('active');
 }
 
-// Initialize FullCalendar for teacher dashboard
+// Initialize FullCalendar for teacher dashboard with enhanced features
 document.addEventListener('DOMContentLoaded', function() {
     const calendarEl = document.getElementById('teacher-calendar');
-    if (calendarEl) {
-        const calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            events: <?php echo json_encode($calendar_events); ?>,
-            eventClick: function(info) {
-                const props = info.event.extendedProps;
-                const lessonId = info.event.id;
-                window.location.href = 'classroom.php?lesson_id=' + lessonId;
-            },
-            eventMouseEnter: function(info) {
-                info.el.style.cursor = 'pointer';
-            },
-            height: 'auto',
-            eventTimeFormat: {
-                hour: 'numeric',
-                minute: '2-digit',
-                meridiem: 'short'
+    if (!calendarEl) return;
+    
+    let selectedStart = null;
+    let selectedEnd = null;
+    
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: <?php echo json_encode($calendar_events); ?>,
+        height: 'auto',
+        contentHeight: 'auto',
+        aspectRatio: 1.8,
+        scrollTime: '08:00:00',
+        scrollTimeReset: false,
+        allDaySlot: false,
+        slotMinTime: '06:00:00',
+        slotMaxTime: '24:00:00',
+        slotDuration: '00:30:00',
+        snapDuration: '00:15:00',
+        selectable: true,
+        selectMirror: true,
+        selectOverlap: false,
+        unselectAuto: false,
+        editable: false,
+        dayMaxEvents: false,
+        weekNumbers: false,
+        weekNumberCalculation: 'ISO',
+        eventTimeFormat: {
+            hour: 'numeric',
+            minute: '2-digit',
+            meridiem: 'short',
+            hour12: true
+        },
+        slotLabelFormat: {
+            hour: 'numeric',
+            minute: '2-digit',
+            meridiem: 'short',
+            hour12: true
+        },
+        // Handle date/time selection (click and drag)
+        select: function(selectInfo) {
+            // Only allow selection in timeGridWeek and timeGridDay views
+            if (selectInfo.view.type === 'timeGridWeek' || selectInfo.view.type === 'timeGridDay') {
+                selectedStart = selectInfo.start;
+                selectedEnd = selectInfo.end;
+                
+                // Validate selection (must be at least 15 minutes)
+                const duration = selectInfo.end - selectInfo.start;
+                const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+                
+                if (duration < minDuration) {
+                    alert('Please select at least 15 minutes for a time slot.');
+                    calendar.unselect();
+                    return;
+                }
+                
+                // Show modal to add availability slot
+                showAddSlotModal(selectInfo.start, selectInfo.end);
+                calendar.unselect();
+            } else {
+                // In month view, just unselect
+                calendar.unselect();
             }
+        },
+        // Handle clicking on a date/time
+        dateClick: function(dateClickInfo) {
+            if (dateClickInfo.view.type === 'timeGridWeek' || dateClickInfo.view.type === 'timeGridDay') {
+                // Quick add 1-hour slot at clicked time
+                const start = dateClickInfo.date;
+                const end = new Date(start.getTime() + 60 * 60 * 1000); // Add 1 hour
+                showAddSlotModal(start, end);
+            }
+        },
+        // Prevent selection on background events
+        selectConstraint: function(info) {
+            // Allow selection on any time slot
+            return true;
+        },
+        // Handle event clicks
+        eventClick: function(info) {
+            const props = info.event.extendedProps;
+            
+            if (props.type === 'lesson') {
+                const lessonId = props.lesson_id;
+                window.location.href = 'classroom.php?lesson_id=' + lessonId;
+            } else if (props.type === 'timeoff') {
+                // Show time off details
+                if (confirm('Delete this time off period?')) {
+                    deleteTimeOff(props.timeoff_id);
+                }
+            } else if (props.type === 'availability') {
+                // Show availability slot options
+                showAvailabilityOptions(props.slot_id);
+            }
+        },
+        eventMouseEnter: function(info) {
+            const props = info.event.extendedProps;
+            if (props.type === 'lesson') {
+                info.el.style.cursor = 'pointer';
+            }
+        },
+        // Handle view changes - ensure proper scrolling
+        viewDidMount: function(view) {
+            // Force scroll container to be properly sized
+            setTimeout(function() {
+                const scrollEl = calendarEl.querySelector('.fc-scroller');
+                if (scrollEl) {
+                    scrollEl.style.overflowY = 'auto';
+                    scrollEl.style.overflowX = 'hidden';
+                    if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
+                        scrollEl.style.maxHeight = '600px';
+                    } else {
+                        scrollEl.style.maxHeight = '500px';
+                    }
+                    // Ensure scroll works
+                    scrollEl.style.position = 'relative';
+                }
+            }, 100);
+        },
+        // Custom event rendering for better visibility
+        eventDidMount: function(info) {
+            const props = info.event.extendedProps;
+            if (props && props.type === 'timeoff') {
+                info.el.style.opacity = '0.3';
+                info.el.style.fontWeight = 'bold';
+                info.el.setAttribute('data-type', 'timeoff');
+            } else if (props && props.type === 'availability') {
+                info.el.style.opacity = '0.2';
+                info.el.setAttribute('data-type', 'availability');
+            }
+        }
+    });
+    
+    calendar.render();
+    
+    // Store calendar instance globally for modal access
+    window.teacherCalendar = calendar;
+    
+    // Quick add slot button
+    const quickAddBtn = document.getElementById('quick-add-slot-btn');
+    if (quickAddBtn) {
+        quickAddBtn.addEventListener('click', function() {
+            const today = new Date();
+            const start = new Date(today);
+            start.setHours(9, 0, 0, 0);
+            const end = new Date(start);
+            end.setHours(start.getHours() + 1);
+            showAddSlotModal(start, end);
         });
-        calendar.render();
+    }
+    
+    // Add time off button
+    const addTimeOffBtn = document.getElementById('add-timeoff-btn');
+    if (addTimeOffBtn) {
+        addTimeOffBtn.addEventListener('click', function() {
+            showAddTimeOffModal();
+        });
     }
 });
+
+// Show modal to add availability slot
+function showAddSlotModal(start, end) {
+    const startDate = start.toISOString().split('T')[0];
+    const startTime = start.toTimeString().slice(0, 5);
+    const endTime = end.toTimeString().slice(0, 5);
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.cssText = 'position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;';
+    modal.innerHTML = `
+        <div class="modal-content" style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #004080;"><i class="fas fa-calendar-plus"></i> Add Availability Slot</h2>
+                <span onclick="this.closest('.modal').remove()" style="font-size: 28px; cursor: pointer; color: #999;">&times;</span>
+            </div>
+            <form id="quick-add-slot-form">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Date</label>
+                    <input type="date" name="specific_date" value="${startDate}" required class="form-control">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Start Time</label>
+                        <input type="time" name="start_time" value="${startTime}" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>End Time</label>
+                        <input type="time" name="end_time" value="${endTime}" required class="form-control">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>
+                        <input type="checkbox" name="is_recurring" value="1" id="make-recurring"> Make this recurring weekly
+                    </label>
+                </div>
+                <div id="recurring-day-group" style="display: none; margin-bottom: 15px;">
+                    <label>Day of Week (for recurring)</label>
+                    <select name="day_of_week" class="form-control">
+                        <option value="">Select day...</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button type="button" onclick="this.closest('.modal').remove()" class="btn-outline">Cancel</button>
+                    <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Add Slot</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Toggle recurring day field
+    const recurringCheckbox = modal.querySelector('#make-recurring');
+    const recurringDayGroup = modal.querySelector('#recurring-day-group');
+    if (recurringCheckbox && recurringDayGroup) {
+        recurringCheckbox.addEventListener('change', function() {
+            recurringDayGroup.style.display = this.checked ? 'block' : 'none';
+            if (this.checked) {
+                const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const selectedDay = dayNames[start.getDay()];
+                modal.querySelector('select[name="day_of_week"]').value = selectedDay;
+            }
+        });
+    }
+    
+    // Handle form submission
+    modal.querySelector('#quick-add-slot-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        formData.append('add_availability_slot', '1');
+        
+        fetch('teacher-dashboard.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                modal.remove();
+                location.reload();
+            } else {
+                alert('Error adding slot. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding slot. Please try again.');
+        });
+    });
+    
+    // Close on outside click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Show modal to add time off
+function showAddTimeOffModal() {
+    const today = new Date().toISOString().split('T')[0];
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.cssText = 'position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;';
+    modal.innerHTML = `
+        <div class="modal-content" style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0; color: #dc3545;"><i class="fas fa-ban"></i> Add Time Off</h2>
+                <span onclick="this.closest('.modal').remove()" style="font-size: 28px; cursor: pointer; color: #999;">&times;</span>
+            </div>
+            <form id="add-timeoff-form" method="POST" action="teacher-calendar-setup.php">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" name="start_date" value="${today}" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" name="end_date" value="${today}" required class="form-control">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label>Reason (optional)</label>
+                    <input type="text" name="reason" placeholder="e.g., Vacation, Personal time..." class="form-control">
+                </div>
+                <input type="hidden" name="add_time_off" value="1">
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button type="button" onclick="this.closest('.modal').remove()" class="btn-outline">Cancel</button>
+                    <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Add Time Off</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close on outside click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Show availability slot options
+function showAvailabilityOptions(slotId) {
+    if (confirm('Delete this availability slot?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'teacher-dashboard.php';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'slot_id';
+        input.value = slotId;
+        form.appendChild(input);
+        const submit = document.createElement('input');
+        submit.type = 'hidden';
+        submit.name = 'delete_availability_slot';
+        submit.value = '1';
+        form.appendChild(submit);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Delete time off
+function deleteTimeOff(timeoffId) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'teacher-calendar-setup.php';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'delete_time_off';
+    input.value = timeoffId;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+}
 
 // Shared Materials Functions
 function toggleMaterialInputs() {

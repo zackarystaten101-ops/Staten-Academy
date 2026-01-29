@@ -650,8 +650,8 @@ if ($user_id && ($user_role === 'student' || $user_role === 'new_student')) {
             
             <!-- Action Buttons -->
             <div class="profile-actions">
-                <a href="schedule.php?teacher=<?php echo urlencode($teacher['name']); ?>" class="profile-action-btn btn-primary-action">
-                    <i class="fas fa-calendar-plus"></i> Schedule Lesson
+                <a href="kids-plans.php" class="profile-action-btn btn-primary-action" style="background: linear-gradient(135deg, #ff6b9d, #ffa500);">
+                    <i class="fas fa-users"></i> Join Group Classes
                 </a>
                 <?php if ($user_role === 'student' && $user_id): ?>
                 <a href="message_threads.php?user_id=<?php echo $teacher_id; ?>" class="profile-action-btn btn-secondary-action">
@@ -784,20 +784,8 @@ if ($user_id && ($user_role === 'student' || $user_role === 'new_student')) {
                     <p>Explore our flexible subscription plans designed to fit your learning needs and schedule.</p>
                     <?php
                     // Determine which plans page to link to based on student's track
-                    $plans_url = 'payment.php';
-                    if ($student_track) {
-                        switch(strtolower($student_track)) {
-                            case 'kids':
-                                $plans_url = 'kids-plans.php';
-                                break;
-                            case 'adults':
-                                $plans_url = 'adults-plans.php';
-                                break;
-                            case 'coding':
-                                $plans_url = 'coding-plans.php';
-                                break;
-                        }
-                    }
+                    // Always link to Group Classes page
+                    $plans_url = 'kids-plans.php';
                     ?>
                     <a href="<?php echo $plans_url; ?>" class="profile-action-btn btn-primary-action" style="display: inline-flex;">
                         <i class="fas fa-arrow-right"></i> View Plans
