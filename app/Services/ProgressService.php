@@ -118,7 +118,6 @@ class ProgressService {
                 cc.name as category_name, cc.color as category_color,
                 ucp.progress_percentage,
                 (SELECT COUNT(*) FROM course_lessons WHERE course_id = c.id) as total_lessons,
-                (SELECT COUNT(*) FROM user_lesson_progress WHERE user_id = ? AND course_id = c.id AND completed = 1) as completed_lessons,
                 ce.enrolled_at
                 FROM course_enrollments ce
                 JOIN courses c ON ce.course_id = c.id
@@ -128,14 +127,15 @@ class ProgressService {
                 ORDER BY ucp.last_accessed_at DESC, ce.enrolled_at DESC";
         
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param("iii", $student_id, $student_id, $student_id);
+        $stmt->bind_param("ii", $student_id, $student_id);
         $stmt->execute();
         $result = $stmt->get_result();
         
         while ($row = $result->fetch_assoc()) {
             $progress = (float)($row['progress_percentage'] ?? 0);
             $total_lessons = (int)($row['total_lessons'] ?? 0);
-            $completed_lessons = (int)($row['completed_lessons'] ?? 0);
+            // Calculate completed lessons from progress percentage since user_lesson_progress table doesn't exist
+            $completed_lessons = $total_lessons > 0 ? (int)round(($progress / 100) * $total_lessons) : 0;
             
             $courses[] = [
                 'id' => $row['id'],
